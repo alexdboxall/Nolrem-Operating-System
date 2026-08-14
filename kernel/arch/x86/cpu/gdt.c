@@ -1,9 +1,24 @@
 
 #include <common.h>
-#include <cpu.h>
-#include <machine/gdt.h>
+#include <log.h>
 
-extern void x86LoadGdt(size_t addr);
+struct gdt_entry
+{
+	uint16_t limit_low;
+	uint16_t base_low;
+	uint8_t base_middle;
+	uint8_t access;
+	uint8_t flags_and_limit_high;
+	uint8_t base_high;
+	
+} __attribute__((packed));
+
+struct gdt_ptr
+{
+	uint16_t size;
+	size_t location;
+} __attribute__((packed));
+
 
 static struct gdt_entry CreateGdtEntry(size_t base, size_t limit, uint8_t access, uint8_t gran)
 {
@@ -17,28 +32,33 @@ static struct gdt_entry CreateGdtEntry(size_t base, size_t limit, uint8_t access
 	};
 }
 
-void x86InitGdt(void)
-{
-	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
+static struct gdt_entry gdt[5];
+static struct gdt_ptr gdtr;
 
-	cpu_data->gdt[0] = CreateGdtEntry(0, 0, 0, 0);				 // null segment
-	cpu_data->gdt[1] = CreateGdtEntry(0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code
-	cpu_data->gdt[2] = CreateGdtEntry(0, 0xFFFFFFFF, 0x92, 0xC); // kernel data
-	cpu_data->gdt[3] = CreateGdtEntry(0, 0xFFFFFFFF, 0xFA, 0xC); // user code
-	cpu_data->gdt[4] = CreateGdtEntry(0, 0xFFFFFFFF, 0xF2, 0xC); // user data
-
-	cpu_data->gdtr.size = sizeof(cpu_data->gdt) - 1;
-	cpu_data->gdtr.location = (size_t) &cpu_data->gdt;
-
-	x86LoadGdt((size_t) &cpu_data->gdtr);
+void x86LoadGdt(size_t gdtPtr) {
+    __asm__ volatile (
+        "lgdt (%0)\n\t"
+        "ljmp $0x08, $1f\n\t"
+        "1:\n\t"
+        "mov $0x10, %%ax\n\t"
+        "mov %%ax, %%ds\n\t"
+        "mov %%ax, %%es\n\t"
+        "mov %%ax, %%ss\n\t"
+        :
+        : "r" (gdtPtr)
+        : "eax", "memory"
+    );
 }
 
-/*
- * Returns the selector used in the GDT.
- */
-uint16_t x86AddTssToGdt(struct tss* tss)
-{
-	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
-	cpu_data->gdt[5] = CreateGdtEntry((size_t) tss, sizeof(struct tss), 0x89, 0x0);
-	return 5 * 0x8;
+void x86InitGdt(void) {
+	gdt[0] = CreateGdtEntry(0, 0, 0, 0);			   // null segment
+	gdt[1] = CreateGdtEntry(0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code
+	gdt[2] = CreateGdtEntry(0, 0xFFFFFFFF, 0x92, 0xC); // kernel data
+	gdt[3] = CreateGdtEntry(0, 0xFFFFFFFF, 0xFA, 0xC); // user code
+	gdt[4] = CreateGdtEntry(0, 0xFFFFFFFF, 0xF2, 0xC); // user data
+
+	gdtr.size = sizeof(gdt) - 1;
+	gdtr.location = (size_t) &gdt;
+
+	x86LoadGdt((size_t) &gdtr);
 }

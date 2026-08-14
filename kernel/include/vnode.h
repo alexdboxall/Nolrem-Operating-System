@@ -1,10 +1,11 @@
 #pragma once
 
 #include <common.h>
-#include <sys/types.h>
-#include <transfer.h>
+#include <obj.h>
 #include <spinlock.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <transfer.h>
 
 struct vnode;
 
@@ -29,8 +30,8 @@ struct vnode;
 *   ioctl: default EINVAL
 *           Performs a miscellaneous operation on a file.
 *
-*   close: default 0
-*           Frees the vnode, as its reference count has hit zero.
+*   cleanup: default 0
+*           Called when ref count hits 0.
 *
 *   truncate: default EINVAL
 *           Truncates the file to the given size. Fails on directories (EISDIR).
@@ -48,6 +49,7 @@ struct vnode;
 #define VNODE_WAIT_WRITE            (1 << 1)
 #define VNODE_WAIT_ERROR            (1 << 2)
 
+
 struct vnode_operations {
     int (*check_open)(struct vnode* node, int flags);
     int (*read)(struct vnode* node, struct transfer* io);
@@ -58,13 +60,12 @@ struct vnode_operations {
      * usermode!! it gives you a *RAW USERMODE POINTER*. 
      */
     int (*ioctl)(struct vnode* node, int command, void* buffer);
-    int (*close)(struct vnode* node);                       // release the fileystem specific data
     int (*truncate)(struct vnode* node, off_t offset);
     int (*create)(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode);
     int (*follow)(struct vnode* node, struct vnode** out, const char* name);
 
     /*
-     * Must fail with EISDIR on directories. Should only decrement st.st_nlink, 
+     * Valid for files OR directories! Should only decrement st.st_nlink, 
      * and remove the link from the fileystem. On things like FAT, where hard 
      * links are not supported, this can just decrement st.st_nlink, as we know
      * that ops.delete is on its way, and that can properly delete it.
@@ -74,21 +75,26 @@ struct vnode_operations {
     /*
      * Deletes a file or directory from the filesystem completely. For files, 
      * the return value given will not propogate back to the VFS caller, as it 
-     * gets called in DestroyVnode(). For files, st.st_nlink will be 0 on
-     * call.
+     * gets called after the ref count hits zero, and before cleanup() runs. 
+     * For files, st.st_nlink will be 0 on call.
      * 
      * For directories, this function *must* check if the directory is non-empty
      * and fail with ENOTEMPTY if so. st.st_nlink will be 1 on call - does not 
      * need to be modified.
      */
     int (*delete)(struct vnode* node);
+
+    /* 
+     * Called when ref count hits zero. If the file is to be deleted, happens
+     * after delete() is called.
+     */
+    int (*cleanup)(struct vnode* node);
 };
 
 struct vnode {
+    struct obj_header hdr;
     struct vnode_operations ops;
     void* data;
-    int reference_count;
-    struct spinlock reference_count_lock;
     struct stat stat;
 
     /*
@@ -97,24 +103,17 @@ struct vnode {
     int flags;
 };
 
-/*
-* Allocates a new vnode for a given set of operations.
-*/
-struct vnode* CreateVnode(struct vnode_operations ops, struct stat st);
-void ReferenceVnode(struct vnode* node);
-void DereferenceVnode(struct vnode* node);
 
-/* 
-* Wrapper functions to check the vnode is valid, and then call the driver.
-*/
-int VnodeOpCheckOpen(struct vnode* node, int flags);
-int VnodeOpRead(struct vnode* node, struct transfer* io);
-int VnodeOpWrite(struct vnode* node, struct transfer* io);
-int VnodeOpIoctl(struct vnode* node, int command, void* buffer);
-int VnodeOpClose(struct vnode* node);
-int VnodeOpTruncate(struct vnode* node, off_t offset);
-uint8_t VnodeOpDirentType(struct vnode* node);
-int VnodeOpCreate(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode);
-int VnodeOpFollow(struct vnode* node, struct vnode** out, const char* name);
-int VnodeOpUnlink(struct vnode* node);
-int VnodeOpDelete(struct vnode* node);
+void InitVnode(void);
+
+struct vnode* CreateVnode(struct vnode_operations ops, struct stat st);
+
+int VnodeCheckOpen(struct vnode* node, int flags);
+int VnodeRead(struct vnode* node, struct transfer* io);
+int VnodeWrite(struct vnode* node, struct transfer* io);
+int VnodeIoctl(struct vnode* node, int command, void* buffer);
+int VnodeTruncate(struct vnode* node, off_t offset);
+uint8_t VnodeDirentType(struct vnode* node);
+int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode);
+int VnodeFollow(struct vnode* node, struct vnode** out, const char* name);
+int VnodeUnlink(struct vnode* node);

@@ -8,26 +8,24 @@
 	
 ; The initial kernel stack.
 section .bss
-align 16
-stack_bottom:
-resb 4 * 1024
-stack_top:
 
 ; We need temporary bootstrap paging structures so we can get the kernel into
 ; high memory. With the below, we can map 4MB of memory, so the kernel can be 
 ; 3MB at most as it gets loaded at 1MB). We will replace and free these paging
 ; structures later in the kernel proper. 
 align 4096
-global boot_page_directory
-global boot_page_table1
 boot_page_directory: resb 4096
 boot_page_table1: resb 4096
+
+stack_bottom:
+resb 4 * 1024
+stack_top:
 
 ; The start of the kernel itself - this will be called by the bootloader.
 ; This is loaded at 1MB, not at 0xC0000000 + 1MB, so it must go in a special
 ; section. Information from the bootloader is in EBX, so we must preserve it!
 section .lowram.text
-extern KernelMain
+extern InitKernel
 extern _kernel_end
 global _start
 _start:
@@ -38,15 +36,8 @@ _start:
 	mov ebx, [esp + 4]
 	add ebx, 0xC0000000
 	
-    ; Work out how many pages in the first 4MB need to be mapped
-    ; (we map the low 1MB, and then the kernel)
-    mov ecx, _kernel_end
-    add ecx, 0xFFF
-    and ecx, 0x0FFFF000
-    shr ecx, 12
-    mov eax, 1024
-    sub eax, ecx
-    
+	; Map the low 4MB of phys to 0xC0000000.
+	
 	; Set up a loop to fill in the page table.
 	mov edi, boot_page_table1 - 0xC0000000
 	xor esi, esi
@@ -55,9 +46,6 @@ _start:
 .mapNextPage:
 	mov edx, esi
 	or edx, 3			; make the page present and writable
-    cmp ecx, eax
-    jg .keep            ; ** remember, the loop counter is going down **
-    xor edx, edx        ; not present
 .keep:
 	mov [edi], edx
 
@@ -100,7 +88,7 @@ vesa_width dw 0
 vesa_height dw 0
 vesa_pitch dw 0
 
-section .text
+section .pageable
 
 ; The proper entry point of the kernel. Assumes the kernel is mapped into memory
 ; at 0xC0100000.
@@ -121,7 +109,7 @@ KernelEntryPoint:
 	; Call the kernel main function, passing it in the table given to us by the
 	; bootloader.
 	push ebx
-	call KernelMain
+	call InitKernel
 
 	; We should never get here, but halt just in case
 	cli

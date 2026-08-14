@@ -38,7 +38,7 @@ static void DrawBootMessage() {
 static void DisplayBootingHeader(void) {
     Clear();
     SetCursor(2, 1);
-    Puts("Booting Merlon", BOOTCOL_WHITE_ON_BLACK);
+    Puts("Booting TinyOS", BOOTCOL_WHITE_ON_BLACK);
 }
 
 static void ShowRamTable(void) {
@@ -184,9 +184,11 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
 
     ExitBootServices();
 
-    kboot_info.num_loaded_modules = 0;
     kboot_info.num_ram_table_entries = fw->num_ram_table_entries;
     kboot_info.ram_table = fw->ram_table;
+
+    DiagnosticPrintf("The fw table is at 0x%X\n  ", fw->ram_table);
+    DiagnosticPrintf("... and has 0x%X entries\n  ", fw->num_ram_table_entries);
 
     ((void(*)(struct kernel_boot_info*)) entry_point)(&kboot_info);
 }

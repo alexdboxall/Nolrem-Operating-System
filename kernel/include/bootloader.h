@@ -48,12 +48,6 @@ struct firmware_info {
     void (*exit_firmware)(void);
 } __attribute__((packed));  
 
-struct boot_loaded_module {
-    char name[48];
-    uint64_t address;
-    uint64_t length;
-} __attribute__((packed));
-
 #define BOOTVIDEO_GET_BPP(info)  (info & 0xFF)
 #define BOOTVIDEO_VGA_TEXT(info) ((info >> 8) & 1) 
 #define BOOTVIDEO_VGA_16(info)   ((info >> 9) & 1) 
@@ -77,20 +71,7 @@ struct boot_video {
 
 struct kernel_boot_info {
     size_t num_ram_table_entries;
-    size_t num_loaded_modules;
-
     struct boot_memory_entry* ram_table;
-    struct boot_loaded_module* modules;
-
-    size_t argc;
-    char* argv;
-
-    /* 
-     * We can use this information to free the memory used by the bootloader
-     * (e.g. for argv, the RAM table, etc.).
-     */
-    size_t bootloader_area_base;
-    size_t bootloader_area_size;
 
     struct boot_video_information* video;
 
@@ -101,7 +82,3 @@ struct kernel_boot_info {
     bool enable_floppy;
 
 } __attribute__((packed));
-
-#ifdef COMPILE_KERNEL
-struct kernel_boot_info GetBootInformation(void);
-#endif

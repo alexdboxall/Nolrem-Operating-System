@@ -1,12 +1,10 @@
 #pragma once
 
-#include <common.h>
+#include <stddef.h>
 
-void LogWriteSerial(const char* format, ...);
-void LogWriteSerialVa(const char* format, va_list list, bool screen);
-void LogDeveloperWarning(const char* format, ...);
-
-#define Log(format, ...) LogWriteSerial("[%s]: " format "\n", __func__, ## __VA_ARGS__)
-
-void DbgScreenPrintf(const char* format, ...);
-void DbgScreenPutchar(char c);
+void InitLog(void);
+void LogCharacter(char c);
+void LogString(char* s);
+void LogInt(int i);
+void LogHex(size_t hx);
+void LogStringAndHexLine(char* s, size_t hx);

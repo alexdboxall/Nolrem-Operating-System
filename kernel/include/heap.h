@@ -1,19 +1,12 @@
 #pragma once
 
-#include <common.h>
+#include <stddef.h>
 
-#define HEAP_ZERO           1
-
-void* AllocHeap(size_t size);
-void* AllocHeapEx(size_t size, int flags);
-void* ReallocHeap(void* ptr, size_t size);
-void* AllocHeapZero(size_t size);
+void* AllocHeap(size_t bytes);
 void FreeHeap(void* ptr);
-void InitHeap(void);
+void* ReallocHeap(void* ptr, size_t new_size);
+size_t GetAllocationSize(void* ptr);
 
-#ifndef NDEBUG
-int DbgGetOutstandingHeapAllocations(void);
-#endif
+void InitBoostrapHeap(void);
 
-#define malloc(x) AllocHeap(x)
-#define free(x) FreeHeap(x)
+char* KeStrdup(const char* str);

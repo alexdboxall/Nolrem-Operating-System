@@ -1,11 +1,7 @@
-#include <machine/pic.h>
-#include <machine/pit.h>
-#include <machine/portio.h>
+#include <machine/x86.h>
 #include <arch.h>
 #include <common.h>
-#include <timer.h>
 #include <spinlock.h>
-#include <irql.h>
 
 static struct spinlock cmos_spinlock;
 static bool nmi_on = true;
@@ -48,7 +44,7 @@ void SetNmiEnable(bool enable) {
     (void) ReadCmos(0x10);
 }
 
-void InitCmos(void) {
-    InitSpinlock(&cmos_spinlock, "cmos", IRQL_HIGH);
+void x86InitCmos(void) {
+    InitSpinlock(&cmos_spinlock);
     SetNmiEnable(true);
 }

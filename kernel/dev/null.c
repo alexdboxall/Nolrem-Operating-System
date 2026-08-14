@@ -6,18 +6,17 @@
  */
 
 #include <heap.h>
-#include <stdlib.h>
 #include <vfs.h>
 #include <log.h>
-#include <assert.h>
 #include <errno.h>
 #include <transfer.h>
 #include <sys/stat.h>
 #include <dirent.h>
 
-static int ReadWrite(struct vnode*, struct transfer*) {
-    // TODO: do we need to set io->length_remaining to zero? 
-    // (on either read or write??)
+static pageable int ReadWrite(struct vnode*, struct transfer* io) {
+    io->offset = 0;
+    io->address = ((uint8_t*) io->address) + io->length_remaining;
+    io->length_remaining = 0;
     return 0;
 }
 
@@ -28,9 +27,11 @@ static const struct vnode_operations dev_ops = {
 
 void InitNullDevice(void)
 {
-    AddVfsMount(CreateVnode(dev_ops, (struct stat) {
+    struct vnode* node = CreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,
         .st_dev = NextDevId()
-    }), "null");
+    });
+    Mount(node, "null");
+    DerefObject(node);      // let the mount keep the last reference
 }

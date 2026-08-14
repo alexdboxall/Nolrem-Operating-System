@@ -1,19 +1,15 @@
-#include <vfs.h>
 #include <spinlock.h>
-#include <irql.h>
 #include <log.h>
-#include <assert.h>
-#include <virtual.h>
 #include <string.h>
 #include <errno.h>
 #include <dirent.h>
 #include <heap.h>
-#include <process.h>
-#include <tree.h>
 #include <fcntl.h>
-#include <linkedlist.h>
-#include <thread.h>
-#include <stackadt.h>
+#include <obj.h>
+#include <vfs.h>
+#include <file.h>
+#include <vnode.h>
+#include <mutex.h>
 
 /*
 * Try not to have non-static functions that return in any way a struct vnode*, as it
@@ -33,18 +29,21 @@ struct mounted_file {
 
 	/* What the device / filesystem mount is called */
 	char* name;
+
+	struct mounted_file* next;
 };
 
-static struct spinlock vfs_lock;
-static struct linked_list* mount_points = NULL;
+static struct mutex* mount_list_lock;
+static struct mounted_file* mounted_file_list;
 
-int NextDevId(void) {
+export int NextDevId(void) {
 	static bool init = false;
 	static struct spinlock devid_lock;
 	static int id = 1;
 
 	if (!init) {
-		InitSpinlock(&devid_lock, "devid", IRQL_SCHEDULER);
+		InitSpinlock(&devid_lock);
+		init = true;
 	}	
 	AcquireSpinlock(&devid_lock);
 	int res = id++;
@@ -52,81 +51,9 @@ int NextDevId(void) {
 	return res;
 }
 
-struct mounted_file* GetMountPointFromName(const char* name) {
-	if (mount_points == NULL) {
-		return NULL;
-	}
-	struct linked_list_node* iter = ListGetFirstNode(mount_points);
-	while (iter != NULL) {
-		struct mounted_file* data = ListGetDataFromNode(iter);
-		if (!strcmp(name, data->name)) {
-			return data;
-		}
-		iter = ListGetNextNode(iter);
-	}
-	return NULL;
-}
-
-int RootsRead(struct vnode* node, struct transfer* io) {
-	if (io->offset % sizeof(struct dirent) != 0) {
-		return EINVAL;
-	}
-
-	int index = io->offset / sizeof(struct dirent);
-	if (index == 0 || index == 1) {
-		struct dirent dir;
-		dir.d_ino = 0;
-		dir.d_disk = node->stat.st_dev;
-		strcpy(dir.d_name, index == 0 ? "." : "..");
-		dir.d_namlen = strlen(dir.d_name);
-		dir.d_type = DT_DIR;
-		return PerformTransfer(&dir, io, sizeof(struct dirent));
-	}
-
-	struct mounted_file* root = ListGetDataAtIndex(mount_points, index - 2);
-	if (root == NULL) {
-		return ENOENT;
-	}
-
-	struct dirent dir;
-	dir.d_type = IFTODT(root->node->node->stat.st_mode);
-	dir.d_ino = root->node->node->stat.st_ino;
-	dir.d_disk = (size_t) root->node->node->stat.st_dev;
-	dir.d_namlen = strlen(root->name);
-	strncpy(dir.d_name, root->name, sizeof(dir.d_name));
-	dir.d_name[sizeof(dir.d_name) - 1] = 0;
-	return PerformTransfer(&dir, io, sizeof(struct dirent));
-}
-
-int RootsFollow(struct vnode* node, struct vnode** output, const char* name) {
-	if (!strcmp(name, "..")) {
-		*output = node;
-		return 0;
-	}
-	struct mounted_file* root = GetMountPointFromName(name);
-	if (root == NULL) {
-		return ENOENT;
-	}
-	*output = root->node->node;
-    return 0;
-}
-
-void InitRootsFilesystem(void) {
-	struct vnode_operations dev_ops = {
-		.read           = RootsRead,
-		.follow         = RootsFollow,
-	};
-
-	AddVfsMount(CreateVnode(dev_ops, (struct stat) {
-        .st_mode = S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO,
-        .st_nlink = 1,
-		.st_dev = NextDevId()
-    }), "*");
-}
-
 void InitVfs(void) {
-    InitSpinlock(&vfs_lock, "vfs", IRQL_SCHEDULER);
-    mount_points = ListCreate();
+    mount_list_lock = CreateMutex();
+	mounted_file_list = NULL;
 }
 
 static bool IsRelative(const char* path) {
@@ -138,10 +65,7 @@ static bool IsRelative(const char* path) {
 	return true;
 }
 
-static int CheckValidComponentName(const char* name)
-{
-	assert(name != NULL);
-	
+static int CheckValidComponentName(const char* name) {	
 	if (name[0] == 0) {
 		return EINVAL;
 	}
@@ -157,13 +81,104 @@ static int CheckValidComponentName(const char* name)
 	return 0;
 }
 
-static int DoesMountPointExist(const char* name) {
-    assert(name != NULL);
-    assert(IsSpinlockHeld(&vfs_lock));
+struct mounted_file* GetMountPointFromName(const char* name) {
+	if (mounted_file_list == NULL) {
+		return NULL;
+	}
+	struct mounted_file* curr = mounted_file_list;
+	while (curr) {
+		if (!strcmp(curr->name, name)) {
+			return curr;
+		}
+		curr = curr->next;
+	}
+	return NULL;
+}
 
+static int DoesMountPointExist(const char* name) {
     if (GetMountPointFromName(name) != NULL) {
         return EEXIST;
     }
+    return 0;
+}
+
+export int Mount(struct vnode* node, const char* name) {
+    if (name == NULL || node == NULL) {
+		return EINVAL;
+	}
+
+	if (strlen(name) >= MAX_COMPONENT_LENGTH) {
+		return ENAMETOOLONG;
+	}
+
+    int status = CheckValidComponentName(name);
+	if (status != 0) {
+		return status;
+	}
+
+    status = AcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
+	if (status != 0) {
+		return status;
+	}
+
+    if (DoesMountPointExist(name) == EEXIST) {
+        ReleaseMutex(mount_list_lock);
+        return EEXIST;
+    }
+
+    struct mounted_file* mount = AllocHeap(sizeof(struct mounted_file));
+	mount->name = KeStrdup(name);
+    mount->node = CreateFile(node, 0, 0, true, true);
+	mount->next = mounted_file_list;
+	mounted_file_list = mount;
+	RefObject(mount->node);
+    ReleaseMutex(mount_list_lock);
+    return 0;
+}
+
+export int Unmount(const char* name) {
+    if (name == NULL) {
+		return EINVAL;
+	}
+
+	if (CheckValidComponentName(name) != 0) {
+		return EINVAL;
+	}
+
+	int res = AcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
+	if (res != 0) {
+		return res;
+	}
+
+	/*
+	* Scan through the mount table for the device
+	*/ 
+    struct mounted_file* actual = GetMountPointFromName(name);
+    if (actual == NULL) {
+        ReleaseMutex(mount_list_lock);
+        return ENODEV;
+    }
+
+    DerefObject(actual->node);
+
+    if (actual == mounted_file_list) {
+		mounted_file_list = mounted_file_list->next;
+	} else {
+		struct mounted_file* curr = mounted_file_list;
+		struct mounted_file* prev = NULL;
+		while (curr) {
+			if (curr == actual) {
+				prev->next = curr->next;
+				break;
+			}
+			prev = curr;
+			curr = curr->next;
+		}
+	}
+	
+	FreeHeap(actual->name);
+	FreeHeap(actual);
+    ReleaseMutex(mount_list_lock);
     return 0;
 }
 
@@ -176,8 +191,6 @@ static int DoesMountPointExist(const char* name) {
 */
 static int GetPathComponent(const char* path, int* ptr, char* out, int max_len, char delimiter) {
 	int i = 0;
-	LogWriteSerial(" GetPathComponent --> %s --> ", path);
-
 	out[0] = 0;
 
 	while (path[*ptr] && path[*ptr] != delimiter) {
@@ -201,8 +214,6 @@ static int GetPathComponent(const char* path, int* ptr, char* out, int max_len, 
 		} while (path[*ptr] == '/');
 	}
 
-	LogWriteSerial("%s\n ", out);
-
 	/*
 	* Ensure that there are no colons or backslashes in the filename itself.
 	*/
@@ -217,7 +228,6 @@ static int GetFinalPathComponent(const char* path, char* out, int max_len) {
 	if (!IsRelative(path)) {
 		status = GetPathComponent(path, &path_ptr, out, max_len, ':');
 		if (status) {
-			LogWriteSerial("BAD C: %d\n", status);
 			return status;
 		}
 	}
@@ -225,7 +235,6 @@ static int GetFinalPathComponent(const char* path, char* out, int max_len) {
 	while (path_ptr < (int) strlen(path)) {
 		status = GetPathComponent(path, &path_ptr, out, max_len, '/');
 		if (status) {
-			LogWriteSerial("BAD D: %d\n", status);
 			return status;
 		}
 	}
@@ -233,79 +242,6 @@ static int GetFinalPathComponent(const char* path, char* out, int max_len) {
 	return 0;
 }
 
-int AddVfsMount(struct vnode* node, const char* name) {
-    EXACT_IRQL(IRQL_STANDARD);   
-
-    if (name == NULL || node == NULL) {
-		return EINVAL;
-	}
-
-	if (strlen(name) >= MAX_COMPONENT_LENGTH) {
-		return ENAMETOOLONG;
-	}
-
-    int status = CheckValidComponentName(name);
-	if (status != 0) {
-		return status;
-	}
-
-    AcquireSpinlock(&vfs_lock);
-
-    if (DoesMountPointExist(name) == EEXIST) {
-        ReleaseSpinlock(&vfs_lock);
-        return EEXIST;
-    }
-
-    struct mounted_file* mount = AllocHeap(sizeof(struct mounted_file));
-	mount->name = strdup(name);
-    mount->node = CreateFile(node, 0, 0, true, true);
-
-	ListInsertEnd(mount_points, (void*) mount);
-
-	LogWriteSerial("MOUNTED TO THE VFS: %s\n", name);
-
-    ReleaseSpinlock(&vfs_lock);
-    return 0;
-}
-
-int RemoveVfsMount(const char* name) {
-    MAX_IRQL(IRQL_PAGE_FAULT);   
-
-    if (name == NULL) {
-		return EINVAL;
-	}
-
-	if (CheckValidComponentName(name) != 0) {
-		return EINVAL;
-	}
-
-	AcquireSpinlock(&vfs_lock);
-
-	/*
-	* Scan through the mount table for the device
-	*/ 
-    struct mounted_file* actual = GetMountPointFromName(name);
-    if (actual == NULL) {
-        ReleaseSpinlock(&vfs_lock);
-        return ENODEV;
-    }
-
-    assert(!strcmp(actual->name, name));
-
-    /*
-     * Decrement the reference that was initially created way back in
-     * vfs_add_device in the call to dev_create_vnode (the vnode dereference),
-     * and then the open file that was created alongside it.
-     */
-    DereferenceVnode(actual->node->node);
-    DereferenceFile(actual->node);
-
-	ListDeleteData(mount_points, actual);
-    FreeHeap(actual->name);
-
-    ReleaseSpinlock(&vfs_lock);
-    return 0;
-}
 
 /*
 * Given an absolute or relative filepath, returns the vnode representing
@@ -314,11 +250,6 @@ int RemoveVfsMount(const char* name) {
 * Should be used carefully, as the reference count is incremented.
 */
 static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_parent) {
-	assert(path != NULL);
-	assert(out != NULL);
-
-	LogWriteSerial("GetVnodeFromPath: %s\n", path);
-
 	if (strlen(path) == 0) {
 		return EINVAL;
 	}
@@ -334,14 +265,11 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	int err;
 	struct vnode* current_vnode = NULL;
 	if (relative) {
-		struct process* prcss = GetProcess();
+		/*struct process* prcss = GetProcess();
 		if (prcss == NULL) {
 			return ENODEV;
 		}
-		current_vnode = prcss->cwd;
-		if (current_vnode == NULL) {
-			LogWriteSerial("*** *!* *!* *!* *** No cwd...\n");
-		}
+		current_vnode = prcss->cwd;*/
 
 	} else {
 		err = GetPathComponent(path, &path_ptr, component_buffer, MAX_COMPONENT_LENGTH, ':');
@@ -349,13 +277,17 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 			return err;
 		}
 
+		err = AcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
+		if (err != 0) {
+			return err;
+		}
 		struct mounted_file* mount = GetMountPointFromName(component_buffer);
+		ReleaseMutex(mount_list_lock);
 		struct file* current_file = mount == NULL ? NULL : mount->node;
 		if (current_file == NULL) {
 			return ENODEV;
 		}
 		current_vnode = current_file->node;
-		LogWriteSerial("Got mount point: %s, 0x%X, 0x%X, 0x%X\n", component_buffer, mount, current_file, current_vnode);
 	}
 	
 	if (current_vnode == NULL) {
@@ -367,7 +299,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	* after a call to vfs_close (this function should only be called 
 	* by vfs_open).
 	*/
-	ReferenceVnode(current_vnode);
+	RefObject(current_vnode);
 
 	char component[MAX_COMPONENT_LENGTH + 1];
 
@@ -375,14 +307,11 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	* Iterate over the rest of the path.
 	*/
 	while (path_ptr < (int) strlen(path)) {
-		LogWriteSerial(" ==> path %s\n", path);
 		int status = GetPathComponent(path, &path_ptr, component, MAX_COMPONENT_LENGTH, '/');
 		if (status != 0) {
-			DereferenceVnode(current_vnode);
+			DerefObject(current_vnode);
 			return status;
 		}
-
-		LogWriteSerial("PATH ITER: %s [of %s]\n", component, path);
 
 		if (!strcmp(component, ".")) {
 			/*
@@ -403,9 +332,9 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 		* a new vnode with a count of one.
 		*/
 		struct vnode* next_vnode = NULL;
-		status = VnodeOpFollow(current_vnode, &next_vnode, component);
+		status = VnodeFollow(current_vnode, &next_vnode, component);
 		if (status != 0) {
-			DereferenceVnode(current_vnode);
+			DerefObject(current_vnode);
 			return status;
 		}	
 		current_vnode = next_vnode;
@@ -413,8 +342,8 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 
 	if (want_parent) {
 		struct vnode* parent;
-		int status = VnodeOpFollow(current_vnode, &parent, "..");
-		DereferenceVnode(current_vnode);
+		int status = VnodeFollow(current_vnode, &parent, "..");
+		DerefObject(current_vnode);
 		if (status != 0) {
 			return status;
 		}
@@ -427,7 +356,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	return 0;
 }
 
-int RemoveFileOrDirectory(const char* path, bool rmdir) {
+export int RemoveFileOrDirectory(const char* path, bool rmdir) {
 	struct vnode* node;
 	int res = GetVnodeFromPath(path, &node, false);
 	if (res != 0) {
@@ -438,24 +367,14 @@ int RemoveFileOrDirectory(const char* path, bool rmdir) {
 	if (rmdir && !is_dir) return ENOTDIR;
 	if (!rmdir && is_dir) return EISDIR;
 
-	if (rmdir) {
-		res = VnodeOpDelete(node);
+	res = node->stat.st_nlink > 0 ? VnodeUnlink(node) : ENOENT;
 
-	} else {
-		res = node->stat.st_nlink > 0 ? VnodeOpUnlink(node) : ENOENT;
-	}
-
-	DereferenceVnode(node);
+	DerefObject(node);
 	return res;
 }
 
-int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
-    EXACT_IRQL(IRQL_STANDARD);  
-
-	LogWriteSerial("OPEN FILE: %s\n", path); 
-
+export int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
  	if (path == NULL || out == NULL || strlen(path) <= 0) {
-		LogWriteSerial("BAD A %d\n", 0);
 		return EINVAL;
 	}
 
@@ -474,17 +393,14 @@ int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
 			}
 			
 			char name[MAX_COMPONENT_LENGTH + 1];
-			LogDeveloperWarning("GetFinalPathComponent probably needs to be fixed");
 			status = GetFinalPathComponent(path, name, MAX_COMPONENT_LENGTH);
-			LogWriteSerial("--> CREATING A FILE, WITH NAME %s\n", name);
 			if (status) {
-				LogWriteSerial("BAD B %d\n", status);
 				return status;
 			}
 
 			struct vnode* child;
-			status = VnodeOpCreate(node, &child, name, flags, mode);
-			DereferenceVnode(node);
+			status = VnodeCreate(node, &child, name, flags, mode);
+			DerefObject(node);
 
 			if (status) {
 				return status;
@@ -505,9 +421,9 @@ int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
 		return status;
     }
 
-	status = VnodeOpCheckOpen(node, flags & (O_ACCMODE | O_NONBLOCK));
+	status = VnodeCheckOpen(node, flags & (O_ACCMODE | O_NONBLOCK));
     if (status) {
-		DereferenceVnode(node);
+		DerefObject(node);
 		return status;
 	}
 
@@ -518,13 +434,13 @@ int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
 		/*
 		* You cannot write to a directory - this also prevents truncation.
 		*/
-		DereferenceVnode(node);
+		DerefObject(node);
 		return EISDIR;
 	}
 
 	if ((flags & O_TRUNC) && IFTODT(node->stat.st_mode) == DT_REG) {
 		if (can_write) {
-			status = VnodeOpTruncate(node, 0);
+			status = VnodeTruncate(node, 0);
 			if (status) {
 				return status;
 			}
@@ -542,8 +458,6 @@ int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
 }
 
 static int FileAccess(struct file* file, struct transfer* io, bool write) {
-	EXACT_IRQL(IRQL_STANDARD);
-
     if (io == NULL || io->address == NULL || file == NULL || file->node == NULL) {
 		return EINVAL;
 	}
@@ -552,27 +466,15 @@ static int FileAccess(struct file* file, struct transfer* io, bool write) {
     }
 	
 	io->blockable = !(file->node->flags & O_NONBLOCK);
-	return (write ? VnodeOpWrite : VnodeOpRead)(file->node, io);
+	return (write ? VnodeWrite : VnodeRead)(file->node, io);
 }
 
-int ReadFile(struct file* file, struct transfer* io) {
+export int ReadFile(struct file* file, struct transfer* io) {
 	return FileAccess(file, io, false);
 }
 
-int WriteFile(struct file* file, struct transfer* io) {
+export int WriteFile(struct file* file, struct transfer* io) {
 	return FileAccess(file, io, true);
-}
-
-int CloseFile(struct file* file) {
-	EXACT_IRQL(IRQL_STANDARD);
-
-    if (file == NULL || file->node == NULL) {
-		return EINVAL;
-	}
-
-    DereferenceVnode(file->node);
-	DereferenceFile(file);
-	return 0;
 }
 
 /*
@@ -580,6 +482,7 @@ int CloseFile(struct file* file) {
  * be open, and may be safely closed after a call to this function, as the 
  * kernel maintains a references to the working directory.
  */
+/*
 int SetWorkingDirectory(struct vnode* node) {
 	struct process* prcss = GetProcess();
 	if (prcss == NULL || node == NULL) {
@@ -597,4 +500,4 @@ int SetWorkingDirectory(struct vnode* node) {
 		DereferenceVnode(deref);
 	}
 	return 0;
-}
+}*/

@@ -1,7 +1,7 @@
 #pragma once
 
-#define USE_BUILTIN_MEMCPY
-#define USE_BUILTIN_MEMSET
+#undef USE_BUILTIN_MEMCPY
+#undef USE_BUILTIN_MEMSET
 
 #ifdef USE_BUILTIN_MEMCPY
 #define memcpy(dst, src, n) __builtin_memcpy(dst, src, n)

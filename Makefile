@@ -50,6 +50,7 @@ common_footer:
 	cp $(BUILD_SOURCE_DIR)/kernel.exe $(BUILD_OUTPUT_DIR)/kernel.exe
 	cp $(BUILD_SOURCE_DIR)/kernel.map $(BUILD_OUTPUT_DIR)/kernel.map
 	objdump -drwC -Mintel $(BUILD_OUTPUT_DIR)/kernel.exe >> $(BUILD_OUTPUT_DIR)/disassembly.txt
+	/Users/alex/Desktop/TOS/toolchain/output/bin/i386-elf-strip --discard-all $(BUILD_OUTPUT_DIR)/KERNEL.EXE
 	nasm $(BOOTLOADER_DIR)/bootloader.s -o bootloader.bin
 	rm $(BUILD_OUTPUT_DIR)/drivers/TEMPLATE.SYS || true
 	rm $(BUILD_OUTPUT_DIR)/applications/TEMPLATE.EXE || true
@@ -88,9 +89,9 @@ bootloader:
 	./boot/build.sh
 	
 cstdlib:
-	$(MAKE) -C $(LIBC_MAKEFILE_DIR)
+#	$(MAKE) -C $(LIBC_MAKEFILE_DIR)
 
-applications: app_header app_all
+applications: #app_header app_all
 drivers: driver_header driver_all
 osrelease: common_header release_compile bootloader cstdlib drivers applications common_footer
 osdebug: common_header debug_compile bootloader cstdlib drivers applications common_footer

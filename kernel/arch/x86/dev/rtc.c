@@ -1,6 +1,7 @@
-#include <machine/cmos.h>
+#include <machine/x86.h>
 #include <errno.h>
 #include <timeconv.h>
+#include <common.h>
 #include <log.h>
 
 #define RTC_SECOND  0x00
@@ -11,7 +12,7 @@
 #define RTC_YEAR    0x09
 #define RTC_WEEKDAY 0x06
 
-#define CURRENT_YEAR 2024
+#define CURRENT_YEAR 2026
 
 static bool IsUpdateInProgress(void) {
     return ReadCmos(0x0A) & 0x80;
@@ -47,7 +48,7 @@ static int Convert24HourTo12(int hour, bool* pm) {
 /*
  * ACPI.SYS will set this with the correct value if one exists.
  */
-int x86_rtc_century_register = -1;
+export int x86_rtc_century_register = -1;
 static int GetCenturyRegister(void) {
     return x86_rtc_century_register;
 }
@@ -69,9 +70,6 @@ static int GetCentury(int low_year, bool rtc_in_bcd_mode) {
         uint8_t century = ReadCmos(century_reg);
         if (rtc_in_bcd_mode) {
             century = BcdToBinary(century);
-        }
-        if (century != guess) {
-            LogDeveloperWarning("RTC century (and maybe everything else) is probably wrong\n");
         }
         return century;
     }
@@ -151,7 +149,7 @@ static void WriteTimeState(struct ostime t)
     WriteCmos(RTC_YEAR, t.year);
 }
 
-uint64_t ArchGetUtcTime(int64_t timezone_offset) {    
+export uint64_t ArchGetUtcTime(int64_t timezone_offset) {    
     struct ostime time;
     struct ostime prev;
 
@@ -160,7 +158,6 @@ uint64_t ArchGetUtcTime(int64_t timezone_offset) {
     }
     ReadTimeState(&time);
     
-    // TODO: timeouts!
     do {
         prev = time;
         while (IsUpdateInProgress()) {
@@ -170,12 +167,10 @@ uint64_t ArchGetUtcTime(int64_t timezone_offset) {
 
     } while (!AreTimesEqual(time, prev));
 
-    LogWriteSerial("RTC got %d:%d:%d %d/%d/%d\n", time.hour, time.min, time.sec, time.day, time.month, time.year);
-
     return TimeStructToValue(time) - timezone_offset;
 }
 
-int ArchSetUtcTime(uint64_t time, int64_t timezone_offset) {
+export int ArchSetUtcTime(uint64_t time, int64_t timezone_offset) {
     time += timezone_offset;
     
     struct ostime rtime = TimeValueToStruct(time);
@@ -187,7 +182,6 @@ int ArchSetUtcTime(uint64_t time, int64_t timezone_offset) {
     } while (!AreTimesEqual(rtime, readback));
 
     WriteCmos(RTC_WEEKDAY, GetWeekday(time));
-    LogWriteSerial("writing weekday %d (1-7, Sunday=1)\n", GetWeekday(time));
 
     return 0;
 }

@@ -1,0 +1,41 @@
+#pragma once
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdatomic.h>
+#include <spinlock.h>
+
+#define OBJTYPE_SEM             0
+#define OBJTYPE_VAS             1
+#define OBJTYPE_PAGE_ORIGIN     2
+#define OBJTYPE_PAGE_VIRT       3
+#define OBJTYPE_DC              4
+#define OBJTYPE_VNODE           5
+#define OBJTYPE_FILE            6
+#define OBJTYPE_MODULE          7
+#define OBJTYPE_USEROBJ         8
+
+struct obj_header {
+        _Atomic uint16_t ref_count;
+        _Atomic uint8_t objtype;
+};
+
+void RegisterObjectType(uint8_t type, void(*cleanup_func)(void*));
+void InitObject(void* obj, uint8_t type);
+void RefObject(void* obj);
+void DerefObject(void* obj);
+
+
+struct user_obj_header {
+        struct obj_header hdr;
+        struct spinlock lock;
+        uint32_t user_ref_count : 16;
+        uint32_t user_gone      : 1;
+        uint32_t user_type      : 15;
+};
+
+void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*));
+void InitUserObjectType(void);
+void InitUserObject(void* obj, uint8_t user_type);
+void UserRef(void* obj);
+void UserDeref(void* obj);

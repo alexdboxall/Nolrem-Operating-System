@@ -7,17 +7,13 @@
  */
 
 #include <heap.h>
-#include <stdlib.h>
 #include <vfs.h>
 #include <log.h>
-#include <assert.h>
 #include <errno.h>
 #include <string.h>
 #include <transfer.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <virtual.h>
-#include <filesystem.h>
 
 struct partition_data {
     struct file* fs;
@@ -94,7 +90,7 @@ static const struct vnode_operations dev_ops = {
     .follow         = Follow,
 };
 
-struct file* CreatePartition(
+pageable struct file* CreatePartition(
     struct file* disk, uint64_t start, uint64_t length, int id, 
     int sector_size, int media_type, bool boot
 ) {
@@ -120,16 +116,15 @@ struct file* CreatePartition(
     node->data = data;
 
     struct file* partition = CreateFile(node, 0, 0, true, true);
-    MountFilesystemForDisk(partition);
+    // TODO:
+    //MountFilesystemForDisk(partition);
     return partition;
 }
 
-struct file* TryCreateMbrPartition(
+static pageable struct file* TryCreateMbrPartition(
     struct file* disk, uint8_t* mem, int index, int sector_size
 ) {
     int offset = 0x1BE + index * 16;
-
-    LogWriteSerial("Trying partition %d, offset 0x%X\n", index, offset);
 
     uint8_t active = mem[offset + 0];
     if (active & 0x7F) {
@@ -154,8 +149,6 @@ struct file* TryCreateMbrPartition(
     total_sectors <<= 8;
     total_sectors |= mem[offset + 12];
 
-    LogWriteSerial("Start sector = 0x%X, total sectors = 0x%X, disk 0x%X\n", start_sector, total_sectors, disk);
-
     if (start_sector == 0 && total_sectors == 0) {
         return NULL;
     }
@@ -171,23 +164,25 @@ struct file* TryCreateMbrPartition(
 /*
  * Caller to free return value.
  */
-struct file** GetMbrPartitions(struct file* disk) {
+static pageable struct file** GetMbrPartitions(struct file* disk) {
     size_t block_size = disk->node->stat.st_blksize;
 
-    uint8_t* mem = (uint8_t*) MapVirt(0, 0, block_size, VM_READ | VM_FILE, disk, 0);
+    uint8_t* mem = AllocHeap(block_size);
     if (mem == NULL) {
         return NULL;
     }
 
     if (mem[0x1FE] != 0x55) {
+        FreeHeap(mem);
         return NULL;
     }
     if (mem[0x1FF] != 0xAA) {
+        FreeHeap(mem);
         return NULL;
     }
 
     struct file** partitions = AllocHeap(sizeof(struct file) * 5);
-    inline_memset(partitions, 0, sizeof(struct file) * 5);
+    memset(partitions, 0, sizeof(struct file) * 5);
 
     int partitions_found = 0;
     for (int i = 0; i < 4; ++i) {
@@ -197,14 +192,14 @@ struct file** GetMbrPartitions(struct file* disk) {
         }
     }
 
-    UnmapVirt((size_t) mem, block_size);
+    FreeHeap(mem);
     return partitions;
 }
 
 /*
  * Returns a null terminated array of partitions.
  */
-struct file** GetPartitionsForDisk(struct file* disk) {
+export pageable struct file** GetPartitionsForDisk(struct file* disk) {
     struct file** partitions = GetMbrPartitions(disk);
     
     if (partitions == NULL) {

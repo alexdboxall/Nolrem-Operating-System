@@ -1,12 +1,10 @@
 #include <diskutil.h>
 #include <string.h>
-#include <irql.h>
-#include <assert.h>
 #include <spinlock.h>
 #include <vfs.h>
 #include <errno.h>
 #include <log.h>
-#include <irql.h>
+#include <heap.h>
 #include <partition.h>
 #include <sys/stat.h>
 
@@ -42,8 +40,7 @@ static char* type_strings[__DISKUTIL_NUM_TYPES] = {
  * are created or any drive names are generated.
  */
 void InitDiskUtil(void) {
-    EXACT_IRQL(IRQL_STANDARD);   
-    InitSpinlock(&lock, "diskutil", IRQL_SCHEDULER);
+    InitSpinlock(&lock);
     memset(type_table, 0, sizeof(type_table));
 }
 
@@ -54,7 +51,7 @@ void InitDiskUtil(void) {
  * 
  * Returns 0 on success, else EINVAL.
  */
-static int AppendNumberToString(char* str, int num) {
+static pageable int AppendNumberToString(char* str, int num) {
     if (str == NULL || num >= 1000) {
         return EINVAL;
     }
@@ -83,9 +80,7 @@ static int AppendNumberToString(char* str, int num) {
  * drv1, etc.) Each call to this function will return a different string. The 
  * caller is responsible for freeing the returned string.
  */
-char* GenerateNewMountedDiskName() {
-    MAX_IRQL(IRQL_SCHEDULER);
-
+export pageable char* GenerateNewMountedDiskName() {
     char name[16];
     strcpy(name, "drv");
 
@@ -94,7 +89,7 @@ char* GenerateNewMountedDiskName() {
     ReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
-    return strdup(name);
+    return KeStrdup(name);
 }
 
 /**
@@ -102,9 +97,7 @@ char* GenerateNewMountedDiskName() {
  * (e.g. raw-hd0, raw-hd1, raw-fd0). Each call to this function will return a 
  * different string. The caller is responsible for freeing the returned string.
  */
-char* GenerateNewRawDiskName(int type) {
-    MAX_IRQL(IRQL_SCHEDULER);
-
+export pageable char* GenerateNewRawDiskName(int type) {
     char name[16] = "raw-";
 
     if (type >= __DISKUTIL_NUM_TYPES || type < 0) {
@@ -118,18 +111,17 @@ char* GenerateNewRawDiskName(int type) {
     ReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
-    LogWriteSerial("GENERATING DISK NAME: %s\n", name);
-    return strdup(name);
+    return KeStrdup(name);
 }
 
 /**
  * Generates and returns the name of a partition from its partition index within
  * a drive (e.g. part0, part1). The caller must free the returned string.
  */
-static char* GetPartitionNameString(int index) {
+static pageable char* GetPartitionNameString(int index) {
     char name[16] = "part";
     AppendNumberToString(name, index);
-    return strdup(name);
+    return KeStrdup(name);
 }
 
 /**
@@ -138,34 +130,29 @@ static char* GetPartitionNameString(int index) {
  * is mounted if it exists. If the disk has no partitions,= a 'whole disk 
  * partition' will be created, the filesystem will still be detected.
  */
-void CreateDiskPartitions(struct file* disk) {
-    EXACT_IRQL(IRQL_STANDARD);   
-
+export pageable void CreateDiskPartitions(struct file* disk) {
     struct file** partitions = GetPartitionsForDisk(disk);
 
     if (partitions == NULL || partitions[0] == NULL) {
-        LogWriteSerial("CreateDiskPartitions A\n");
         struct stat st = disk->node->stat;
         struct vnode* whole_disk = CreatePartition(
             disk, 0, st.st_size, 0, st.st_blksize, 0, false)->node;
-        VnodeOpCreate(disk->node, &whole_disk, GetPartitionNameString(0), 0, 0);
+        VnodeCreate(disk->node, &whole_disk, GetPartitionNameString(0), 0, 0);
         return;
     }
     
-    LogWriteSerial("CreateDiskPartitions B\n");
-
     for (int i = 0; partitions[i]; ++i) {
         struct vnode* partition = partitions[i]->node;
         char* str = GetPartitionNameString(i);
-        VnodeOpCreate(disk->node, &partition, str, 0, 0);
+        VnodeCreate(disk->node, &partition, str, 0, 0);
     }
 }
 
-void InitDiskPartitionHelper(struct disk_partition_helper* helper) {
+export void InitDiskPartitionHelper(struct disk_partition_helper* helper) {
     helper->num_partitions = 0;
 }
 
-int DiskFollowHelper(
+export int DiskFollowHelper(
     struct disk_partition_helper* helper, struct vnode** out, const char* name
 ) {
     for (int i = 0; i < helper->num_partitions; ++i) {
@@ -178,7 +165,7 @@ int DiskFollowHelper(
     return EINVAL;
 }
 
-int DiskCreateHelper(
+export int DiskCreateHelper(
     struct disk_partition_helper* helper, struct vnode** in, const char* name
 ) {
     if (helper->num_partitions >= MAX_PARTITIONS_PER_DISK) {

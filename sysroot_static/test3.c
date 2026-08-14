@@ -352,7 +352,7 @@ Patton, Carole; Mace, Scott (July 4, 1988). "Windows Gets More Memory With Upgra
 "Microsoft Internet Explorer Web Browser Available on All Major Platforms, Offers Broadest International Support". News Center. San Jose, California: Microsoft. April 30, 1996. Archived from the original on January 15, 2008. Retrieved February 14, 2011.
 "Windows 95 Support Lifecycle". Microsoft. Archived from the original on November 22, 2012. Retrieved January 3, 2011.
 "Windows 98 Standard Edition Support Lifecycle". Microsoft. Archived from the original on November 22, 2012. Retrieved January 3, 2011.
-"Improving "Cold Boot" Time for System Manufacturers". Microsoft. December 4, 2001. Archived from the original on February 13, 2010. Retrieved August 26, 2010.
+"Improving "Boot" Time for System Manufacturers". Microsoft. December 4, 2001. Archived from the original on February 13, 2010. Retrieved August 26, 2010.
 "Windows Millennium Edition: All About Me". PC World. Archived from the original on August 1, 2013. Retrieved May 21, 2013.
 Custer, Helen (1993). Inside Windows NT. Redmond: Microsoft Press. ISBN 1-55615-481-X.
 Thurrott, Paul (January 24, 2003). "Windows Server 2003: The Road To Gold – Part One: The Early Years". Archived from the original on January 1, 2005. Retrieved May 28, 2012.

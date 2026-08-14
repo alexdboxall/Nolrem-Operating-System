@@ -61,6 +61,8 @@ struct stat {
     blksize_t st_blksize;   /* Block size for file system I/O */
 };
 
+#ifndef COMPILE_KERNEL
 int stat(const char* restrict path, struct stat* restrict buf);
 int fstat(int fd, struct stat* buf);
 int lstat(const char* restrict path, struct stat* restrict buf);
+#endif

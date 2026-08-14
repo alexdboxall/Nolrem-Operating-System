@@ -10,7 +10,7 @@ SECTIONS
 	
 	. += 0xC0000000;
 	
-	.text ALIGN(4096) : AT (ADDR (.text) - 0xC0000000)
+	.text ALIGN(16) : AT (ADDR (.text) - 0xC0000000)
 	{
 		*(.text .text.*)
 	
@@ -21,29 +21,21 @@ SECTIONS
         end_ctors = .;
 
 		*(.dtors)
+
+		*(.rodata)
+		*(.data)
+
+		*(.cold_text)
+
+		. = ALIGN(4096);
+		*(.kuser)
+		*(.kuserrodata)
+
+		. = ALIGN(4096);
+		*(.pageable)
+		*(.pageablerodata)
 	}
 	
-	.rodata ALIGN(4096) : AT (ADDR (.rodata) - 0xC0000000)
-	{
-		*(.rodata)
-	}
-
-
-	. = ALIGN(4096);
-	_start_pageablek_section = .;
-
-	.pageablek ALIGN(4096) : AT (ADDR (.data) + SIZEOF(.data) - 0xC0000000)
-	{
-		*(.pageablektext)
-		*(.pageablekdata)
-	}
-	_end_pageablek_section = .;
-
-	.data ALIGN(4096) : AT (ADDR (.data) - 0xC0000000)
-	{
-		*(.data)
-	}
-
 	.bss ALIGN(4096) : AT (ADDR (.bss) - 0xC0000000)
 	{
 		*(COMMON)

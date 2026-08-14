@@ -1,6 +1,6 @@
 
 export TARGET=i386-elf
-export PREFIX="/Users/alex/Desktop/NOS/toolchain/output"
+export PREFIX="/Users/alex/Desktop/TOS/toolchain/output"
 export PATH="$PREFIX/bin:$PATH"
 
 cd build

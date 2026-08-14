@@ -1,148 +1,8 @@
 
+#include <common.h>
 #include <string.h>
 #include <errno.h>
-#include <stdint.h>
-#include <stdbool.h>
 #include <ctype.h>
-
-/*
- * Contains the code for memcpy, memset, strcpy, strcmp and strlen.
- */
-#include <cmn_string.h>
-
-#ifdef COMPILE_KERNEL
-#include <heap.h>
-#include <common.h>
-#else
-#include <stdlib.h>
-#define export
-#endif
-
-void* memchr(const void* s, int c, size_t n) {
-	const uint8_t* ptr = (const uint8_t*) s;
-
-	while (n--) {
-		if (*ptr == (uint8_t) c) {
-			return (void*) ptr;
-		}
-
-		++ptr;
-	}
-
-	return NULL;
-}
-
-int memcmp(const void* s1, const void* s2, size_t n) {
-    const uint8_t* a = (const uint8_t*) s1;
-	const uint8_t* b = (const uint8_t*) s2;
-
-	for (size_t i = 0; i < n; ++i) {
-		if (a[i] < b[i]) return -1;
-		else if (a[i] > b[i]) return 1;
-	}
-	
-	return 0;
-}
-
-int strncmp(const char* s1, const char* s2, size_t n) {
-	while (n && *s1 && (*s1 == *s2)) {
-		++s1;
-		++s2;
-		--n;
-	}
-	if (n == 0) {
-		return 0;
-	} else {
-		return (*(unsigned char*) s1 - *(unsigned char*) s2);
-	}
-}
-
-void* memmove(void* dst, const void* src, size_t n) {
-	uint8_t* a = (uint8_t*) dst;
-	const uint8_t* b = (const uint8_t*) src;
-
-	if (a <= b) {
-		while (n--) {
-			*a++ = *b++;
-		}
-	} else {
-		b += n;
-		a += n;
-
-		while (n--) {
-			*--a = *--b;
-		}
-	}
-
-	return dst;
-}
-
-char* strcat(char* restrict dst, const char* restrict src) {
-	char* ret = dst;
-
-	while (*dst) {
-		++dst;
-	}
-
-	while ((*dst++ = *src++)) {
-		;
-	}
-
-	return ret;
-}
-
-char* strncpy(char* restrict dst, const char* restrict src, size_t n) {
-	char* ret = dst;
-
-	while (n--) {
-		if (*src) {
-			*dst++ = *src++;
-		} else {
-			*dst++ = 0;
-		}
-	}
-
-	return ret;
-}
-
-char* strchr(const char* s, int c) {
-	do {
-		if (*s == (char) c) {
-			return (char*) s;
-		}
-	} while (*s++);
-	return NULL;
-}
-
-char* strdup(const char* str) {
-	char* copy = (char*) malloc(strlen(str) + 1);
-	strcpy(copy, str);
-	return copy;
-}
-
-#ifndef COMPILE_KERNEL
-
-int strcasecmp(const char* s1, const char* s2) {
-	while ((*s1) && (tolower(*s1) == tolower(*s2))) {
-		++s1;
-		++s2;
-	}
-
-	return tolower(*(uint8_t*) s1) - tolower(*(uint8_t*) s2);
-}
-
-int strncasecmp(const char* s1, const char* s2, size_t n) {
-	while (n && *s1 && (tolower(*s1) == tolower(*s2))) {
-		++s1;
-		++s2;
-		--n;
-	}
-	if (n == 0) {
-		return 0;
-	} else {
-		return tolower(*(unsigned char*) s1) - tolower(*(unsigned char*) s2);
-	}
-}
 
 char* strerror(int err) {
 	switch (err) {
@@ -221,21 +81,6 @@ char* strerror(int err) {
 	default:
 		return "Unknown error";
 	}
-}
-
-char* strncat(char* restrict dst, const char* restrict src, size_t n) {
-	char* ret = dst;
-
-	while (*dst) {
-		++dst;
-	}
-
-	while (*src && n--) {
-		*dst++ = *src++;
-	}	
-
-	*dst = 0;
-	return ret;
 }
 
 int strcoll(const char* s1, const char* s2) {
@@ -399,4 +244,33 @@ char* strtok(char* restrict s, const char* restrict delim) {
 	return token;
 }
 
-#endif
+char* strchr(const char* s, int c) {
+	do {
+		if (*s == (char) c) {
+			return (char*) s;
+		}
+	} while (*s++);
+	return NULL;
+}
+
+int strcasecmp(const char* s1, const char* s2) {
+	while ((*s1) && (tolower(*s1) == tolower(*s2))) {
+		++s1;
+		++s2;
+	}
+
+	return tolower(*(uint8_t*) s1) - tolower(*(uint8_t*) s2);
+}
+
+int strncasecmp(const char* s1, const char* s2, size_t n) {
+	while (n && *s1 && (tolower(*s1) == tolower(*s2))) {
+		++s1;
+		++s2;
+		--n;
+	}
+	if (n == 0) {
+		return 0;
+	} else {
+		return tolower(*(unsigned char*) s1) - tolower(*(unsigned char*) s2);
+	}
+}

@@ -1,54 +1,59 @@
 
 #include <common.h>
-#include <cpu.h>
 #include <log.h>
 
-/*
-* x86/lowlevel/idt.c - Interrupt Descriptor Table
-*
-* The interrupt decriptor table (IDT) is essentially a lookup table for where
-* the CPU should jump to when an interrupt is receieved.
-*/
+struct idt_entry
+{
+	uint16_t isr_offset_low;
+	uint16_t segment_selector;
+	uint8_t reserved;
+	uint8_t type;
+	uint16_t isr_offset_high;
 
-extern void x86LoadIdt(size_t addr);
+} __attribute__((packed));
 
-/*
-* Our trap handlers, defined in lowlevel/trap.s, which will be called
-* when an interrupt occurs. 
-*/
-extern size_t isr_vectors;
+struct idt_ptr
+{
+	uint16_t size;
+	size_t location;
+} __attribute__((packed));
 
-/*
-* Fill in an entry in the IDT.
-*/
+extern size_t isr_vectors_first_33;
+
+static struct idt_entry idt[256];
+static struct idt_ptr idtr;
+
 static void x86SetIdtEntry(int num, size_t isr_addr, uint8_t type)
 {
-	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
-
-	cpu_data->idt[num].isr_offset_low = (isr_addr & 0xFFFF);
-	cpu_data->idt[num].isr_offset_high = (isr_addr >> 16) & 0xFFFF;
-	cpu_data->idt[num].segment_selector = 0x08;
-	cpu_data->idt[num].reserved = 0;
-	cpu_data->idt[num].type = type;
+	idt[num].isr_offset_low = (isr_addr & 0xFFFF);
+	idt[num].isr_offset_high = (isr_addr >> 16) & 0xFFFF;
+	idt[num].segment_selector = 0x08;
+	idt[num].reserved = 0;
+	idt[num].type = type;
 }
 
-/*
-* Initialise the IDT. After this has occured, interrupts may be enabled.
-*/
-void x86InitIdt(void)
-{
-	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
-	
-	/*
-	 * Install the interrupt handlers. We set the system call interrupt vector
-	 * to be invokable from usermode.
-	 */
-	for (int i = 0; i < 256; ++i) {
-		x86SetIdtEntry(i, (&isr_vectors)[i], i == 96 ? 0xEE : 0x8E);
+void x86LoadIdt(size_t idtPtr) {
+    __asm__ volatile (
+        "lidt (%0)"
+        :
+        : "r" (idtPtr)
+        : "memory"
+    );
+}
+
+void x86InitIdt(void) {
+	size_t* isr_vectors = &isr_vectors_first_33;
+
+	for (int i = 0; i < 32; ++i) {
+		x86SetIdtEntry(i, isr_vectors[i], 0x8E);
+	}
+	for (int i = 32; i < 256; ++i) {
+		size_t vector = ((size_t)isr_vectors[32]) + 4 * (i - 32) + 6 * ((i - 16) / 32);
+		x86SetIdtEntry(i, vector, i == 96 ? 0xEE : 0x8E);
 	}
 
-	cpu_data->idtr.location = (size_t) &cpu_data->idt;
-	cpu_data->idtr.size = sizeof(cpu_data->idt) - 1;
+	idtr.location = (size_t) &idt;
+	idtr.size = sizeof(idt) - 1;
 	
-	x86LoadIdt((size_t) &cpu_data->idtr);
+	x86LoadIdt((size_t) &idtr);
 }

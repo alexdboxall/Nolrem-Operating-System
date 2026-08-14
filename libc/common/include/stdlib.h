@@ -58,7 +58,7 @@ lldiv_t lldiv(long long int numer, long long int denom);
 
 #define INCLUDED_STDLIB
 void _exit(int status);
-#define _Exit(status) _exit(status)
+#define CdExit(status) _exit(status)
 
 void* malloc(size_t size);
 void free(void* ptr);

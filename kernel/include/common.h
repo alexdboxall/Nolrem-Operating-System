@@ -10,7 +10,7 @@
 #include <sys/types.h>
 #endif
 
-#define OS_VERSION_STRING   "TinyOS"
+#define OS_VERSION_STRING   "Nolrem"
 #define OS_VERSION_MAJOR    0x00
 #define OS_VERSION_MINOR    0x01
 

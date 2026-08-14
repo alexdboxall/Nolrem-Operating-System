@@ -25,3 +25,4 @@ void BrushRectFallback(struct graphics_driver* drv, int x1, int y1, int x2, int 
         ++y1;
     }
 }
+

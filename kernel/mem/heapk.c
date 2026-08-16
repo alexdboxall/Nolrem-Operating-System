@@ -5,6 +5,7 @@
 #include <heapex.h>
 #include <spinlock.h>
 
+#define ALIGN       (sizeof(size_t))    // must be power of 2
 #define BOOTSTRAP_HEAP_SIZE (1024 * 32)
 
 static uint8_t bootstrap_heap[BOOTSTRAP_HEAP_SIZE];
@@ -34,6 +35,8 @@ bool IsOnBootstrapHeap(void* ptr) {
 
 export void* KeAllocHeap(size_t bytes) {
     AcquireSpinlock(&heap_lock);
+
+    bytes = (bytes + ALIGN - 1) & ~(ALIGN - 1);
 
     if (!use_real_heap) {
         void* retv = AllocBootstrapHeap(bytes);
@@ -72,6 +75,8 @@ static bool IsTopBoostrapHeapAllocation(void* ptr) {
 }
 
 export void* KeReallocHeap(void* ptr, size_t new_size) {
+    new_size = (new_size + ALIGN - 1) & ~(ALIGN - 1);
+
     size_t old_size = GetAllocationSize(ptr);
     if (old_size == new_size) {
         return ptr;

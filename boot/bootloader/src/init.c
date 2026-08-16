@@ -30,7 +30,7 @@ static void HideBootOptionsMessage(void) {
 static void DrawBootMessage() {
     static int dot_cycle = 0;
     for (int j = 0; j < 3; ++j) {
-        Putchar(16 + j, 1, (dot_cycle % 4) > j ? '.' : 0, BOOTCOL_WHITE_ON_BLACK);
+        Putchar(16 + j, 1, (dot_cycle & 3) > j ? '.' : 0, BOOTCOL_WHITE_ON_BLACK);
     }
     ++dot_cycle;
 }
@@ -85,6 +85,8 @@ static void BootOptionsMenu(void) {
         } else {
             Puts("[F] - Enable floppy drive", BOOTCOL_GREY_ON_BLACK);
         }
+        SetCursor(2, 5 + i + 2);
+        Printf("Boot structure is at 0x%X, 0x%X", (size_t) &kboot_info, (size_t) kboot_info.ram_table);
 
 retry:;
         char key = WaitKey();
@@ -130,7 +132,6 @@ static bool DisplayBootScreen(void) {
 }
 
 static size_t LoadProgramHeaders(size_t base) {
-    size_t krnl_dest = GetFw()->kernel_load_point;
 	struct Elf32_Ehdr* elf = (struct Elf32_Ehdr*) base;
 	struct Elf32_Phdr* progHeaders = (struct Elf32_Phdr*) (base + elf->e_phoff);
 
@@ -167,25 +168,24 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
     }
     
     size_t file_size = GetFileSize(fw->kernel_filename);
-    DiagnosticPrintf("The kernel file exists, and has a size of %d.%d KiB\n  ", file_size / 1024, (file_size % 1023) * 10 / 1024);
+    DiagnosticPrintf("The kernel file exists, and has a size of %d KiB\n  ", file_size / 1024);
 
-    LoadFile(fw->kernel_filename, 0x10000);
+    LoadFile(fw->kernel_filename, 0x40000);
     DiagnosticPrintf("The kernel image has been loaded into RAM.\n  ");
 
-    size_t entry_point = LoadProgramHeaders(0x10000);
+    size_t entry_point = LoadProgramHeaders(0x40000);
     DiagnosticPrintf("The kernel's executable has been fully loaded to address 0x%X.\n  ", fw->kernel_load_point);
     DiagnosticPrintf("The kernel entry point is at 0x%X\n  ", entry_point);
 
     kboot_info.enable_floppy = 1;
+    kboot_info.num_ram_table_entries = fw->num_ram_table_entries;
+    kboot_info.ram_table = fw->ram_table;
 
     if (show_boot_options) {
         BootOptionsMenu();
     }
 
     ExitBootServices();
-
-    kboot_info.num_ram_table_entries = fw->num_ram_table_entries;
-    kboot_info.ram_table = fw->ram_table;
 
     DiagnosticPrintf("The fw table is at 0x%X\n  ", fw->ram_table);
     DiagnosticPrintf("... and has 0x%X entries\n  ", fw->num_ram_table_entries);

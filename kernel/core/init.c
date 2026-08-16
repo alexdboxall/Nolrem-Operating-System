@@ -76,11 +76,11 @@ export _Noreturn void InitKernelResidentPortion(void) {
     CdTranslateRegion(&r1, -25, -25);
     CdTranslateRegion(&r2, +25, +25);
     
-    struct brush* b1 = CdCreatePatternedBrush(0xFF0000, 0xFF8000, BRUSH_PATTERN_BIG_DIAG_CROSS);
+    struct brush* b1 = CdCreatePatternedBrush(0xFFFF0000, TransparentColour(), BRUSH_PATTERN_BIG_DIAG_CROSS);
     CdPaintRegionWithBrush(dc, r1, b1);
-    struct brush* b2 = CdCreatePatternedBrush(0x00FF00, 0xFF0000, BRUSH_PATTERN_50_PERCENT);
+    struct brush* b2 = CdCreatePatternedBrush(0xFF00FF00, 0xFFFF0000, BRUSH_PATTERN_50_PERCENT);
     CdPaintRegionWithBrush(dc, r2, b2);
-    struct brush* b3 = CdCreatePatternedBrush(0xfcba03, 0x4ba67d, BRUSH_PATTERN_CROSS);
+    struct brush* b3 = CdCreatePatternedBrush(0xFFfcba03, 0xFF4ba67d, BRUSH_PATTERN_CROSS);
     CdPaintRegionWithBrush(dc, r3, b3);
     CdInvertRect(dc, 65, 175, 400, 200);
     DerefObject(dc);
@@ -92,6 +92,11 @@ export _Noreturn void InitKernelResidentPortion(void) {
     CdFreeRegion(r1);
     CdFreeRegion(r2);
     CdFreeRegion(r3);
+
+
+    // Now let's try running the *USERMODE* versions!
+    region_t r = CreateRectRegion(50, 60, 300, 250);
+    LogStringAndHexLine("Have a user object at ", (size_t) r);
 
     while (true) {
         ArchIdle();

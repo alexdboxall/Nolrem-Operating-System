@@ -83,8 +83,8 @@ export colour_t CdGetBrushSecondaryColour(struct brush* br) {
 }
 
 export int CdSetBrushOrigin(struct brush* br, int x, int y) {
-    br->origin_x = x % 8;
-    br->origin_y = y % 8;
+    br->origin_x = x & 7;
+    br->origin_y = y & 7;
     return 0;
 }
 

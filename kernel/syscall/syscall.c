@@ -9,7 +9,14 @@ static size_t (* const syscall_table[])(size_t, size_t, size_t, size_t) = {
     [SYS_CreateEllipseRegion] = SysCreateEllipseRegion,
     [SYS_EmptyOrEveryRegion] = SysEmptyOrEveryRegion,
     [SYS_CreateRoundedRectRegion] = SysCreateRoundedRectRegion,
-    [SYS_CreatePolyPolygonRegion] = SysCreatePolyPolygonRegion
+    [SYS_CreatePolyPolygonRegion] = SysCreatePolyPolygonRegion,
+    [SYS_GetObjectType] = SysGetObjectType,
+    [SYS_IsRegionEqual] = SysIsRegionEqual,
+    [SYS_IsRegionEmpty] = SysIsRegionEmpty,
+    [SYS_IsPointInRegion] = SysIsPointInRegion,
+    [SYS_TranslateRegion] = SysTranslateRegion,
+    [SYS_CopyRegion] = SysCopyRegion,
+    [SYS_GetRegionBounds] = SysGetRegionBounds,
 };
 
 export size_t PerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d) {

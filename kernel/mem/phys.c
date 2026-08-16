@@ -59,7 +59,6 @@ export size_t AllocPhys(bool pin) {
 
 void InitPhys(struct boot_memory_entry* table, size_t count) {
     LogString("\nInit physical memory... ");
-
     size_t total_phys_pages = 0;
     size_t max_phys_page_idx = 0;
 
@@ -97,7 +96,15 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
     
         if (BOOTRAM_GET_TYPE(entry.info) == BOOTRAM_TYPE_AVAILABLE) {         
             for (size_t j = page_start; j < page_end; ++j) {
-                if (j * PAGE_SIZE >= 0x100000 && j * PAGE_SIZE < max_addr_used_now) {
+                if (j * PAGE_SIZE >= 0x10000 && j * PAGE_SIZE < max_addr_used_now) {
+                    continue;
+                }
+                if (j * PAGE_SIZE == 0x0000 || j * PAGE_SIZE == 0xA000 || j * PAGE_SIZE == 0xC000) {
+                    // 0 has IVT/BIOS stuff
+                    // 0xA000 has the kernel boot info table
+                    // 0xC000 has the RAM data in it
+                    
+                    // TODO: a more stable way of getting this info!!
                     continue;
                 }
                 if (j < sys_pp_table_max_index) {

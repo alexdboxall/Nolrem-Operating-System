@@ -12,7 +12,7 @@ export pageable int CdPaintRoundedRectWithBrush(struct dc* dc, int x, int y, int
 
 export pageable int CdPaintRoundedRect(struct dc* dc, int x, int y, int width, int height, 
     int radius) {
-    struct brush* brush = CdGetDcBrush(dc);
+    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintRoundedRectWithBrush(dc, x, y, width, height, radius, brush);
     DerefObject(brush);
     return retv;
@@ -27,7 +27,7 @@ export pageable int CdPaintEllipseWithBrush(struct dc* dc, int x, int y, int wid
 }
 
 export pageable int CdPaintEllipse(struct dc* dc, int x, int y, int width, int height) {
-    struct brush* brush = CdGetDcBrush(dc);
+    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintEllipseWithBrush(dc, x, y, width, height, brush);
     DerefObject(brush);
     return retv;
@@ -43,7 +43,7 @@ export pageable int CdPaintPolygonWithBrush(struct dc* dc, int* x, int* y, int p
 }
 
 export pageable int CdPaintPolygon(struct dc* dc, int* x, int* y, int points, int mode) {
-    struct brush* brush = CdGetDcBrush(dc);
+    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintPolygonWithBrush(dc, x, y, points, mode, brush);
     DerefObject(brush);
     return retv;

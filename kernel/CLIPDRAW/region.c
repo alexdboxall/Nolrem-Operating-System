@@ -16,7 +16,7 @@ static void ExpandToFit(struct region* rgn, int extra_bytes) {
         if (rgn->allocated_length < 512) {
             rgn->allocated_length *= 2;
         } else if (power2) {
-            rgn->allocated_length += rgn->allocated_length / 2;
+            rgn->allocated_length += rgn->allocated_length >> 1;
         } else {
             rgn->allocated_length /= 3;
             rgn->allocated_length *= 4;
@@ -993,4 +993,51 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
 export bool CdIsRegionEmpty(struct region rgn) {
     struct region_data* data = rgn.data;
     return data->num_bands == 0;
+}
+
+
+int IterateRegion(
+    struct region rgn, 
+    int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel), 
+    void* context,
+    int init_rv
+);
+
+static int GetRegionBoundsCallback(struct rect r, void* ctxt, int rv, bool* cancel) {
+    // We treat `w` as x2 and `h` as y2.
+    struct rect* bound_rect = ctxt;
+    if (r.y < bound_rect->y) {
+        bound_rect->y = r.y;
+    }
+    if (r.x < bound_rect->x) {
+        bound_rect->x = r.x;
+    }
+    if (r.x + r.w > bound_rect->w) {
+        bound_rect->h = r.x + r.w;
+    }
+    if (r.y + r.h > bound_rect->h) {
+        bound_rect->h = r.y + r.h;
+    }
+    *cancel = false;
+    return rv;
+}
+
+export struct rect CdGetRegionBounds(struct region rgn) {
+    if (CdIsRegionEmpty(rgn)) {
+        struct rect empty = {0};
+        return empty;
+    }
+
+    // We treat `w` as x2 and `h` as y2.
+    struct rect r;
+    r.x = INT_MAX;
+    r.y = INT_MAX;
+    r.w = INT_MIN;
+    r.h = INT_MIN;
+    IterateRegion(rgn, GetRegionBoundsCallback, &r, 0);
+
+    // Correct the w/h from x2/y2
+    r.w -= r.x;
+    r.h -= r.y;
+    return r;
 }

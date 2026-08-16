@@ -17,10 +17,10 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
     struct uregion* ua = (struct uregion*) a;
     struct uregion* ub = (struct uregion*) b;
 
-    if (!ValidateUserRegionAndAtomicallyRef(ua)) {
+    if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
         return 0;
     }
-    if (!ValidateUserRegionAndAtomicallyRef(ub)) {
+    if (!ValidateUserObjectAndAtomicallyRef(ub, UOBJ_REGION)) {
         DerefObject(ua);
         return 0;
     }
@@ -35,7 +35,7 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
 }
 
 export pageableuserexec region_t GetRegionCombination(int mode, region_t a, region_t b) {
-    return (region_t) SystemCall(SYS_CreateRectRegion, (size_t) a, (size_t) b, mode, 0);
+    return (region_t) SystemCall(SYS_GetRegionCombination, (size_t) a, (size_t) b, mode, 0);
 }
 
 export pageableuserexec void GetRegionCombinationInPlace(int mode, region_t* a, region_t b) {

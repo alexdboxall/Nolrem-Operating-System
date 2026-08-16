@@ -9,24 +9,24 @@
 struct rect mouse_bounds = {.x = 0, .y = 0, .w = 640, .h = 480};
 
 struct graphics_driver;
-extern void VGAInvertRect(struct graphics_driver* drv, int x1, int y1, int x2, int y2);
+extern void VgaInvertRect(struct graphics_driver* drv, int x1, int y1, int x2, int y2);
 
 void DrawMouse(int x, int y) {
-    VGAInvertRect(NULL, x,     y + 0,  x + 1, y + 1);
-    VGAInvertRect(NULL, x,     y + 1,  x + 2, y + 2);
-    VGAInvertRect(NULL, x,     y + 2,  x + 3, y + 3);
-    VGAInvertRect(NULL, x,     y + 3,  x + 4, y + 4);
-    VGAInvertRect(NULL, x,     y + 4,  x + 5, y + 5);
-    VGAInvertRect(NULL, x,     y + 5,  x + 6, y + 6);
-    VGAInvertRect(NULL, x,     y + 6,  x + 7, y + 7);
-    VGAInvertRect(NULL, x,     y + 7,  x + 8, y + 8);
+    VgaInvertRect(NULL, x,     y + 0,  x + 1, y + 1);
+    VgaInvertRect(NULL, x,     y + 1,  x + 2, y + 2);
+    VgaInvertRect(NULL, x,     y + 2,  x + 3, y + 3);
+    VgaInvertRect(NULL, x,     y + 3,  x + 4, y + 4);
+    VgaInvertRect(NULL, x,     y + 4,  x + 5, y + 5);
+    VgaInvertRect(NULL, x,     y + 5,  x + 6, y + 6);
+    VgaInvertRect(NULL, x,     y + 6,  x + 7, y + 7);
+    VgaInvertRect(NULL, x,     y + 7,  x + 8, y + 8);
 
-    VGAInvertRect(NULL, x,     y + 8,  x + 5, y + 9);
-    VGAInvertRect(NULL, x,     y + 9,  x + 3, y + 10);
+    VgaInvertRect(NULL, x,     y + 8,  x + 5, y + 9);
+    VgaInvertRect(NULL, x,     y + 9,  x + 3, y + 10);
 
-    VGAInvertRect(NULL, x + 3, y + 9,  x + 5, y + 12);
-    VGAInvertRect(NULL, x + 4, y + 12, x + 6, y + 15);
-    VGAInvertRect(NULL, x + 5, y + 15, x + 6, y + 16);
+    VgaInvertRect(NULL, x + 3, y + 9,  x + 5, y + 12);
+    VgaInvertRect(NULL, x + 4, y + 12, x + 6, y + 15);
+    VgaInvertRect(NULL, x + 5, y + 15, x + 6, y + 16);
 }
 
 void BoundMouse(int* x, int* y, struct rect* mouse_bounds) {

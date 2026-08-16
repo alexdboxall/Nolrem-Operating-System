@@ -33,13 +33,47 @@ struct rect {
     int h;
 };
 
+struct dc;
+struct pen;
+struct brush;
+struct font;
+
+typedef struct dc* dc_t;
+typedef struct pen* pen_t;
+typedef struct brush* brush_t;
+typedef struct font* font_t;
+typedef void* any_t;
 
 /* Object Functions */
-void Ref(void*);
-void Deref(void*);
+void Ref(any_t);
+void Deref(any_t);
+
+int GetObjectType(any_t handle);
+
+bool IsMailbox(any_t handle);
+bool IsMutex(any_t handle);
+bool IsThread(any_t handle);
+bool IsProcess(any_t handle);
+bool IsFile(any_t handle);
+bool IsDirectory(any_t handle);
+bool IsTimer(any_t handle);
+bool IsMemoryRegion(any_t handle);
+bool IsSound(any_t handle);
+bool IsDynamicLibrary(any_t handle);
+bool IsWindow(any_t handle);
+bool IsWindowClass(any_t handle);
+bool IsBrush(any_t handle);
+bool IsPen(any_t handle);
+bool IsBitmap(any_t handle);
+bool IsTypeface(any_t handle);
+bool IsFont(any_t handle);
+bool IsRegion(any_t handle);
+bool IsDc(any_t handle);
+bool IsAnything(any_t handle);
 
 /* Helper Functions */
 int IntegerSqrt(int x);
+
 
 /* Region Functions */
 
@@ -78,7 +112,7 @@ void GetRegionCombinationInPlace(int mode, region_t* a, region_t b);
 #define SubtractRegionInPlace(a, b)    GetRegionCombinationInPlace(REGION_COMBINE_DIFFERENCE, a, b)
 #define XorRegionInPlace(a, b)         GetRegionCombinationInPlace(REGION_COMBINE_XOR, a, b)
 
-int TranslateRegion(region_t* rgn, int offx, int offy);
+int TranslateRegion(region_t rgn, int offx, int offy);
 
 region_t CopyRegion(region_t rgn);
 
@@ -89,12 +123,6 @@ struct rect GetRegionBounds(region_t rgn);
 bool IsPointInRegion(region_t rgn, int x, int y);
 bool IsSubRegion(region_t super, region_t sub);
 bool IsOverlappingRegion(region_t a, region_t b);
-
-/* 
- * not a quick operation! calls GetRegionCombination!
- * shuffles the whole thing such that trans_x and trans_y are 0
- */
-region_t ResetRegionOrigin(region_t rgn);
 
 
 /* Colour Functions */
@@ -153,16 +181,6 @@ bool IsOpaqueColour(colour_t argb);
 
 #define FLOOD_FILL_SURFACE  0
 #define FLOOD_FILL_BORDER   1
-
-struct dc;
-struct pen;
-struct brush;
-struct font;
-
-typedef struct dc* dc_t;
-typedef struct pen* pen_t;
-typedef struct brush* brush_t;
-typedef struct font* font_t;
 
 // both the bitmap DC's clip region and the real DC clipregion are used
 dc_t PaintBitmap(dc_t dc, dc_t bitmap, int x, int y);
@@ -271,3 +289,8 @@ struct point GetBrushOrigin(brush_t br);
 // unlike DuplicateHandle, makes a new brush object itself with duplicate data
 // e.g. so you can take a stock brush and change its colour
 brush_t CopyBrush(brush_t br);
+
+
+/* DC Functions */
+int SetGraphicsObject(dc_t dc, void* obj);
+any_t GetGraphicsObject(dc_t dc, int type);

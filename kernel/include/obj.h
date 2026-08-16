@@ -16,8 +16,16 @@
 #define OBJTYPE_USEROBJ         8
 
 struct obj_header {
-        _Atomic uint16_t ref_count;
-        _Atomic uint8_t objtype;
+    _Atomic uint16_t ref_count;
+    _Atomic uint8_t objtype;
+};
+
+struct user_obj_header {
+    struct obj_header hdr;
+    struct spinlock lock;
+    uint8_t user_ref_count;
+    uint8_t user_gone       : 1;
+    uint8_t user_type       : 7;
 };
 
 void RegisterObjectType(uint8_t type, void(*cleanup_func)(void*));
@@ -26,13 +34,6 @@ void RefObject(void* obj);
 void DerefObject(void* obj);
 
 
-struct user_obj_header {
-        struct obj_header hdr;
-        struct spinlock lock;
-        uint32_t user_ref_count : 16;
-        uint32_t user_gone      : 1;
-        uint32_t user_type      : 15;
-};
 
 void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*));
 void InitUserObjectType(void);

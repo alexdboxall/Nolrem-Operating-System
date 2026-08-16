@@ -15,5 +15,16 @@ MK_SYSCALL(CreateRectRegion)
 MK_SYSCALL(CreateEllipseRegion)
 MK_SYSCALL(CreateRoundedRectRegion)
 MK_SYSCALL(CreatePolyPolygonRegion)
+MK_SYSCALL(GetObjectType)
+MK_SYSCALL(IsRegionEqual)
+MK_SYSCALL(IsRegionEmpty)
+MK_SYSCALL(IsPointInRegion)
+MK_SYSCALL(TranslateRegion)
+MK_SYSCALL(CopyRegion)
+MK_SYSCALL(GetRegionBounds)
 
+// User side - requests it
 size_t SystemCall(int call, size_t arg1, size_t arg2, size_t arg3, size_t arg4);
+
+// Kernel side - handles it
+size_t PerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d);

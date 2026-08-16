@@ -3,10 +3,11 @@ OUTPUT_FORMAT("elf32-i386")
 
 SECTIONS
 {
-	. = 1M;
+	. = 0x10000;
 	.lowram.text : {
 		*(.lowram.text)
 	}
+	
 	
 	. += 0xC0000000;
 	

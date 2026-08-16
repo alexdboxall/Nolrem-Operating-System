@@ -91,7 +91,7 @@ vesa_pitch dw 0
 section .pageable
 
 ; The proper entry point of the kernel. Assumes the kernel is mapped into memory
-; at 0xC0100000.
+; at 0xC0010000.
 KernelEntryPoint:
 	; Remove the identity paging and flush the TLB so the changes take effect
 	mov [boot_page_directory], dword 0

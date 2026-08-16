@@ -16,7 +16,7 @@ export pageable bool CdIsSubRegion(struct region super, struct region sub) {
     return is_sub;
 }
 
-export pageable struct region CdResetRegionOrigin(struct region rgn) {
+static pageable struct region CdResetRegionOrigin(struct region rgn) {
     /*
      * Keep the region logically the same, but 'bake in' the translation
      * so that trans_x and trans_y are both (0, 0).

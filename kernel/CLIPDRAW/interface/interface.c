@@ -9,8 +9,8 @@ export int CdInvertRect(struct dc* dc, int x, int y, int width, int height) {
 
 static void NormaliseBrushPattern(uint8_t* output, struct brush* brush) {
     for (int y = 0; y < 8; ++y) {
-        uint8_t val = brush->pattern[(y + brush->origin_y) % 8];
-        output[y] = (val << (brush->origin_x % 8)) | (val >> (8 - (brush->origin_x % 8)));
+        uint8_t val = brush->pattern[(y + brush->origin_y) & 7];
+        output[y] = (val << (brush->origin_x & 7)) | (val >> (8 - (brush->origin_x & 7)));
     }
 }
 

@@ -1,6 +1,7 @@
 #include "api.h"
 
 #include <common.h>
+#include <errno.h>
 #include <log.h>
 #include <obj.h>
 #include <kgfx.h>
@@ -17,19 +18,39 @@ struct dc {
 
 static struct brush* dummy_brush;
 
-export struct brush* CdGetDcBrush(struct dc* dc) {
-    RefObject(dc->brush);
-    return dc->brush;
-}
-
 struct graphics_driver* GetOutputDriver(struct dc* dc) {
     return dc->drv;
 }
 
-export void CdSetDcBrush(dc_t dc, brush_t brush) {
-    RefObject(brush);
-    DerefObject(dc->brush);
-    dc->brush = brush;
+export int CdSetGraphicsObject(struct dc* dc, void* obj) {
+    struct user_obj_header* hdr = obj;
+    switch (hdr->user_type) {
+    case UOBJ_BRUSH:
+        RefObject(obj);
+        DerefObject(dc->brush);
+        dc->brush = obj;
+        return 0;
+    case UOBJ_PEN:
+        RefObject(obj);
+        DerefObject(dc->pen);
+        dc->pen = obj;
+        return 0;
+    default:
+        return EINVAL;
+    }
+}
+
+export void* CdGetGraphicsObject(struct dc* dc, int type) {
+    switch (type) {
+    case UOBJ_BRUSH:
+        RefObject(dc->brush);
+        return dc->brush;
+    case UOBJ_PEN:
+        RefObject(dc->pen);
+        return dc->pen;
+    default:
+        return NULL;
+    }
 }
 
 void CleanupDc(void* _dc) {

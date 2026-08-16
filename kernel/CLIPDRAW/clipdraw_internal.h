@@ -1,6 +1,9 @@
 #include "api.h"
 #include <obj.h>
 
+// used for the validation func
+#define UOBJ_ANYTYPE            (-1)
+
 #define UOBJ_INVALID             0
 #define UOBJ_MUTEX               1
 #define UOBJ_THREAD              2
@@ -23,6 +26,27 @@
 #define UOBJ_DC                  19
 
 /* INTERNAL ONLY */
+
+struct path {
+    int num_points_total;       // includes both x,y, and array points
+
+    // the most recently added point
+    int x;
+    int y;
+
+    // all earlier points (does *NOT* include the one stored in the x,y vars)
+    void* data;
+
+    // polygon point counts
+    void* count_data;  // completed polygon counts only
+    int polygons;      // includes the one currently being worked on
+    int count_total_so_far;     // of the ones in the count_data array
+
+    int scale_x_16_16;
+    int scale_y_16_16;
+    int trans_x;
+    int trans_y;
+};
 
 struct graphics_driver;
 void AddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv);
@@ -58,8 +82,7 @@ struct uregion {
 struct uregion* RegionToUserRegion(struct region rgn);
 struct region UserRegionToRegion(struct uregion* urgn);
 
-bool ValidateUserObjectAndAtomicallyRef(void* obj);
-bool ValidateUserRegionAndAtomicallyRef(struct uregion* ur);
+bool ValidateUserObjectAndAtomicallyRef(void* obj, int type);
 
 struct brush {
     struct user_obj_header hdr;
@@ -73,7 +96,9 @@ struct brush {
 
 /* INTERNAL, BUT HAS USER-WRAPPER*/
 struct dc* CdCreateDc(void);
-struct brush* CdGetDcBrush(struct dc* dc);
+
+int CdSetGraphicsObject(struct dc* dc, void* obj);
+void* CdGetGraphicsObject(struct dc* dc, int type);
 
 int CdPaintRegionWithBrush(struct dc* dc, struct region rgn, struct brush* brush);
 int CdPaintRegion(struct dc* dc, struct region rgn);
@@ -91,6 +116,8 @@ struct region CdCreateRectRegion(int x, int y, int width, int height);
 struct region CdEverythingRegion(void);
 struct region CdGetRegionCombination(int mode, struct region a, struct region b);
 bool CdIsRegionEmpty(struct region rgn);
+
+struct rect CdGetRegionBounds(struct region rgn);
 
 struct brush* CdCreatePatternedBrush(colour_t primary, colour_t secondary, int pattern);
 struct brush* CdCreateSolidBrush(colour_t argb);
@@ -122,11 +149,9 @@ struct brush* CdCopyBrush(struct brush* br);
 #define CdXorRegionInPlace(a, b)         CdGetRegionCombinationInPlace(REGION_COMBINE_XOR, a, b)
 
 
-
 /* PAGEABLE - CAN'T BE USED INTERNALLY BUT HAS WRAPPER */
 bool CdIsOverlappingRegion(struct region a, struct region b);
 bool CdIsSubRegion(struct region super, struct region sub);
-struct region CdResetRegionOrigin(struct region rgn);
 bool CdIsRegionEqual(struct region a, struct region b);
 bool CdIsPointInRegion(struct region rgn, int x, int y);
 void CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b);
@@ -145,3 +170,21 @@ int CdPaintPolygonWithBrush(struct dc* dc, int* x, int* y, int points, int mode,
     struct brush* brush);
 int CdPaintPolygon(struct dc* dc, int* x, int* y, int points, int mode);
 struct region CdCreateRoundedRectRegion(int x, int y, int width, int height, int radius);
+
+
+struct path CdCreatePath(int start_x, int start_y);
+struct region CdClosePath(struct path p, int mode);
+
+void CdSetPathTransform(
+    struct path* p, 
+    int scale_x_16_16, int scale_y_16_16, 
+    int trans_x, int trans_y
+);
+
+struct path CdCopyPath(struct path p);
+
+void CdDrawPath(struct path* p, int x, int y);
+void CdDrawCubicBeizerPath(struct path* p, int x, int y, int c1x, int c1y, int c2x, int c2y);
+void CdDrawQuadraticBezierPath(struct path* p, int x, int y, int cx, int cy);
+
+void CdLiftPath(struct path* p, int start_x, int start_y);

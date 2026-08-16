@@ -3,6 +3,7 @@
 #include <log.h>
 #include <machine/x86.h>
 #include <interrupt.h>
+#include <syscall.h>
 
 #define ISR_SYSTEM_CALL 96
 #define ISR_PAGE_FAULT  14
@@ -18,6 +19,12 @@ static size_t GetCr2(void) {
 
 void x86HandleInterrupt(struct x86_regs* r) {
     int num = r->int_no;
+
+    if (num == ISR_SYSTEM_CALL) {
+        LogStringAndHexLine("Handling system call number 0x", r->eax);
+        r->eax = PerformSystemCall(r->eax, r->ebx, r->ecx, r->edx, r->esi);
+        return;
+    }
 
     if (num < PIC_IRQ_BASE) {
         LogStringAndHexLine("Interrupt 0x", num);

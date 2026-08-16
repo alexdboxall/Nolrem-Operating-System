@@ -48,14 +48,14 @@ export int CdInvertRegion(struct dc* dc, struct region rgn) {
 }
 
 export int CdPaintRegion(struct dc* dc, struct region rgn) {
-    struct brush* brush = CdGetDcBrush(dc);
+    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintRegionWithBrush(dc, rgn, brush);
     DerefObject(brush);
     return retv;
 }
 
 export int CdPaintRect(struct dc* dc, int x, int y, int width, int height) {
-    struct brush* brush = CdGetDcBrush(dc);
+    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintRectWithBrush(dc, x, y, width, height, brush);
     DerefObject(brush);
     return retv;

@@ -9,7 +9,7 @@
 #include "clipdraw_internal.h"
 
 struct dc {
-    struct obj_header hdr;
+    struct user_obj_header hdr;
     struct graphics_driver* drv;
     struct brush* brush;
     struct pen* pen;
@@ -39,7 +39,7 @@ void CleanupDc(void* _dc) {
 }
 
 void InitDc(void) {
-    RegisterObjectType(OBJTYPE_DC, CleanupDc);
+    RegisterUserObjectType(UOBJ_REGION, CleanupDc);
     dummy_brush = CdCreateSolidBrush(SystemColour());
 }
 
@@ -51,7 +51,7 @@ void CleanupDummy(void*) {
 
 export struct dc* CdCreateDc(void) {
     struct dc* dc = AllocHeap(sizeof(struct dc));
-    InitObject(&dc, OBJTYPE_DC);
+    InitUserObject(&dc, UOBJ_REGION);
     dc->drv = GetKernelGraphicsDriver();
     dc->brush = dummy_brush;
     dc->pen = NULL;

@@ -107,9 +107,9 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitBoostrapHeap();
     InitKernelVirtArena();
     InitTimer();
-    InitVga();
     ArchInit();
     ArchCallGlobalConstructors();
+    InitVga();
 
     InitPhys(
         (void*)((size_t) boot_info->ram_table + 0xC0000000), 

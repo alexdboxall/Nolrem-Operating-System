@@ -306,7 +306,7 @@ static const uint8_t bayer_4x4_masks[17][4] = {
     {0xFF, 0xFF, 0xFF, 0xFF}  // Level 16 (100% color2)
 };
 
-void VGADrawRectBayer4x4(int x1, int y1, int x2, int y2, uint8_t color1, uint8_t color2, int level) {
+void VGADrawRectBayer4x4(int x1, int y1, int x2, int y2, uint8_t color1, uint8_t color2, int level) {    
     volatile uint8_t* vram = (volatile uint8_t*) 0xC00A0000;
     volatile uint8_t dummy;
 
@@ -742,6 +742,9 @@ void FindVGAColours(uint32_t rgb, uint8_t* col_out, uint8_t* level_out) {
 }
 
 void VGAPutRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour) {
+    if (!IsOpaqueColour(colour)) {
+        return;
+    }
     uint8_t colours = 0;
     uint8_t level = 0;
     FindVGAColours(colour, &colours, &level);
@@ -750,6 +753,10 @@ void VGAPutRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_
 
 void VGAPutBrushRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t primary,
     uint32_t secondary, uint8_t* pattern) {
+
+    if (!IsOpaqueColour(primary) && !IsOpaqueColour(secondary)) {
+        return;
+    }
 
     uint8_t pcolours = 0;
     uint8_t plevel = 0;
@@ -1011,7 +1018,7 @@ void VGAScrollRect(struct graphics_driver*, int x_start, int y_start, int x_end,
 
 
 static int curx = 16;
-static int cury = 16 * 3;
+static int cury = 16 * 2;
 
 void VGAPanic(const char* s) {
     cury += 32;

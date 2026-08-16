@@ -3,7 +3,7 @@ import os
 lines = 0
 asserts = 0
 comments = 0
-testing = 0
+clipdraw = 0
 platlines = 0
 kernel = 0
 ext = ['c', 'h', 'cpp', 'hpp', 'asm', 's']
@@ -28,6 +28,11 @@ for path, subdirs, files in os.walk(os.getcwd()):
             n = os.path.join(path, name)
             if 'acpi' in n:
                 continue
+            if 'sysroot' in n:
+                continue
+            if 'build' in n:
+                continue
+            print(n)
             lns = open(n, 'r').read().split('\n')
             j = len(lns)
             for l in lns:
@@ -38,12 +43,11 @@ for path, subdirs, files in os.walk(os.getcwd()):
             lines += j
             if n.find('kernel') != -1 and n.find('debug') == -1:
                 kernel += j
-            if n.find('debug/tests/') != -1 or n.find('debug\\tests\\') != -1:
-                testing += j
+            if n.find('CLIPDRAW') != -1:
+                clipdraw += j
             if n.find('arch/') != -1 or n.find('arch\\') != -1 or n.find('x86/') != -1 or n.find('x86\\') != -1:
                 platlines += j
         
 print('{} lines (of those, {}, or {}% are platform specific)'.format(lines, platlines, round(platlines * 100 / lines, 1)))
 print('{} lines come from the kernel (non-tests)'.format(kernel))
-print('{}% asserts, '.format(round(asserts * 100 / lines, 1)), '{}% comments, '.format(round(comments * 100 / lines, 1)), '{}% tests'.format(round(testing * 100 / lines, 1)))
-print('(does not include ACPICA)')
+print('{} lines come from CLIPDRAW (non-tests)'.format(clipdraw))

@@ -19,6 +19,8 @@
 #define UOBJ_TYPEFACE            15
 #define UOBJ_FONT                16
 #define UOBJ_MAILBOX             17
+#define UOBJ_REGION              18
+#define UOBJ_DC                  19
 
 /* INTERNAL ONLY */
 
@@ -46,6 +48,18 @@ int IterateRegion(
 struct graphics_driver* GetOutputDriver(struct dc*);
 
 void CdInitBrushSubsystem(void);
+void CdInitUserRegionSubsystem(void);
+
+struct uregion {
+    struct user_obj_header hdr;
+    struct region rgn;
+};
+
+struct uregion* RegionToUserRegion(struct region rgn);
+struct region UserRegionToRegion(struct uregion* urgn);
+
+bool ValidateUserObjectAndAtomicallyRef(void* obj);
+bool ValidateUserRegionAndAtomicallyRef(struct uregion* ur);
 
 struct brush {
     struct user_obj_header hdr;
@@ -119,7 +133,6 @@ void CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b);
 
 struct region CdCreateEllipseRegion(int x, int y, int width, int height);
 struct region CdCreatePolyPolygonRegion(int* px, int* py, int* counts, int polygons, int mode);
-struct region CdCreatePolygonRegion(int* px, int* py, int points, int mode);
 
 int CdPaintRoundedRectWithBrush(struct dc* dc, int x, int y, int width, int height, 
     int radius, struct brush* brush);

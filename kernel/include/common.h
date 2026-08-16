@@ -23,6 +23,8 @@
 
 #define export __attribute__((used)) __attribute__((visibility ("default")))
 
+#define pageableuserexec __attribute__((section(".pageablekuser")))
+#define pageableuserrodata __attribute__((section(".pageablekuserrodata")))
 #define userexec __attribute__((section(".kuser")))
 #define userrodata __attribute__((section(".kuserrodata")))
 

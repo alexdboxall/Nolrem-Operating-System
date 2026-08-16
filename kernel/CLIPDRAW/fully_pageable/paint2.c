@@ -35,7 +35,8 @@ export pageable int CdPaintEllipse(struct dc* dc, int x, int y, int width, int h
 
 export pageable int CdPaintPolygonWithBrush(struct dc* dc, int* x, int* y, int points, int mode, 
     struct brush* brush) {
-    struct region rgn = CdCreatePolygonRegion(x, y, points, mode);
+    int count = points;
+    struct region rgn = CdCreatePolyPolygonRegion(x, y, &count, 1, mode);
     CdPaintRegionWithBrush(dc, rgn, brush);
     CdFreeRegion(rgn);
     return 0;

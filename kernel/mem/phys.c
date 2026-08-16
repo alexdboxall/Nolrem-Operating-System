@@ -58,7 +58,7 @@ export size_t AllocPhys(bool pin) {
 }
 
 void InitPhys(struct boot_memory_entry* table, size_t count) {
-    LogString("Init physical memory... ");
+    LogString("\nInit physical memory... ");
 
     size_t total_phys_pages = 0;
     size_t max_phys_page_idx = 0;

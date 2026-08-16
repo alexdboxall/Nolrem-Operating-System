@@ -54,6 +54,7 @@ def getText(kernel_only, no_drv, big):
         if '\\toolchain' in path or '\\toolchain' in subdirs: continue
         if 'toolchain/' in path or 'toolchain/' in subdirs: continue
         if 'toolchain\\' in path or 'toolchain\\' in subdirs: continue
+
         if no_drv:
             if 'drivers' in path or 'drivers' in subdirs: continue
 
@@ -61,6 +62,8 @@ def getText(kernel_only, no_drv, big):
             if name.split('.')[-1] in ext:
                 n = os.path.join(path, name)
                 if 'acpi' in n and not big:
+                    continue
+                if 'sysroot' in n:
                     continue
                 good_files.append(n)
     

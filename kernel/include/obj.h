@@ -9,7 +9,7 @@
 #define OBJTYPE_VAS             1
 #define OBJTYPE_PAGE_ORIGIN     2
 #define OBJTYPE_PAGE_VIRT       3
-#define OBJTYPE_DC              4
+
 #define OBJTYPE_VNODE           5
 #define OBJTYPE_FILE            6
 #define OBJTYPE_MODULE          7

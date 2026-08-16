@@ -125,8 +125,3 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
     FinishRegion(&rgn, &ctxt);
     return rgn;
 }
-
-export pageable struct region CdCreatePolygonRegion(int* px, int* py, int points, int mode) {
-    int count = points;
-    return CdCreatePolyPolygonRegion(px, py, &count, 1, mode);
-}

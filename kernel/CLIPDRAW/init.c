@@ -3,4 +3,5 @@
 
 export void CdInit(void) {
     CdInitBrushSubsystem();
+    CdInitUserRegionSubsystem();
 }

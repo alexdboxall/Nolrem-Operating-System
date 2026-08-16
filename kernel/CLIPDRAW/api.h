@@ -12,7 +12,9 @@ struct region {
     size_t allocated_length;
 };
 
-typedef void* region_t;
+struct uregion;
+
+typedef struct uregion* region_t;
 
 struct point {
     int x;
@@ -31,6 +33,10 @@ struct rect {
     int h;
 };
 
+
+/* Object Functions */
+void Ref(void*);
+void Deref(void*);
 
 /* Helper Functions */
 int IntegerSqrt(int x);
@@ -75,7 +81,6 @@ void GetRegionCombinationInPlace(int mode, region_t* a, region_t b);
 int TranslateRegion(region_t* rgn, int offx, int offy);
 
 region_t CopyRegion(region_t rgn);
-void FreeRegion(region_t rgn);
 
 bool IsRegionEqual(region_t a, region_t b);
 bool IsRegionEmpty(region_t rgn);
@@ -127,7 +132,7 @@ static inline  uint8_t GetAlpha(colour_t argb) {
     return (argb >> 24) & 0xFF;
 }
 
-static inline  colour_t TransparentColour(void) {
+static inline colour_t TransparentColour(void) {
     return 0;
 }
 

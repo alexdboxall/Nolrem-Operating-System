@@ -27,12 +27,14 @@ static struct brush* CdCreateBrush(colour_t primary, colour_t secondary, uint8_t
 export struct brush* CdCopyBrush(struct brush* old_br) {
     struct brush* br = AllocHeap(sizeof(struct brush));
     InitUserObject(br, UOBJ_BRUSH);
+    LockUserObject(old_br);
     br->origin_x = old_br->origin_x;
     br->origin_y = old_br->origin_y;
     br->pattern_type = old_br->pattern_type;
     br->primary = old_br->primary;
     br->secondary = old_br->secondary;
     memcpy(br->pattern, old_br->pattern, sizeof(br->pattern));
+    UnlockUserObject(old_br);
     return br;
 }
 
@@ -55,44 +57,64 @@ export int CdSetBrushPattern(struct brush* br, int pattern) {
     if (pattern < 0 || pattern >= BRUSH_PATTERN_CUSTOM) {
         return EINVAL;
     }
+    LockUserObject(br);
     br->pattern_type = br->pattern_type;
     memcpy(br->pattern, standard_brush_patterns[pattern], sizeof(br->pattern));
+    UnlockUserObject(br);
     return 0;
 }
 
 export int CdGetBrushPattern(struct brush* br) {
-    return br->pattern_type;
+    LockUserObject(br);
+    int retv = br->pattern_type;
+    UnlockUserObject(br);
+    return retv;
 }
 
 export int CdSetBrushColour(struct brush* br, colour_t argb) {
+    LockUserObject(br);
     br->primary = argb;
+    UnlockUserObject(br);
     return 0;
 }
 
 export colour_t CdGetBrushColour(struct brush* br) {
-    return br->primary;
+    LockUserObject(br);
+    colour_t retv = br->primary;
+    UnlockUserObject(br);
+    return retv;
 }
 
 export int CdSetBrushSecondaryColour(struct brush* br, colour_t argb) {
+    LockUserObject(br);
     br->secondary = argb;
+    UnlockUserObject(br);
     return 0;
 }
 
 export colour_t CdGetBrushSecondaryColour(struct brush* br) {
-    return br->secondary;
+    LockUserObject(br);
+    colour_t retv = br->secondary;
+    UnlockUserObject(br);
+    return retv;
 }
 
 export int CdSetBrushOrigin(struct brush* br, int x, int y) {
+    LockUserObject(br);
     br->origin_x = x & 7;
     br->origin_y = y & 7;
+    UnlockUserObject(br);
     return 0;
 }
 
 export struct point CdGetBrushOrigin(struct brush* br) {
-    return (struct point) {
+    LockUserObject(br);
+    struct point retv = (struct point) {
         .x = br->origin_x,
         .y = br->origin_y
     };
+    UnlockUserObject(br);
+    return retv;
 }
 
 static struct brush* stock_brushes[4];

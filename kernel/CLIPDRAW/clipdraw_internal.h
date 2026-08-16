@@ -73,6 +73,8 @@ struct graphics_driver* GetOutputDriver(struct dc*);
 
 void CdInitBrushSubsystem(void);
 void CdInitUserRegionSubsystem(void);
+void CdInitPenSubsystem(void);
+void CdInitDcSubsystem(void);
 
 struct uregion {
     struct user_obj_header hdr;
@@ -84,14 +86,30 @@ struct region UserRegionToRegion(struct uregion* urgn);
 
 bool ValidateUserObjectAndAtomicallyRef(void* obj, int type);
 
+/* GCC can actually optimise some of the getter/setter functions if the 
+ * same values are placed in the same spot. lol.
+ */
 struct brush {
     struct user_obj_header hdr;
-    colour_t primary;
-    colour_t secondary;
-    uint8_t pattern[8];
     uint8_t origin_x;
     uint8_t origin_y;
     uint8_t pattern_type;
+    uint8_t pattern[8];
+    colour_t primary;
+    colour_t secondary;
+};
+
+struct pen {
+    struct user_obj_header hdr;
+    uint8_t origin_x;
+    uint8_t origin_y;
+    uint8_t pattern_type;
+    uint8_t pattern[8];
+    colour_t col;
+    uint8_t pat_width;
+    uint8_t pat_height;
+    bool is_custom;
+    int thickness;
 };
 
 /* INTERNAL, BUT HAS USER-WRAPPER*/
@@ -147,6 +165,22 @@ struct brush* CdCopyBrush(struct brush* br);
 #define CdUnionRegionInPlace(a, b)       CdGetRegionCombinationInPlace(REGION_COMBINE_UNION, a, b)
 #define CdSubtractRegionInPlace(a, b)    CdGetRegionCombinationInPlace(REGION_COMBINE_DIFFERENCE, a, b)
 #define CdXorRegionInPlace(a, b)         CdGetRegionCombinationInPlace(REGION_COMBINE_XOR, a, b)
+
+struct pen* CdCreateSolidPen(colour_t colour, int thickness);
+struct pen* CdCreatePatternedPen(colour_t colour, int thickness, int pattern);
+struct pen* CdCreateCustomPen(colour_t colour, int width, int height, // maxheight=8
+    uint8_t* rows_bitmap); 
+
+colour_t CdGetPenColour(struct pen* pen);
+int CdSetPenColour(struct pen* pen, colour_t col);
+int CdGetPenPattern(struct pen* pen);
+int CdSetPenPattern(struct pen* pen, int pattern);
+int CdGetPenThickness(struct pen* pen);
+int CdSetPenThickness(struct pen* pen, int thickness);
+struct pen* CdGetStockPen(int type);
+struct pen* CdCopyPen(struct pen* pen);
+int CdSetPenOrigin(struct pen* pen, int x, int y);
+struct point CdGetPenOrigin(struct pen* pen);
 
 
 /* PAGEABLE - CAN'T BE USED INTERNALLY BUT HAS WRAPPER */

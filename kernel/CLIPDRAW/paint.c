@@ -12,6 +12,8 @@ struct context {
     };
 };
 
+// TODO: LOCKS!
+
 static int PaintRectCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
     struct context* ctxt = _ctxt;
     CdPaintRectWithBrush(ctxt->dc, r.x, r.y, r.w, r.h, ctxt->brush);

@@ -6,5 +6,4 @@
 struct graphics_driver;
 struct dc;
 
-void InitDc(void);
 struct dc* CreateDc(void);

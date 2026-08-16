@@ -3,5 +3,7 @@
 
 export void CdInit(void) {
     CdInitBrushSubsystem();
+    CdInitPenSubsystem();
     CdInitUserRegionSubsystem();
+    CdInitDcSubsystem();
 }

@@ -54,6 +54,15 @@ int vga_rect_callback(struct rect r, void* ctxt, int colour, bool* cancel) {
 extern void InitVga();
 
 #include "CLIPDRAW/clipdraw_internal.h"
+#include "CLIPDRAW/gfx_driver.h"
+
+
+static void draw_test(struct graphics_driver* drv, uint8_t* pattern, int x, int y) {
+    drv->pen_line(drv, x, y, x, y + 400, 0xFFFF0000, 2, pattern, 2, 2, true);
+    drv->pen_line(drv, x, y + 400, x + 400, y + 400, 0xFFFF0000, 2, pattern, 2, 2, true);
+    drv->pen_line(drv, x + 400, y + 400, x + 400, y, 0xFFFF0000, 2, pattern, 2, 2, true);
+    drv->pen_line(drv, x + 400, y, x, y, 0xFFFF0000, 2, pattern, 2, 2, true);
+}
 
 /* 
  * We want to be able to page out some of the very early bootstrap code.
@@ -93,6 +102,25 @@ export _Noreturn void InitKernelResidentPortion(void) {
     CdFreeRegion(r2);
     CdFreeRegion(r3);
 
+    struct graphics_driver* drv = GetOutputDriver(dc);
+    //drv->thin_line(drv, 50, 400, 600, 450, 0xFFFF0000);
+    drv->solid_line(drv, 50, 400, 600, 450, 0xFFFF4000, 3);
+    uint8_t pattern[] = {
+        0b10,
+        0b01,
+    };
+    int x = 50;
+    int dx = 1;
+    while (true) {
+        draw_test(drv, pattern, x, 50);
+        draw_test(drv, pattern, x, 50);
+        x += dx;
+        pattern[0] ^= 3;
+        pattern[1] ^= 3;
+        if (x == 450 || x == 50) {
+            dx *= -1;
+        }
+    }
 
     // Now let's try running the *USERMODE* versions!
     region_t r = CreateRectRegion(50, 60, 300, 250);
@@ -126,7 +154,6 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitVnode();
     InitDiskUtil();
     InitFile();
-    InitDc();
     InitUserObjectType();
     InitThread();
     InitScheduler();

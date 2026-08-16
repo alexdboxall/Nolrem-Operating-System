@@ -19,19 +19,24 @@ export int CdPaintRectWithBrush(struct dc* dc, int x, int y, int width, int heig
 
     struct graphics_driver* drv = GetOutputDriver(dc);
 
-    if (brush->primary == brush->secondary || brush->pattern_type == BRUSH_PATTERN_SOLID) {
-        drv->fill_rect(drv, x, y, x + width, y + height, brush->primary);
+    LockUserObject(brush);
+    colour_t primary = brush->primary;
+    colour_t secondary = brush->secondary;
+    uint8_t pattern_type = brush->pattern_type;
+
+    if (primary == secondary || pattern_type == BRUSH_PATTERN_SOLID) {
+        UnlockUserObject(brush);
+        drv->fill_rect(drv, x, y, x + width, y + height, primary);
     } else {
         uint8_t pattern[8];
         NormaliseBrushPattern(pattern, brush);
+        UnlockUserObject(brush);
         drv->brush_rect(
             drv, x, y, x + width, y + height,
-            brush->primary, brush->secondary, pattern
+            primary, secondary, pattern
         );
     }
     return 0;
 }
-
-//     void (*brush_rect)(int x1, int y1, int x2, int y2, uint32_t primary, uint32_t secondary, uint8_t* pattern);
 
 

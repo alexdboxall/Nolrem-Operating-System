@@ -72,3 +72,13 @@ export pageable void UserDeref(void* obj) {
     }
     ReleaseSpinlock(&uo->lock);
 }
+
+export void LockUserObject(void* obj) {
+    struct user_obj_header* hdr = obj;
+    AcquireSpinlock(&hdr->lock);
+}
+
+export void UnlockUserObject(void* obj) {
+    struct user_obj_header* hdr = obj;
+    ReleaseSpinlock(&hdr->lock);
+}

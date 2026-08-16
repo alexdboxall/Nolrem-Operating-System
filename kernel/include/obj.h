@@ -38,5 +38,8 @@ void DerefObject(void* obj);
 void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*));
 void InitUserObjectType(void);
 void InitUserObject(void* obj, uint8_t user_type);
+void LockUserObject(void* obj);
+void UnlockUserObject(void* obj);
+
 void UserRef(void* obj);
 void UserDeref(void* obj);

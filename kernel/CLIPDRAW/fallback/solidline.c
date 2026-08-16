@@ -3,7 +3,8 @@
 
 #include <log.h>
 
-extern int IntegerSqrt(int x);
+#define MIN4(a,b,c,d) MIN(MIN(a,b), MIN(c,d))
+#define MAX4(a,b,c,d) MAX(MAX(a,b), MAX(c,d))
 
 static void DrawThinLine(struct graphics_driver* drv, int x1, int y1, int x2, int y2, uint32_t colour) {
     int dx =  x2 - x1; if (dx < 0) dx = -dx;
@@ -52,22 +53,42 @@ static void DrawThickLineSolid(struct graphics_driver* drv, int x1, int y1, int 
         return;
     }
 
+    // Same fix as PenLineFallback: the offset formula below rounds
+    // thickness/2 to the nearest integer, which is exact for even
+    // thickness but rounds *up* for odd thickness (the .5 remainder
+    // rounds away from zero). Mirroring one rounded half-offset onto
+    // both sides of the line (+ox/-ox) then doubles that overshoot, so
+    // total width is always even -- every odd thickness silently became
+    // the next even number up.
+    //
+    // Fix: round thickness up to the nearest even number for one side
+    // of the line and down to the nearest even number for the other
+    // side, and feed each independently through the same (exact for
+    // even inputs) formula. Even thickness is unaffected; odd thickness
+    // now gets two offsets 1 pixel apart that sum to the exact requested
+    // width instead of one too many.
+    int t_neg = thickness - (thickness & 1); // thickness rounded down to even
+    int t_pos = thickness + (thickness & 1); // thickness rounded up to even
+
     int div = 2 * len;
-    int ox_num = -dy * thickness;
-    int oy_num = dx * thickness;
-    
-    int ox = (ox_num >= 0 ? (ox_num + len) : (ox_num - len)) / div;
-    int oy = (oy_num >= 0 ? (oy_num + len) : (oy_num - len)) / div;
 
-    int p1x = x1 + ox; int p1y = y1 + oy;
-    int p2x = x1 - ox; int p2y = y1 - oy;
-    int p3x = x2 - ox; int p3y = y2 - oy;
-    int p4x = x2 + ox; int p4y = y2 + oy;
+    int oxp_num = -dy * t_pos;
+    int oyp_num = dx * t_pos;
+    int oxn_num = -dy * t_neg;
+    int oyn_num = dx * t_neg;
 
-    #define MIN(a, b) ((a) < (b) ? (a) : (b))
-    #define MAX(a, b) ((a) > (b) ? (a) : (b))
-    #define MIN4(a,b,c,d) MIN(MIN(a,b), MIN(c,d))
-    #define MAX4(a,b,c,d) MAX(MAX(a,b), MAX(c,d))
+    int oxp = (oxp_num >= 0 ? (oxp_num + len) : (oxp_num - len)) / div;
+    int oyp = (oyp_num >= 0 ? (oyp_num + len) : (oyp_num - len)) / div;
+    int oxn = (oxn_num >= 0 ? (oxn_num + len) : (oxn_num - len)) / div;
+    int oyn = (oyn_num >= 0 ? (oyn_num + len) : (oyn_num - len)) / div;
+
+    // p1/p4 sit on the "+t_pos" side, p2/p3 on the "-t_neg" side -- for
+    // even thickness this is identical to the old symmetric +ox/-ox
+    // placement.
+    int p1x = x1 + oxp; int p1y = y1 + oyp;
+    int p2x = x1 - oxn; int p2y = y1 - oyn;
+    int p3x = x2 - oxn; int p3y = y2 - oyn;
+    int p4x = x2 + oxp; int p4y = y2 + oyp;
 
     int minX = MIN4(p1x, p2x, p3x, p4x);
     int minY = MIN4(p1y, p2y, p3y, p4y);
@@ -104,7 +125,6 @@ void SolidLineFallback(struct graphics_driver* drv, int x1, int y1, int x2, int 
     if (thickness <= 0) {
         return;
     }
-    
     if (thickness == 1) {
         DrawThinLine(drv, x1, y1, x2, y2, colour);
     } else {

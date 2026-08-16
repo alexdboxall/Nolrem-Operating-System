@@ -294,3 +294,56 @@ brush_t CopyBrush(brush_t br);
 /* DC Functions */
 int SetGraphicsObject(dc_t dc, void* obj);
 any_t GetGraphicsObject(dc_t dc, int type);
+
+
+
+
+/* Pen Functions */
+#define PEN_INVALID                 (-1)
+#define PEN_PATTERN_SOLID           0
+#define PEN_PATTERN_DASH            1
+#define PEN_PATTERN_DOT             2
+#define PEN_PATTERN_DASH_DOT        3
+#define PEN_PATTERN_DASH_DOT_DOT    4
+#define PEN_PATTERN_NONE            5
+#define PEN_PATTERN_SQUIGGLY        6
+#define PEN_PATTERN_DOUBLE          7
+#define _HIGHEST_USED_PEN_TYPE      (PEN_PATTERN_DOUBLE)
+
+pen_t CreateSolidPen(colour_t colour, int thickness);
+pen_t CreatePatternedPen(colour_t colour, int thickness, int pattern);
+pen_t CreateCustomPen(colour_t colour, int width, int height, // maxheight=8
+    uint8_t* rows_bitmap); 
+
+colour_t GetPenColour(pen_t pen);
+int SetPenColour(pen_t pen, colour_t col);
+
+int GetPenPattern(pen_t pen);
+int SetPenPattern(pen_t pen, int pattern);
+int GetPenThickness(pen_t pen);
+int SetPenThickness(pen_t pen, int thickness);
+
+#define STOCK_PEN_BLACK_1           0
+#define STOCK_PEN_WHITE_1           1
+#define STOCK_PEN_SYSTEM_1          2
+#define STOCK_PEN_BLACK_2           3
+#define STOCK_PEN_WHITE_2           4
+#define STOCK_PEN_SYSTEM_2          5
+#define STOCK_PEN_BLACK_3           6
+#define STOCK_PEN_WHITE_3           7
+#define STOCK_PEN_SYSTEM_3          8
+#define STOCK_PEN_TRANSPARENT       9
+#define STOCK_PEN_DOUBLE            10
+#define STOCK_PEN_SQUIGGLY          11
+#define _NUM_STOCK_PENS             12
+
+// again, like brushes this doesn't increase the ref count, so no need to free
+pen_t GetStockPen(int type);
+
+// unlike DuplicateHandle, makes a new pen object itself with duplicate data
+// e.g. so you can take a stock pen and change its colour
+pen_t CopyPen(pen_t pen);
+
+int SetPenOrigin(pen_t pen, int x, int y);
+struct point GetPenOrigin(pen_t pen);
+

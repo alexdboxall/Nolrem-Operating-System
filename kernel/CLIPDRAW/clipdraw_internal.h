@@ -51,6 +51,9 @@ struct path {
 struct graphics_driver;
 void AddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv);
 
+void CdMapDCCoordinates(struct dc* dc, int* x1, int* y1, int* x2, int* y2);
+void CdLogicalToDevice(struct dc* dc, int* x, int* y);
+
 struct region_iteration_context;
 
 int IterateRegionCoroutine(
@@ -59,7 +62,8 @@ int IterateRegionCoroutine(
     void* context,
     struct region_iteration_context* ctxt,
     bool (*band_callback)(int y0, int y1, int* retv, void* context),                        /* return TRUE to stop early */
-    bool (*rect_callback)(int y0, int y1, int x0, int x1, int* retv, void* context)         /* as above */
+    bool (*rect_callback)(int y0, int y1, int x0, int x1, int* retv, void* context),        /* as above */
+    struct dc* dc
 );
 
 int IterateRegion(
@@ -81,8 +85,12 @@ struct uregion {
     struct region rgn;
 };
 
+struct region CdGetRegionCombinationEx(int mode, struct region a, struct region b, struct dc* scale_dc);
+
 struct uregion* RegionToUserRegion(struct region rgn);
 struct region UserRegionToRegion(struct uregion* urgn);
+
+void CdTranslateCoordinates(struct dc* dc, int dx, int dy);
 
 bool ValidateUserObjectAndAtomicallyRef(void* obj, int type);
 
@@ -112,6 +120,12 @@ struct pen {
     int thickness;
 };
 
+
+
+int ActualPaintRectWithBrush(struct dc* dc, int x, int y, int x2, int y2, 
+    struct brush* brush);
+int ActualInvertRect(struct dc* dc, int x, int y, int x2, int y2);
+
 /* INTERNAL, BUT HAS USER-WRAPPER*/
 struct dc* CdCreateDc(void);
 
@@ -135,6 +149,12 @@ struct region CdEverythingRegion(void);
 struct region CdGetRegionCombination(int mode, struct region a, struct region b);
 bool CdIsRegionEmpty(struct region rgn);
 
+static inline struct region CdCreateRectRegionIndirect(struct rect r) {
+    return CdCreateRectRegion(
+        r.x, r.y, r.w, r.h
+    );
+}
+
 struct rect CdGetRegionBounds(struct region rgn);
 
 struct brush* CdCreatePatternedBrush(colour_t primary, colour_t secondary, int pattern);
@@ -155,6 +175,13 @@ int CdSetBrushOrigin(struct brush* br, int x, int y);
 struct point CdGetBrushOrigin(struct brush* br);
 
 struct brush* CdCopyBrush(struct brush* br);
+
+int CdPaintGradientRectHz(struct dc* dc, int x, int y, int width, int height, colour_t c1, colour_t c2);
+
+int CdSetClipRegion(struct dc* dc, struct region rgn);
+int CdRestrictClipRegion(struct dc* dc, struct region rgn);
+struct region CdGetCopyOfClipRegion(struct dc* dc);
+struct region CdIntersectWithClipRegion(struct dc* dc, struct region rgn);
 
 #define CdIntersectRegion(a, b)   CdGetRegionCombination(REGION_COMBINE_INTERSECT, a, b)
 #define CdUnionRegion(a, b)       CdGetRegionCombination(REGION_COMBINE_UNION, a, b)

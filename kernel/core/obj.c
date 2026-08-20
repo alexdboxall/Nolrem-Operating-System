@@ -1,5 +1,6 @@
 #include <obj.h>
 #include <common.h>
+#include <log.h>
 
 static void(*objtype_cleanup_handlers[32])(void*);
 static void(*uobjtype_cleanup_handlers[32])(void*);

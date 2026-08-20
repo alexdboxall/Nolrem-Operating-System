@@ -16,6 +16,11 @@ struct dc {
     struct graphics_driver* drv;
     struct brush* brush;
     struct pen* pen;
+    struct region cliprgn;
+
+    // for subwindowing
+    int16_t trans_x;
+    int16_t trans_y;
 };
 
 static struct brush* dummy_brush;
@@ -23,6 +28,67 @@ static struct pen* dummy_pen;
 
 struct graphics_driver* GetOutputDriver(struct dc* dc) {
     return dc->drv;
+}
+
+void CdMapDCCoordinates(struct dc* dc, int* x1, int* y1, int* x2, int* y2) {
+    // TODO: the future add viewport/window origin/extents
+    LockUserObject(dc);
+    *x1 += dc->trans_x;
+    *x2 += dc->trans_x;
+    *y1 += dc->trans_y;
+    *y2 += dc->trans_y;
+    UnlockUserObject(dc);
+}
+
+
+void CdLogicalToDevice(struct dc* dc, int* x, int* y) {
+    int dummy;
+    CdMapDCCoordinates(dc, x, y, &dummy, &dummy);
+}
+
+
+void CdTranslateCoordinates(struct dc* dc, int dx, int dy) {
+    LockUserObject(dc);
+    dc->trans_x += dx;
+    dc->trans_y += dy;
+    UnlockUserObject(dc);
+}
+
+// Makes a COPY of the input region
+export int CdSetClipRegion(struct dc* dc, struct region rgn) {
+    LockUserObject(dc);
+    CdFreeRegion(dc->cliprgn);
+    dc->cliprgn = CdCopyRegion(rgn);
+    UnlockUserObject(dc);
+    return 0;
+}
+
+export int CdRestrictClipRegion(struct dc* dc, struct region rgn) {
+    LockUserObject(dc);
+    CdIntersectRegionInPlace(&dc->cliprgn, rgn);
+    UnlockUserObject(dc);
+    return 0;
+}
+
+export struct region CdGetCopyOfClipRegion(struct dc* dc) {
+    LockUserObject(dc);
+    struct region retv = CdCopyRegion(dc->cliprgn);
+    UnlockUserObject(dc);
+    return retv;
+}
+
+// TODO: this function needs to become the 'guts' of the gfx driver interface
+//       functions, doing the scaling of the input `rgn` in some sort of
+//       CdGetRegionCombinationEx(op, a, b, dc) that uses DC coords on `b`
+//       and apply dc->trans_x, dc->trans_y as  a simple offset
+export struct region CdIntersectWithClipRegion(struct dc* dc, struct region rgn) {
+    //LockUserObject(dc);
+    // TODO: the DC gets locked on scaling within this function.
+    // might need to pass in the scale params in a struct?
+    // copying the DC or the region sound slow
+    struct region retv = CdGetRegionCombinationEx(REGION_COMBINE_INTERSECT, dc->cliprgn, rgn, dc);
+    //UnlockUserObject(dc);
+    return retv;
 }
 
 export int CdSetGraphicsObject(struct dc* dc, void* obj) {
@@ -84,6 +150,9 @@ export struct dc* CdCreateDc(void) {
     dc->drv = GetKernelGraphicsDriver();
     dc->brush = dummy_brush;
     dc->pen = NULL;// dummy_pen;
+    dc->cliprgn = CdEverythingRegion();
+    dc->trans_x = 0;
+    dc->trans_y = 0;
     AddGraphicsFallbacksWhereNeeded(dc->drv);
     return dc;
 }

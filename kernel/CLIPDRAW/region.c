@@ -368,13 +368,15 @@ struct region_iteration_context {
     int num_spans;
     int16_t y0;             // safe to read post- band callback
     int16_t y1;             // safe to read post- band callback
+                            // ^^ not translated by DC!
+    
+    int16_t scaled_y0;      // translated by DC
+    int16_t scaled_y1;      // translated by DC
     bool compact_spans;
     uint8_t compact_spans_top_byte;
     bool in_repeat_mode;
     int j;
     bool done_band_callback;
-    int recent_x0;              // safe to read post- rect callback
-    int recent_x1;              // safe to read post- rect callback
     bool done;
     uint8_t* prev_small_mode;       // caller must provide as must be stable memory address across calls
                                     // (we have cx.ptr pointing to within it, so can't be on a local frame
@@ -428,7 +430,7 @@ int IterateRegion(
         .rect_callback = rect_callback
     };
     struct region_iteration_context ctxt = CreateIterationContext(&rgn);
-    return IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk);
+    return IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk, NULL);
 }
 
 int IterateRegionCoroutine(
@@ -437,7 +439,8 @@ int IterateRegionCoroutine(
     void* context,
     struct region_iteration_context* ctxt,
     bool (*band_callback)(int y0, int y1, int* retv, void* context),                        /* return TRUE to stop early */
-    bool (*rect_callback)(int y0, int y1, int x0, int x1, int* retv, void* context)         /* as above */
+    bool (*rect_callback)(int y0, int y1, int x0, int x1, int* retv, void* context),        /* as above */
+    struct dc* scale_dc     /* NULL is okay - means no special scaling */
 ) {
     struct region_data* data = rgn.data;
     int trans_x = data->trans_x;
@@ -521,7 +524,15 @@ int IterateRegionCoroutine(
             }
 
             if (band_callback != NULL) {
-                if (band_callback(cx.y0 + trans_y, cx.y1 + trans_y, &retv, context)) {
+                int sy0 = cx.y0;
+                int sy1 = cx.y1;
+                if (scale_dc) {
+                    int dummy;
+                    CdMapDCCoordinates(scale_dc, &dummy, &sy0, &dummy, &sy1);
+                }
+                cx.scaled_y0 = sy0;
+                cx.scaled_y1 = sy1;
+                if (band_callback(sy0 + trans_y, sy1 + trans_y, &retv, context)) {
                     cx.done_band_callback = true;
                     *ctxt = cx;
                     return retv;
@@ -572,10 +583,24 @@ int IterateRegionCoroutine(
             }
 
             if (rect_callback != NULL) {
-                if (rect_callback(cx.y0 + trans_y, cx.y1 + trans_y, x0 + trans_x, x1 + trans_x, &retv, context)) {
+                int sx0 = x0;
+                int sx1 = x1;
+                if (scale_dc) {
+                    int dummy;
+                    CdMapDCCoordinates(scale_dc, &sx0, &dummy, &sx1, &dummy);
+                }
+
+                int sy0 = cx.y0;
+                int sy1 = cx.y1;
+                if (scale_dc) {
+                    int dummy;
+                    CdMapDCCoordinates(scale_dc, &dummy, &sy0, &dummy, &sy1);
+                }
+                cx.scaled_y0 = sy0;
+                cx.scaled_y1 = sy1;
+
+                if (rect_callback(cx.scaled_y0 + trans_y, cx.scaled_y1 + trans_y, sx0 + trans_x, sx1 + trans_x, &retv, context)) {
                     cx.j++;
-                    cx.recent_x0 = x0 + trans_x;
-                    cx.recent_x1 = x1 + trans_x;
                     *ctxt = cx;
                     return retv;
                 }
@@ -720,6 +745,8 @@ static bool NopCallback(int y0, int y1, int* retv, void* context) {
     return true;
 }
 
+#include <log.h>
+
 static bool RectCallback(int y0, int y1, int x0, int x1, int* retv, void* context) {
     (void) y0;
     (void) y1;
@@ -742,7 +769,7 @@ static bool CheckRegionCondition(int mode, bool a, bool b) {
     }
 }
 
-export struct region CdGetRegionCombination(int mode, struct region a, struct region b) { 
+export struct region CdGetRegionCombinationEx(int mode, struct region a, struct region b, struct dc* scale_dc) { 
     struct region_data* a_data = a.data;
     struct region_data* b_data = b.data;
 
@@ -775,12 +802,19 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
         }
 
         if (num_a_edges_buffer == 0 && !a_ctxt.done) {
-            int a_consumed = IterateRegionCoroutine(a, num_edges, y_edges, &a_ctxt, RegionCombinationEdgeCallback, NULL);
+            int a_consumed = IterateRegionCoroutine(a, num_edges, y_edges, &a_ctxt, RegionCombinationEdgeCallback, NULL, NULL);
             num_a_edges_buffer += a_consumed;
             memcpy(a_edges_buffer, y_edges + num_edges, sizeof(a_edges_buffer));
         }
         if (num_b_edges_buffer == 0 && !b_ctxt.done) {
-            int b_consumed = IterateRegionCoroutine(b, num_edges, y_edges, &b_ctxt, RegionCombinationEdgeCallback, NULL);
+            // here's the plan. (?)
+            // if we detect that Y axis is negated, we'll basically swap 
+            // out `RegionCombinationEdgeCallback` for another thunk callback
+            // and we'll, before this loop even starts, go through all of `b`
+            // using the 'normal' routine to copy it into an allocated buffer.
+            // we'll then invert that buffer, and then the thunk routine can
+            // just the buffer data instead of the data from the actual coroutine 
+            int b_consumed = IterateRegionCoroutine(b, num_edges, y_edges, &b_ctxt, RegionCombinationEdgeCallback, NULL, scale_dc);
             num_b_edges_buffer += b_consumed;
             memcpy(b_edges_buffer, y_edges + num_edges, sizeof(b_edges_buffer));
         }
@@ -833,8 +867,8 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
      * Clear off the initial band callbacks, we don't need them. The y0, y1
      * values from this are used though in the initial loading of x values.
      */
-    IterateRegionCoroutine(a, 0, NULL, &a_ctxt, NopCallback, NULL);
-    IterateRegionCoroutine(b, 0, NULL, &b_ctxt, NopCallback, NULL);
+    IterateRegionCoroutine(a, 0, NULL, &a_ctxt, NopCallback, NULL, NULL);
+    IterateRegionCoroutine(b, 0, NULL, &b_ctxt, NopCallback, NULL, scale_dc);
 
     /*
      * These represent the ranges in which the stored (x0, x1) data corresponds.
@@ -859,8 +893,8 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
              * from the initial priming of the pump, or from the previous
              * loop iteration. 
              */
-            a_y0 = a_ctxt.y0 + a_data->trans_y;
-            a_y1 = a_ctxt.y1 + a_data->trans_y;
+            a_y0 = a_ctxt.scaled_y0 + a_data->trans_y;
+            a_y1 = a_ctxt.scaled_y1 + a_data->trans_y;
             num_a_x_spans = 0;
             if (a_x_points != NULL) {
                 FreeHeap(a_x_points);
@@ -875,7 +909,7 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
                  */
                 int16_t x[2];
                 int retv = IterateRegionCoroutine(
-                    a, 0, (void*) x, &a_ctxt, NopCallback, RectCallback
+                    a, 0, (void*) x, &a_ctxt, NopCallback, RectCallback, NULL
                 );
                 if (retv == 0) {
                     /* This was a new band being seen. */
@@ -888,8 +922,8 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
             }
         }
         while (!b_ctxt.done && b_y1 <= y0) {
-            b_y0 = b_ctxt.y0 + b_data->trans_y;
-            b_y1 = b_ctxt.y1 + b_data->trans_y;
+            b_y0 = b_ctxt.scaled_y0 + b_data->trans_y;
+            b_y1 = b_ctxt.scaled_y1 + b_data->trans_y;
             num_b_x_spans = 0;
             if (b_x_points != NULL) {
                 FreeHeap(b_x_points);
@@ -899,13 +933,25 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
             while (true) {
                 int16_t x[2];
                 int retv = IterateRegionCoroutine(
-                    b, 0, (void*) x, &b_ctxt, NopCallback, RectCallback
+                    b, 0, (void*) x, &b_ctxt, NopCallback, RectCallback, scale_dc
                 );
                 if (retv == 0) {
                     break;
                 } else {
-                    b_x_points[num_b_x_spans * 2 + 0] = x[0];
-                    b_x_points[num_b_x_spans * 2 + 1] = x[1];
+                    if (scale_dc == NULL) {
+                        b_x_points[num_b_x_spans * 2 + 0] = x[0];
+                        b_x_points[num_b_x_spans * 2 + 1] = x[1];
+                    } else {
+                        int tmp1 = x[0];
+                        int tmp2 = x[1];
+                        if (tmp2 < tmp1) {
+                            b_x_points[(b_ctxt.num_spans - num_b_x_spans - 1) * 2 + 0] = tmp2;
+                            b_x_points[(b_ctxt.num_spans - num_b_x_spans - 1) * 2 + 1] = tmp1;
+                        } else {
+                            b_x_points[num_b_x_spans * 2 + 0] = tmp1;
+                            b_x_points[num_b_x_spans * 2 + 1] = tmp2;
+                        }
+                    }
                     num_b_x_spans++;
                 }
             }
@@ -988,6 +1034,10 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
     FinishRegion(&out_rgn, &build_context);
 
     return out_rgn;
+}
+
+export struct region CdGetRegionCombination(int mode, struct region a, struct region b) {
+    return CdGetRegionCombinationEx(mode, a, b, NULL);
 }
 
 export bool CdIsRegionEmpty(struct region rgn) {

@@ -26,6 +26,7 @@ static void ExpandToFit(struct region* rgn, int extra_bytes) {
 }
 
 void BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt) {
+    memcpy(rgn->sig, "RGN!", 4);
     rgn->used_length = sizeof(struct region_data);
     rgn->allocated_length = 32;
     rgn->data = AllocHeap(rgn->allocated_length);
@@ -432,7 +433,9 @@ int IterateRegion(
         .rect_callback = rect_callback
     };
     struct region_iteration_context ctxt = CreateIterationContext(&rgn);
-    return IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk, NULL);
+    int result = IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk, NULL);
+    CloseIterationContext(ctxt);
+    return result;
 }
 
 int IterateRegionCoroutine(
@@ -638,20 +641,6 @@ int IterateRegionCoroutine(
     return retv;
 }
 
-struct region CdEmptyRegion(void) {
-    struct region rgn;
-    rgn.allocated_length = sizeof(struct region_data);
-    rgn.used_length = rgn.allocated_length;
-    rgn.data = AllocHeap(rgn.allocated_length);
-
-    struct region_data* data = rgn.data;
-    data->trans_x = 0;
-    data->trans_y = 0;
-    data->num_bands = 0;
-
-    return rgn;
-}
-
 struct region CdCopyRegion(struct region rgn) {
     struct region new_rgn = rgn;
     new_rgn.data = AllocHeap(rgn.allocated_length);
@@ -663,60 +652,6 @@ export void CdFreeRegion(struct region rgn) {
     FreeHeap(rgn.data);
 }
 
-export int CdTranslateRegion(struct region* rgn, int offx, int offy) {
-    if (rgn == NULL) {
-        return -1;//TODO: EINVAL;
-    }
-
-    struct region_data* data = rgn->data;
-    data->trans_x += offx;
-    data->trans_y += offy;
-    return 0;
-}
-
-export struct region CdCreateRectRegion(int x, int y, int width, int height) {
-    /* 
-     * This function will bypass AddScanline, just because this one needs to be 
-     * fast! (And it's easy to write!).
-     * 
-     * Luckily, all regions must start with their first band in regular mode.
-     * So it's not too bad. We also prohibit compact mode on the first line to 
-     * make our lives here even easier.
-     */
-
-    if (width <= 0 || height <= 0) {
-        return CdEmptyRegion();
-    }
-
-    struct region rgn;
-    rgn.allocated_length = sizeof(struct region_data) + 10;
-    rgn.data = AllocHeap(rgn.allocated_length);
-    rgn.used_length = rgn.allocated_length;
-
-    struct region_data* data = rgn.data;
-    data->trans_x = 0;
-    data->trans_y = 0;
-    data->num_bands = 1;
-
-    data->band_data[0] = 0x80 | 0x40 | 1;      /* regular mode, 1 span */
-    data->band_data[1] = 0;                    /* high byte of spans   */
-
-    int16_t y0 = (int16_t) y;
-    int16_t y1 = (int16_t) (y + height);
-    memcpy(data->band_data + 2, &y0, 2);
-    memcpy(data->band_data + 4, &y1, 2);
-
-    int16_t x0 = (int16_t) x;
-    int16_t x1 = (int16_t) (x + width);
-    memcpy(data->band_data + 6, &x0, 2);
-    memcpy(data->band_data + 8, &x1, 2);
-
-    return rgn;
-}
-
-export struct region CdEverythingRegion(void) {
-    return CdCreateRectRegion(INT16_MIN, INT16_MIN, 65535, 65535);
-}
 
 static bool RegionCombinationEdgeCallback(int y0, int y1, int* retv, void* context) {
     int16_t* y_edges = (int16_t*) context;
@@ -1020,6 +955,8 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         FreeHeap(out_spans);
     }
 
+    FreeHeap(y_edges);
+
     if (a_x_points != NULL) {
         FreeHeap(a_x_points);
     }
@@ -1106,4 +1043,77 @@ export struct rect CdGetRegionBounds(struct region rgn) {
     r.w -= r.x;
     r.h -= r.y;
     return r;
+}
+
+
+
+struct region CdEmptyRegion(void) {
+    struct region rgn;
+    memcpy(rgn.sig, "RGN.", 4);
+    rgn.allocated_length = sizeof(struct region_data);
+    rgn.used_length = rgn.allocated_length;
+    rgn.data = AllocHeap(rgn.allocated_length);
+
+    struct region_data* data = rgn.data;
+    data->trans_x = 0;
+    data->trans_y = 0;
+    data->num_bands = 0;
+
+    return rgn;
+}
+
+export int CdTranslateRegion(struct region* rgn, int offx, int offy) {
+    if (rgn == NULL) {
+        return -1;//TODO: EINVAL;
+    }
+
+    struct region_data* data = rgn->data;
+    data->trans_x += offx;
+    data->trans_y += offy;
+    return 0;
+}
+
+export struct region CdCreateRectRegion(int x, int y, int width, int height) {
+    /* 
+     * This function will bypass AddScanline, just because this one needs to be 
+     * fast! (And it's easy to write!).
+     * 
+     * Luckily, all regions must start with their first band in regular mode.
+     * So it's not too bad. We also prohibit compact mode on the first line to 
+     * make our lives here even easier.
+     */
+
+    if (width <= 0 || height <= 0) {
+        return CdEmptyRegion();
+    }
+
+    struct region rgn;
+    memcpy(rgn.sig, "RGNr", 4);
+    rgn.allocated_length = sizeof(struct region_data) + 10;
+    rgn.data = AllocHeap(rgn.allocated_length);
+    rgn.used_length = rgn.allocated_length;
+
+    struct region_data* data = rgn.data;
+    data->trans_x = 0;
+    data->trans_y = 0;
+    data->num_bands = 1;
+
+    data->band_data[0] = 0x80 | 0x40 | 1;      /* regular mode, 1 span */
+    data->band_data[1] = 0;                    /* high byte of spans   */
+
+    int16_t y0 = (int16_t) y;
+    int16_t y1 = (int16_t) (y + height);
+    memcpy(data->band_data + 2, &y0, 2);
+    memcpy(data->band_data + 4, &y1, 2);
+
+    int16_t x0 = (int16_t) x;
+    int16_t x1 = (int16_t) (x + width);
+    memcpy(data->band_data + 6, &x0, 2);
+    memcpy(data->band_data + 8, &x1, 2);
+
+    return rgn;
+}
+
+export struct region CdEverythingRegion(void) {
+    return CdCreateRectRegion(INT16_MIN, INT16_MIN, 65535, 65535);
 }

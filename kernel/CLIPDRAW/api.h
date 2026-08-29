@@ -7,6 +7,7 @@
 #include <keycodes.h>
 
 struct region {
+    char sig[4];
     void* data;
     size_t used_length;     
     size_t allocated_length;

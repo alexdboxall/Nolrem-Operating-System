@@ -37,10 +37,12 @@ struct dc* WmGetDC(void);
 int WmReturnDC(struct dc* dc);
 struct dc* WmBeginPaint(struct window* win);
 void WmEndPaint(struct window* win, struct dc* dc);
-
+void WmChangePosition(struct window* win, struct rect local_r, bool lock);
 struct window* WmCreateWindow(struct window* parent, const char* classname, struct rect local_r, bool lock);
 struct window_class* WmOpenWindowClass(const char* name);
 struct window_class* WmCreateWindowClass(const char* name, winproc_t proc, int flags);
 int WmDefaultWindowProcedure(struct window* win, struct msg msg);
 struct window* WmGetDesktop(void);
 int WmCallWinProc(struct window* win, struct msg msg);
+void WmInvalidateRegion(struct window* win, struct region rgn, bool lock);
+void WmInvalidateWindow(struct window* win, bool lock);

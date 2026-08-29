@@ -132,17 +132,18 @@ export void* CdGetGraphicsObject(struct dc* dc, int type) {
 void CleanupDc(void* _dc) {
     struct dc* dc = _dc;
     DerefObject(dc->brush);
+    DerefObject(dc->pen);
     FreeHeap(dc);
 }
 
 void CdInitDcSubsystem(void) {
-    RegisterUserObjectType(UOBJ_REGION, CleanupDc);
+    RegisterUserObjectType(UOBJ_DC, CleanupDc);
 }
 
 export struct dc* CdCreateDc(void) {
     struct dc* dc = AllocHeap(sizeof(struct dc));
-    InitUserObject(&dc, UOBJ_REGION);
-    dc->drv = GetKernelGraphicsDriver();
+    InitUserObject(dc, UOBJ_DC);
+    dc->drv = GetKernelGraphicsDriver();    
     dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);
     dc->pen = CdGetStockPen(STOCK_PEN_BLACK_1);
     // CdGetStockBrush doesn't add a ref, but on brush/pen change we deref,

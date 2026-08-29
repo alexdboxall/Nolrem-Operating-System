@@ -20,6 +20,8 @@ static void HandleWmPaint(struct window* win) {
     CdSetGraphicsObject(dc, b);
     struct region rgn = CdCreateEllipseRegion(50, 50, 500, 500);
     CdPaintRegion(dc, rgn);
+    CdFreeRegion(rgn);
+    
     DerefObject(b);
     
     WmEndPaint(win, dc);

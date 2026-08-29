@@ -199,24 +199,37 @@ for (int y = 240; y < 250; ++y) {
     WmInit();
 
     struct window* win = WmCreateWindow(WmGetDesktop(), NULL, (struct rect) {
-        .x = 275, .y = 75, .w = 500, .h = 350
+        .x = 75, .y = 75, .w = 300, .h = 350
     }, true);
-    struct window* win2 = WmCreateWindow(WmGetDesktop(), NULL, (struct rect) {
-        .x = 275, .y = 175, .w = 450, .h = 150
-    }, true);
+
+    struct rect w2pos = (struct rect) {
+        .x = 175, .y = 175, .w = 450, .h = 150
+    };
+
+    struct window* win2 = WmCreateWindow(WmGetDesktop(), NULL, w2pos, true);
     
     WmCallWinProc(WmGetDesktop(), (struct msg) {
         .type = WM_PAINT
     });
 
-    WmCallWinProc(win, (struct msg) {
-        .type = WM_PAINT
-    });
-    /*WmCallWinProc(win2, (struct msg) {
-        .type = WM_PAINT
-    });
+    while (true) {
+        w2pos.x = (((w2pos.x - 175) + 1) % 100) + 175;
+        WmChangePosition(win2, w2pos, true);
+        
+        WmInvalidateWindow(WmGetDesktop(), true);
+        WmInvalidateWindow(win, true);
+        WmInvalidateWindow(win2, true);
 
-*/
+        WmCallWinProc(WmGetDesktop(), (struct msg) {
+            .type = WM_PAINT
+        });
+        WmCallWinProc(win, (struct msg) {
+            .type = WM_PAINT
+        });
+        WmCallWinProc(win2, (struct msg) {
+            .type = WM_PAINT
+        });
+    }
     
     (void) win;
     (void) win2;

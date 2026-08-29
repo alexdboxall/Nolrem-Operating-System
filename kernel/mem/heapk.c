@@ -16,6 +16,7 @@ static struct heap kernel_heap;
 
 static void* AllocBootstrapHeap(size_t bytes) {
     if (bootstrap_heap_index + bytes > BOOTSTRAP_HEAP_SIZE) {
+        LogStringAndHexLine("OUT OF HEAP! HEAT STARTS AT 0x", (size_t) bootstrap_heap);
         return NULL;
     }
     void* retv = bootstrap_heap + bootstrap_heap_index;

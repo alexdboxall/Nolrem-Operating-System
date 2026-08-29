@@ -163,7 +163,7 @@ export void WmChangePosition(struct window* win, struct rect local_r, bool lock)
         WmInvalidateExposedRegion(win, &covered_rgn, true);
     }
     CdFreeRegion(covered_rgn);
-    CdFreeRegion(old_win_bounds);    
+    CdFreeRegion(old_win_bounds);       /* this clears old win->win_rgn */   
 
     /* Make the window dirty. */
     CdFreeRegion(win->dirty_rgn);
@@ -280,17 +280,13 @@ export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
         BORDER_WIDTH,
         CdGetStockBrush(STOCK_BRUSH_BLACK)
     );
-
-    LogString("\n\nPREPARE:\n");
     CdPaintRectWithBrush(dc, 
         0,
         0,
         BORDER_WIDTH,
         win->local_win_bound.h - SHADOW_CUT_IN - BORDER_WIDTH,
         CdGetStockBrush(STOCK_BRUSH_SYSTEM)
-    );
-    LogString("\n");
-    
+    );    
     CdPaintRectWithBrush(dc, 
         win->local_win_bound.w - SHADOW_CUT_IN - BORDER_WIDTH,
         0,
@@ -345,6 +341,7 @@ export struct dc* WmBeginPaint(struct window* win) {
 
     struct dc* dc = WmGetDC();
     CdRestrictClipRegion(dc, invl_rgn);
+    CdFreeRegion(invl_rgn);
 
     CdSetTranslation(dc, win->global_offset_cached.x, win->global_offset_cached.y);
 

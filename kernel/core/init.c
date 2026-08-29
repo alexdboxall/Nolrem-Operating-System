@@ -55,6 +55,7 @@ extern void InitVga();
 
 #include "CLIPDRAW/clipdraw_internal.h"
 #include "CLIPDRAW/gfx_driver.h"
+#include "_WINMGR/winmgr_internal.h"
 
 
 void draw_test(struct graphics_driver* drv, uint8_t* pattern, int x, int y) {
@@ -185,9 +186,6 @@ for (int y = 240; y < 250; ++y) {
         }
     }
 
-    struct brush* blue_brush = CdCreateSolidBrush(0xFF00C0F0);
-    CdPaintRectWithBrush(dc, 0, 0, 640, 480, blue_brush);
-
     /*
     CdPaintGradientRectHz(dc, 47 + 6, 97 + 6, 556, 326, 0xFF4095bf, 0xFF4095bf);
     CdPaintGradientRectHz(dc, 47 + 2, 97 + 2, 556, 326, BlackColour(), BlackColour());
@@ -197,23 +195,31 @@ for (int y = 240; y < 250; ++y) {
     CdPaintGradientRectHz(dc, 500, 100, 100, 20, 0xFF00CAFF, 0xFF00CAFF);
     CdPaintGradientRectHz(dc, 50, 120, 550, 300, WhiteColour(), WhiteColour());
 */
-    struct window;
     extern void WmInit(void);
-    extern struct window* WmCreateWindow(struct window* parent, struct rect local_r, bool lock);
-    extern void WmEndPaint(struct window* win, struct dc* dc);
-    extern struct window* WmGetDesktop(void);
-    extern struct dc* WmBeginPaint(struct window* win);
-
     WmInit();
 
-    struct window* win = WmCreateWindow(WmGetDesktop(), (struct rect) {
-        .x = 75, .y = 75, .w = 500, .h = 350
+    struct window* win = WmCreateWindow(WmGetDesktop(), NULL, (struct rect) {
+        .x = 275, .y = 75, .w = 500, .h = 350
     }, true);
-
-    extern int WmDefaultWindowProcedure(struct window* win, struct msg msg);
-    WmDefaultWindowProcedure(win, (struct msg) {
-        .msg_id = WM_PAINT
+    struct window* win2 = WmCreateWindow(WmGetDesktop(), NULL, (struct rect) {
+        .x = 275, .y = 175, .w = 450, .h = 150
+    }, true);
+    
+    WmCallWinProc(WmGetDesktop(), (struct msg) {
+        .type = WM_PAINT
     });
+
+    WmCallWinProc(win, (struct msg) {
+        .type = WM_PAINT
+    });
+    /*WmCallWinProc(win2, (struct msg) {
+        .type = WM_PAINT
+    });
+
+*/
+    
+    (void) win;
+    (void) win2;
 
     DerefObject(dc);
 

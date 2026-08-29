@@ -18,7 +18,7 @@ static void HandleWmPaint(struct window* win) {
     );
 
     CdSetGraphicsObject(dc, b);
-    struct region rgn = CdCreateEllipseRegion(50, 50, 1400, 1400);
+    struct region rgn = CdCreateEllipseRegion(50, 50, 500, 500);
     CdPaintRegion(dc, rgn);
     DerefObject(b);
     
@@ -26,12 +26,9 @@ static void HandleWmPaint(struct window* win) {
 }
 
 export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
-    switch (msg.msg_id) {
+    switch (msg.type) {
     case WM_PAINT:
         HandleWmPaint(win);
-        return 0;
-
-    case WM_NCPAINT:
         return 0;
 
     default:

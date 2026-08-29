@@ -355,10 +355,12 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_PAINT        1
 #define WM_NCPAINT      2
 
+#define CS_ALLCLIENT    1
+
 struct window;
 
 struct msg {
-    uint16_t msg_id;
+    uint16_t type;
     void* p_arg;
     int i_arg;
 };

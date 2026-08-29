@@ -1,3 +1,5 @@
+#pragma once
+
 #include "api.h"
 #include <obj.h>
 
@@ -51,6 +53,8 @@ struct path {
 struct graphics_driver;
 void AddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv);
 
+void CdLogRegion(struct region r);
+
 void CdMapDCCoordinates(struct dc* dc, int* x1, int* y1, int* x2, int* y2);
 void CdLogicalToDevice(struct dc* dc, int* x, int* y);
 
@@ -90,7 +94,7 @@ struct region CdGetRegionCombinationEx(int mode, struct region a, struct region 
 struct uregion* RegionToUserRegion(struct region rgn);
 struct region UserRegionToRegion(struct uregion* urgn);
 
-void CdTranslateCoordinates(struct dc* dc, int dx, int dy);
+void CdSetTranslation(struct dc* dc, int x, int y);
 
 bool ValidateUserObjectAndAtomicallyRef(void* obj, int type);
 

@@ -44,10 +44,10 @@ void CdLogicalToDevice(struct dc* dc, int* x, int* y) {
 }
 
 
-void CdTranslateCoordinates(struct dc* dc, int dx, int dy) {
+void CdSetTranslation(struct dc* dc, int x, int y) {
     LockUserObject(dc);
-    dc->trans_x += dx;
-    dc->trans_y += dy;
+    dc->trans_x = x;
+    dc->trans_y = y;
     UnlockUserObject(dc);
 }
 

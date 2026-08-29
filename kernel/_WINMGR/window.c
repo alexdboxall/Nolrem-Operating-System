@@ -13,10 +13,9 @@
 
 static struct spinlock winmgr_lock;
 
-static struct window* desktop_window;
-
 static void CleanupWindow(void* _win) {
     struct window* win = _win;
+    DerefObject(win->winclass);
     FreeHeap(win);
 }
 
@@ -178,12 +177,22 @@ export void WmChangePosition(struct window* win, struct rect local_r, bool lock)
     if (lock) WmUnlock();
 }
 
-struct window* WmCreateWindow(struct window* parent, struct rect local_r, bool lock) {
+export int WmCallWinProc(struct window* win, struct msg msg) {
+    return win->winclass->proc(win, msg);
+}
+
+export struct window* WmCreateWindow(struct window* parent, const char* classname, struct rect local_r, bool lock) {
+    struct window_class* wc = WmOpenWindowClass(classname);
+    if (wc == NULL) {
+        return NULL;
+    }
+
     struct window* win = AllocHeap(sizeof(struct window));
     InitUserObject(win, UOBJ_WINDOW);
 
     if (lock) WmLock();
 
+    win->winclass = wc;
     win->first_child = NULL;
     win->parent = parent;
     win->next_sibling = parent ? parent->first_child : NULL;
@@ -244,12 +253,9 @@ export void WmRaiseToTop(struct window* win, bool lock) {
     if (lock) WmUnlock();
 }
 
-export struct window* WmGetDesktop(void) {
-    return desktop_window;
-}
-
 export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
     struct brush* blue = CdCreateSolidBrush(0xFF000080);
+
     CdPaintRectWithBrush(dc, BORDER_WIDTH, BORDER_WIDTH, win->local_client_bound.w, TITLEBAR_HEIGHT, blue);
     DerefObject(blue);
 
@@ -274,6 +280,8 @@ export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
         BORDER_WIDTH,
         CdGetStockBrush(STOCK_BRUSH_BLACK)
     );
+
+    LogString("\n\nPREPARE:\n");
     CdPaintRectWithBrush(dc, 
         0,
         0,
@@ -281,6 +289,8 @@ export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
         win->local_win_bound.h - SHADOW_CUT_IN - BORDER_WIDTH,
         CdGetStockBrush(STOCK_BRUSH_SYSTEM)
     );
+    LogString("\n");
+    
     CdPaintRectWithBrush(dc, 
         win->local_win_bound.w - SHADOW_CUT_IN - BORDER_WIDTH,
         0,
@@ -310,73 +320,15 @@ export bool WmCheckIfPaintRequired(struct window* win) {
     return !empty;
 }
 
-// ========================= MOVE TO OWN FILE =========================
-#define DC_CACHE_SIZE   8
-struct dc_cache_entry {
-    struct dc* dc;
-    bool allocated;
-};
-
-static struct mutex* dc_cache_mtx;
-static struct dc_cache_entry dc_cache[DC_CACHE_SIZE];
-
-export struct dc* WmGetDC(void) {
-    int res = AcquireMutex(dc_cache_mtx, TIMEOUT_INFINITE);
-    if (res != 0) {
-        return NULL;
-    }
-
-    for (int i = 0 ; i < DC_CACHE_SIZE; ++i) {
-        if (!dc_cache[i].allocated) {
-            dc_cache[i].allocated = true;
-            struct dc* dc = dc_cache[i].dc;
-            ReleaseMutex(dc_cache_mtx);
-            return dc;
-        }
-    }
-
-    ReleaseMutex(dc_cache_mtx);
-    return CdCreateDc();
-}
-
-export int WmReturnDC(struct dc* dc) {
-    int res = AcquireMutex(dc_cache_mtx, TIMEOUT_INFINITE);
-    if (res != 0) {
-        return res;
-    }
-
-    for (int i = 0 ; i < DC_CACHE_SIZE; ++i) {
-        if (dc_cache[i].dc == dc) {
-            dc_cache[i].allocated = false;
-            // We reset the DC on return, instead of Get(), because this will
-            // often allow e.g. a brush or pen set by the user of the DC to be
-            // properly released and cleaned up (instead of waiting for the 
-            // next Get() for it to be cleaned up).
-            CdResetDC(dc);
-            ReleaseMutex(dc_cache_mtx);
-            return 0;
-        }
-    }
-
-    ReleaseMutex(dc_cache_mtx);
-    DerefObject(dc);
-    return 0;
-}
-
-void WmInitDcCache(void) {
-    for (int i = 0; i < DC_CACHE_SIZE; ++i) {
-        dc_cache[i].dc = CdCreateDc();
-        dc_cache[i].allocated = false;
-    }
-    dc_cache_mtx = CreateMutex();
-}
-
-// ========================= MOVE TO OWN FILE =========================
+extern void WmInitDcCache(void);
+extern void WmInitWindowClassSubsystem();
+extern void WmInitDesktopWindowSubsystem();
 
 void WmInit(void) {
     InitSpinlock(&winmgr_lock);
     WmInitDcCache();
-    desktop_window = WmCreateWindow(NULL, (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
+    WmInitWindowClassSubsystem();
+    WmInitDesktopWindowSubsystem();    
 }
 
 export void WmEndPaint(struct window* win, struct dc* dc) {
@@ -393,13 +345,17 @@ export struct dc* WmBeginPaint(struct window* win) {
 
     struct dc* dc = WmGetDC();
     CdRestrictClipRegion(dc, invl_rgn);
-    CdFreeRegion(invl_rgn);
-    CdTranslateCoordinates(dc, win->global_offset_cached.x, win->global_offset_cached.y);
-    WmDefaultNonClientPaint(dc, win);
-    CdTranslateCoordinates(dc, -win->global_offset_cached.x, -win->global_offset_cached.y);
-    CdRestrictClipRegion(dc, win->client_rgn);
-    int cx = win->global_offset_cached.x - win->local_win_bound.x + win->local_client_bound.x;
-    int cy = win->global_offset_cached.y - win->local_win_bound.y + win->local_client_bound.y;
-    CdTranslateCoordinates(dc, cx, cy);
+
+    CdSetTranslation(dc, win->global_offset_cached.x, win->global_offset_cached.y);
+
+    if (!(win->winclass->flags & CS_ALLCLIENT)) {
+        WmDefaultNonClientPaint(dc, win);
+        CdSetTranslation(dc, 0, 0);
+        CdRestrictClipRegion(dc, win->client_rgn);
+        int cx = win->global_offset_cached.x + (win->local_client_bound.x - win->local_win_bound.x);
+        int cy = win->global_offset_cached.y + (win->local_client_bound.y - win->local_win_bound.y);
+        CdSetTranslation(dc, cx, cy);
+    }
+    
     return dc;
 }

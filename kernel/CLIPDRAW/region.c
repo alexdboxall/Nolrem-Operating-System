@@ -342,7 +342,9 @@ done_encoding:
      * Now we mark down the new scanline we're working on.
      */
     ctxt->current_spans = num_spans;
-    ctxt->current_points = AllocHeap(new_span_bytes);
+    // don't allow allocheap(0) - that gives NULL!! and then we go back to
+    // 'this is the first scanline'!
+    ctxt->current_points = AllocHeap(new_span_bytes + 1);
     ctxt->current_height = 1;
     memcpy(ctxt->current_points, x_points, new_span_bytes);
 }
@@ -718,21 +720,11 @@ export struct region CdEverythingRegion(void) {
 
 static bool RegionCombinationEdgeCallback(int y0, int y1, int* retv, void* context) {
     int16_t* y_edges = (int16_t*) context;
-    int index = *retv;
 
-    if (index == 0) {
-        y_edges[index++] = (int16_t) y0;
-        y_edges[index++] = (int16_t) y1;
+    y_edges[0] = (int16_t) y0;
+    y_edges[1] = (int16_t) y1;
 
-    } else {
-        int16_t prev = y_edges[index - 1];
-        if (y0 > prev) {
-            y_edges[index++] = (int16_t) y0;
-        }
-        y_edges[index++] = (int16_t) y1;
-    }
-
-    *retv = index - (*retv);
+    *retv = 2;
     return true;                // Stop here!
 }
 
@@ -802,9 +794,12 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         }
 
         if (num_a_edges_buffer == 0 && !a_ctxt.done) {
-            int a_consumed = IterateRegionCoroutine(a, num_edges, y_edges, &a_ctxt, RegionCombinationEdgeCallback, NULL, NULL);
-            num_a_edges_buffer += a_consumed;
-            memcpy(a_edges_buffer, y_edges + num_edges, sizeof(a_edges_buffer));
+            int16_t probe[2];
+            int a_consumed = IterateRegionCoroutine(a, 0, probe, &a_ctxt, RegionCombinationEdgeCallback, NULL, NULL);
+            if (a_consumed == 2) {
+                num_a_edges_buffer = 2;
+                memcpy(a_edges_buffer, probe, sizeof(a_edges_buffer));
+            }
         }
         if (num_b_edges_buffer == 0 && !b_ctxt.done) {
             // here's the plan. (?)
@@ -814,9 +809,13 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
             // using the 'normal' routine to copy it into an allocated buffer.
             // we'll then invert that buffer, and then the thunk routine can
             // just the buffer data instead of the data from the actual coroutine 
-            int b_consumed = IterateRegionCoroutine(b, num_edges, y_edges, &b_ctxt, RegionCombinationEdgeCallback, NULL, scale_dc);
-            num_b_edges_buffer += b_consumed;
-            memcpy(b_edges_buffer, y_edges + num_edges, sizeof(b_edges_buffer));
+            
+            int16_t probe[2];
+            int b_consumed = IterateRegionCoroutine(b, 0, probe, &b_ctxt, RegionCombinationEdgeCallback, NULL, scale_dc);
+            if (b_consumed == 2) {
+                num_b_edges_buffer = 2;
+                memcpy(b_edges_buffer, probe, sizeof(b_edges_buffer));
+            }
         }
 
         if (num_a_edges_buffer == 0 && num_b_edges_buffer == 0) {
@@ -1043,6 +1042,24 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
 export bool CdIsRegionEmpty(struct region rgn) {
     struct region_data* data = rgn.data;
     return data->num_bands == 0;
+}
+
+int LogRect(struct rect r, void*, int rv, bool* cancel) {
+    *cancel = false;
+    LogString("RECT: ");
+    LogInt(r.x);
+    LogString(", ");
+    LogInt(r.y);
+    LogString(" (W: ");
+    LogInt(r.w);
+    LogString(", H: ");
+    LogInt(r.h);
+    LogString(")\n");
+    return rv;
+}
+
+void CdLogRegion(struct region r) {
+    IterateRegion(r, LogRect, NULL, 0);
 }
 
 int IterateRegion(

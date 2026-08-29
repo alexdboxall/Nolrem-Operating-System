@@ -347,3 +347,20 @@ pen_t CopyPen(pen_t pen);
 int SetPenOrigin(pen_t pen, int x, int y);
 struct point GetPenOrigin(pen_t pen);
 
+
+
+
+/* Window Functions */
+
+#define WM_PAINT        1
+#define WM_NCPAINT      2
+
+struct window;
+
+struct msg {
+    uint16_t msg_id;
+    void* p_arg;
+    int i_arg;
+};
+
+typedef int (*winproc_t)(struct window* self, struct msg msg);

@@ -6,6 +6,8 @@
 #include <heapex.h>
 #include <string.h>
 
+/* THIS FILE IS BYO LOCKING */
+
 /**
  * Represents a section of memory that is either allocated or free. The memory 
  * address it represents is itself, excluding the metadata at the start or end.
@@ -55,6 +57,7 @@ static const userrodata uint16_t free_list_block_sizes[TOTAL_NUM_FREE_LISTS] = {
     40,         48,         56,         64,
     80,         96,         128,        160,
     192,        256,        384,        512
+    //192,        256,        2048,       4096
 };
 
 /**
@@ -64,12 +67,13 @@ static const userrodata uint16_t free_list_block_sizes[TOTAL_NUM_FREE_LISTS] = {
  */
 static userexec int GetSmallestListIndexThatFits(size_t size_without_metadata) {
     int i = 0;
-    while (true) {
+    while (i < TOTAL_NUM_FREE_LISTS) {
         if (size_without_metadata <= free_list_block_sizes[i]) {
             return i;
         }
         ++i;
     }
+    return TOTAL_NUM_FREE_LISTS - 1;
 }
 
 /**
@@ -153,6 +157,7 @@ static userexec struct block* RequestBlock(struct heap* heap, size_t total_size)
      */
     total_size += MIN_REQ_SIZE * 2;
 
+    total_size = (total_size + 1023) & ~1023;
     struct block* block = (struct block*) heap->get_memory(total_size);
     if (block == NULL) {
         return NULL;
@@ -218,9 +223,6 @@ static userexec struct block* AddBlock(struct heap* heap, struct block* block) {
     struct block** head_list = GetHeap(heap);
 
     int free_list_index = GetInsertionIndex(size - METADATA_TOTAL);
-    if (free_list_index == -1) {
-
-    }
 
     size_t prev_size = *(((size_t*) block) - 1);
     struct block* prev = (struct block*) (((size_t*) block) - prev_size / sizeof(size_t));
@@ -267,7 +269,6 @@ static userexec struct block* AddBlock(struct heap* heap, struct block* block) {
          */
         RemoveBlock(heap, GetInsertionIndex(GetSize(prev) - METADATA_TOTAL), prev);
         RemoveBlock(heap, GetInsertionIndex(GetSize(next) - METADATA_TOTAL), next);
-
         SetSizeTags(prev, size + GetSize(prev) + GetSize(next));
         prev->prev = NULL;
         prev->next = NULL;
@@ -349,7 +350,17 @@ static userexec struct block* FindBlock(struct heap* heap, size_t user_requested
     int min_index = GetSmallestListIndexThatFits(user_requested_size);
     for (int i = min_index; i < TOTAL_NUM_FREE_LISTS; ++i) {
         if (head_list[i] != NULL) {
-            return AllocateBlock(heap, head_list[i], i, user_requested_size);
+            if (i == TOTAL_NUM_FREE_LISTS - 1) {
+                struct block* current = head_list[i];
+                while (current) {
+                    if (GetSize(current) - METADATA_TOTAL >= user_requested_size) {
+                        return AllocateBlock(heap, current, i, user_requested_size);
+                    }
+                    current = current->next;
+                }
+            } else {
+                return AllocateBlock(heap, head_list[i], i, user_requested_size);
+            }
         }
     }
 
@@ -359,7 +370,12 @@ static userexec struct block* FindBlock(struct heap* heap, size_t user_requested
      * This avoids an issue if e.g. a user requests 2.1KB, and we allocate 3.9KB
      * and it goes in the wrong bucket due to the two different indexes used.
      */
-    size_t total_size = free_list_block_sizes[min_index + 1] + METADATA_TOTAL;
+    size_t total_size;
+    if (min_index + 1 < TOTAL_NUM_FREE_LISTS) {
+        total_size = free_list_block_sizes[min_index + 1] + METADATA_TOTAL;
+    } else {
+        total_size = user_requested_size + METADATA_TOTAL;
+    }
     struct block* sys_block = RequestBlock(heap, total_size);
     if (sys_block == NULL) {
         return NULL;
@@ -374,23 +390,13 @@ static userexec struct block* FindBlock(struct heap* heap, size_t user_requested
     return AllocateBlock(heap, head_list[sys_index], sys_index, user_requested_size);
 }
 
-static userexec void LockHeap(struct heap* heap) {
-    AcquireSpinlock(&heap->lock);
-}
-
-static userexec void UnlockHeap(struct heap* heap) {
-    ReleaseSpinlock(&heap->lock);
-}
-
 export userexec void* AllocHeapEx(struct heap* heap, size_t size) {
     if (size == 0) {
         return NULL;
     }
 
-    LockHeap(heap);
     size = RoundUpSize(size);
     struct block* block = FindBlock(heap, size);
-    UnlockHeap(heap);
     
     if (block == NULL) {
         return NULL;
@@ -407,9 +413,7 @@ export userexec void FreeHeapEx(struct heap* heap, void* ptr) {
     block->prev = NULL;
     block->next = NULL;
 
-    LockHeap(heap);
     AddBlock(heap, block);
-    UnlockHeap(heap);
 }
 
 export userexec void* ReallocHeapEx(struct heap* heap, void* ptr, size_t new_size) {

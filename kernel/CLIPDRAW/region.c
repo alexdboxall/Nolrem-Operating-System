@@ -1045,7 +1045,6 @@ export bool CdIsRegionEmpty(struct region rgn) {
     return data->num_bands == 0;
 }
 
-
 int IterateRegion(
     struct region rgn, 
     int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel), 

@@ -4,7 +4,7 @@
 #include <spinlock.h>
 #include <common.h>
 
-#define TOTAL_NUM_FREE_LISTS 28
+#define TOTAL_NUM_FREE_LISTS 16
 
 struct block;
 

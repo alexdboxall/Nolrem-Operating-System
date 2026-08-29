@@ -198,16 +198,22 @@ for (int y = 240; y < 250; ++y) {
     CdPaintGradientRectHz(dc, 50, 120, 550, 300, WhiteColour(), WhiteColour());
 */
     struct window;
-    extern struct window* WmCreateWindow(struct rect r);
+    extern void WmInit(void);
+    extern struct window* WmCreateWindow(struct window* parent, struct rect local_r, bool lock);
     extern void WmEndPaint(struct window* win, struct dc* dc);
+    extern struct window* WmGetDesktop(void);
     extern struct dc* WmBeginPaint(struct window* win);
 
-    struct window* win = WmCreateWindow((struct rect) {
-        .x = 75, .y = 75, .w = 500, .h = 350
-    });
-    struct dc* wdc = WmBeginPaint(win);
-    WmEndPaint(win, wdc);
+    WmInit();
 
+    struct window* win = WmCreateWindow(WmGetDesktop(), (struct rect) {
+        .x = 75, .y = 75, .w = 500, .h = 350
+    }, true);
+
+    extern int WmDefaultWindowProcedure(struct window* win, struct msg msg);
+    WmDefaultWindowProcedure(win, (struct msg) {
+        .msg_id = WM_PAINT
+    });
 
     DerefObject(dc);
 
@@ -222,12 +228,12 @@ for (int y = 240; y < 250; ++y) {
  */
 export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitLog();
+    InitVga();
     InitBoostrapHeap();
     InitKernelVirtArena();
     InitTimer();
     ArchInit();
     ArchCallGlobalConstructors();
-    InitVga();
 
     InitPhys(
         (void*)((size_t) boot_info->ram_table + 0xC0000000), 

@@ -126,6 +126,8 @@ int ActualPaintRectWithBrush(struct dc* dc, int x, int y, int x2, int y2,
     struct brush* brush);
 int ActualInvertRect(struct dc* dc, int x, int y, int x2, int y2);
 
+void CdResetDC(struct dc* dc);
+
 /* INTERNAL, BUT HAS USER-WRAPPER*/
 struct dc* CdCreateDc(void);
 

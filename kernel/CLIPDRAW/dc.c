@@ -23,9 +23,6 @@ struct dc {
     int16_t trans_y;
 };
 
-static struct brush* dummy_brush;
-static struct pen* dummy_pen;
-
 struct graphics_driver* GetOutputDriver(struct dc* dc) {
     return dc->drv;
 }
@@ -140,19 +137,42 @@ void CleanupDc(void* _dc) {
 
 void CdInitDcSubsystem(void) {
     RegisterUserObjectType(UOBJ_REGION, CleanupDc);
-    dummy_brush = CdCreateSolidBrush(SystemColour());
-    dummy_pen = CdCopyPen(CdGetStockPen(STOCK_PEN_BLACK_1));
 }
 
 export struct dc* CdCreateDc(void) {
     struct dc* dc = AllocHeap(sizeof(struct dc));
     InitUserObject(&dc, UOBJ_REGION);
     dc->drv = GetKernelGraphicsDriver();
-    dc->brush = dummy_brush;
-    dc->pen = NULL;// dummy_pen;
+    dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);
+    dc->pen = CdGetStockPen(STOCK_PEN_BLACK_1);
+    // CdGetStockBrush doesn't add a ref, but on brush/pen change we deref,
+    // so we need to ref here
+    RefObject(dc->brush);
+    RefObject(dc->pen);
     dc->cliprgn = CdEverythingRegion();
     dc->trans_x = 0;
     dc->trans_y = 0;
     AddGraphicsFallbacksWhereNeeded(dc->drv);
     return dc;
+}
+
+void CdResetDC(struct dc* dc) {
+    LockUserObject(dc);
+    
+    CdFreeRegion(dc->cliprgn);
+    dc->cliprgn = CdEverythingRegion();
+    dc->trans_x = 0;
+    dc->trans_y = 0;
+
+    dc->drv = GetKernelGraphicsDriver();
+    AddGraphicsFallbacksWhereNeeded(dc->drv);
+
+    DerefObject(dc->brush);
+    DerefObject(dc->pen);
+    dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);
+    dc->pen = CdGetStockPen(STOCK_PEN_BLACK_1);
+    RefObject(dc->brush);
+    RefObject(dc->pen);
+
+    UnlockUserObject(dc);
 }

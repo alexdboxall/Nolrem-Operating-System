@@ -21,21 +21,27 @@ export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int
         int cur_y = y + i;
         int dy = cur_y - center_y;
 
-        long b2 = (long)b * b;
-        long dy2 = (long)dy * dy;
-        long remaining = b2 - dy2;
+        int b2 = b * b;
+        int dy2 = dy * dy;
+        int remaining = b2 - dy2;
 
         if (remaining < 0) {
             AddScanline(&rgn, &ctxt, 0, NULL, false);
             continue;
         }
 
-        // the '4096' is here to give a bit more precision to the endevour
+        // the '65536' is here to give a bit more precision to the endevour
         // the old appraoch was to put a*a*... in the dx2_scaled, but that would
         // be a*a*(a thing computed based on b*b) which may overflow 32 bits
         // and we don't want to have to do 64 bit division.
-        long dx2_scaled = (4096 * remaining) / b2;
-        int dx = a * IntegerSqrt((int)dx2_scaled) / 64;
+        //
+        // the LL is necessary as we do want a 64 bit intermediate before the b2
+        // divides it back out
+        //
+        // we know basically that remaining <= b2, so the most it can return
+        // is the scale value
+        int dx2_scaled = (int)((1073741824LL * remaining) / b2);
+        int dx = a * IntegerSqrt(dx2_scaled) >> 15;
 
         if (dx == 0) {
             /* 

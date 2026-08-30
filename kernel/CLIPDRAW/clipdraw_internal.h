@@ -83,6 +83,12 @@ void CdInitBrushSubsystem(void);
 void CdInitUserRegionSubsystem(void);
 void CdInitPenSubsystem(void);
 void CdInitDcSubsystem(void);
+void CdInitMouseSubsystem(void);
+
+void CdRemoveMouse(int x, int y);
+void CdDrawMouse(int x, int y);
+void CdStartVideoUpdate(int x1, int y1, int x2, int y2); 
+void CdEndVideoUpdate(int x1, int y1, int x2, int y2);
 
 struct uregion {
     struct user_obj_header hdr;

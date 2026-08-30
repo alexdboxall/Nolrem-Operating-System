@@ -9,3 +9,4 @@ struct spinlock {
 void InitSpinlock(struct spinlock* lock);
 void AcquireSpinlock(struct spinlock* lock);
 void ReleaseSpinlock(struct spinlock* lock);
+bool TryAcquireSpinlock(struct spinlock* lock);

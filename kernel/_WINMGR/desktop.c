@@ -5,6 +5,9 @@
 #include <mutex.h>
 #include "winmgr_internal.h"
 
+//#define DESKTOP_COLOUR 0xFF00C0F0
+#define DESKTOP_COLOUR 0xFF00E0E0
+
 
 static struct window* desktop_window;
 static struct brush* desktop_brush;
@@ -35,7 +38,7 @@ int DesktopWinProc(struct window* win, struct msg msg) {
 }
 
 void WmInitDesktopWindowSubsystem() {
-    desktop_brush = CdCreateSolidBrush(0xFF00C0F0);
+    desktop_brush = CdCreateSolidBrush(DESKTOP_COLOUR);
     WmCreateWindowClass(".DESKTOP", DesktopWinProc, CS_ALLCLIENT);
     desktop_window = WmCreateWindow(NULL, ".DESKTOP", (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
 }

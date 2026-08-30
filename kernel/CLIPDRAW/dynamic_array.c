@@ -19,7 +19,7 @@ struct dynamic_array CreateDynamicArray(int data_size, int initial_allocation) {
 
 struct dynamic_array CopyDynamicArray(struct dynamic_array old) {
     struct dynamic_array da = old;
-    da.array = (size_t) AllocHeap(old.allocated);
+    da.array = (size_t) AllocHeap(old.allocated * old.data_size);
     memcpy(DA_GET_ARRAY(da), DA_GET_ARRAY(old), old.allocated * DA_GET_DATA_SIZE(old));
     return da;
 }

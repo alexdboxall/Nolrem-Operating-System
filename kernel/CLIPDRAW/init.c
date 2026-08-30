@@ -6,4 +6,5 @@ export void CdInit(void) {
     CdInitPenSubsystem();
     CdInitUserRegionSubsystem();
     CdInitDcSubsystem();
+    CdInitMouseSubsystem();
 }

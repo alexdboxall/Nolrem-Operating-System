@@ -26,11 +26,13 @@ static inline int EdgeFunction32(int ax, int ay, int bx, int by, int px, int py)
 
 static void SetPenPixel(struct graphics_driver* drv, int x, int y, int u, int v, uint32_t colour, uint8_t* pattern, int pat_width, int pat_height, bool inv_instead_of_col) {
     if (GetPatternBitHorizontal(u, v, pattern, pat_width, pat_height)) {
+        CdStartVideoUpdate(x, y, x + 1, y + 1);
         if (inv_instead_of_col) {
             drv->invert_rect(drv, x, y, x + 1, y + 1);
         } else {
             drv->fill_rect(drv, x, y, x + 1, y + 1, colour);
         }
+        CdEndVideoUpdate(x, y, x + 1, y + 1);
     }
 }
 

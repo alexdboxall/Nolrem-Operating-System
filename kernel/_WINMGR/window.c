@@ -8,10 +8,28 @@
 #define BORDER_WIDTH    3
 #define SHADOW_CUT_IN   2
 #define TITLEBAR_HEIGHT 20
-#define TITLEBAR_COL_1  0xFF000080
-#define TITLEBAR_COL_2  0xFF00CAFF
+
+#define TITLEBAR_COL_1              0xFF000080
+#define TITLEBAR_COL_2              0xFF00CAFF
+#define TITLEBAR_INACTIVE_COL_1     0xFF404040
+#define TITLEBAR_INACTIVE_COL_2     0xFF808080
 
 static struct spinlock winmgr_lock;
+static struct window* foreground_window = NULL;
+
+export struct window* WmGetForegroundWindow() {
+    return foreground_window;
+}
+
+export void WmSetForegroundWindow(struct window* win) {
+    if (foreground_window != NULL) {
+        DerefObject(foreground_window);
+    }
+    foreground_window = win;
+    if (win != NULL) {
+        RefObject(win);
+    }
+}
 
 static void CleanupWindow(void* _win) {
     struct window* win = _win;
@@ -61,8 +79,6 @@ export void WmInvalidateWindow(struct window* win, bool lock) {
     win->dirty_rgn = CdEverythingRegion();
     if (lock) WmUnlock();
 }
-
-
 
 static struct point WmAccumulateScreenOrigin(struct window* win, bool lock) {
     if (lock) WmLock();
@@ -200,6 +216,10 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
         parent->first_child = win;
     }
 
+    if (parent == WmGetDesktop()) {
+        WmSetForegroundWindow(win);
+    }
+
     SetInternalWindowBounds(win, local_r);
 
     struct region covered_rgn = CdCopyRegion(win->win_rgn);
@@ -254,9 +274,29 @@ export void WmRaiseToTop(struct window* win, bool lock) {
 }
 
 export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
-    struct brush* blue = CdCreateSolidBrush(0xFF000080);
+    int width = win->local_client_bound.w;
+    int initial_part = width / 3;//width < 100 ? width : width / 2;
+    int remaining_part = width - initial_part;
+    int gradient_part = remaining_part / 4 * 3;
+    int end_part = remaining_part - gradient_part;
 
-    CdPaintRectWithBrush(dc, BORDER_WIDTH, BORDER_WIDTH, win->local_client_bound.w, TITLEBAR_HEIGHT, blue);
+    bool foreground = WmGetForegroundWindow() == win;
+
+    uint32_t col1 = foreground ? TITLEBAR_COL_1 : TITLEBAR_INACTIVE_COL_1;
+    uint32_t col2 = foreground ? TITLEBAR_COL_2 : TITLEBAR_INACTIVE_COL_2;
+
+    struct brush* blue = CdCreateSolidBrush(col1);
+    CdPaintRectWithBrush(
+        dc, BORDER_WIDTH, BORDER_WIDTH, initial_part, TITLEBAR_HEIGHT, blue
+    );
+    CdPaintGradientRectHz(
+        dc, BORDER_WIDTH + initial_part, BORDER_WIDTH, gradient_part, TITLEBAR_HEIGHT,
+        col1, col2
+    );
+    CdSetBrushColour(blue, col2);
+    CdPaintRectWithBrush(
+        dc, BORDER_WIDTH + initial_part + gradient_part, BORDER_WIDTH, end_part, TITLEBAR_HEIGHT, blue
+    );
     DerefObject(blue);
 
     CdPaintRectWithBrush(dc, 

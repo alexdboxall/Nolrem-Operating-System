@@ -6,57 +6,7 @@
 #include <machine/x86.h>
 #include "ps2controller.h"
 
-struct rect mouse_bounds = {.x = 0, .y = 0, .w = 640, .h = 480};
-
-struct graphics_driver;
-extern void VgaInvertRect(struct graphics_driver* drv, int x1, int y1, int x2, int y2);
-
-void DrawMouse(int x, int y) {
-    VgaInvertRect(NULL, x,     y + 0,  x + 1, y + 1);
-    VgaInvertRect(NULL, x,     y + 1,  x + 2, y + 2);
-    VgaInvertRect(NULL, x,     y + 2,  x + 3, y + 3);
-    VgaInvertRect(NULL, x,     y + 3,  x + 4, y + 4);
-    VgaInvertRect(NULL, x,     y + 4,  x + 5, y + 5);
-    VgaInvertRect(NULL, x,     y + 5,  x + 6, y + 6);
-    VgaInvertRect(NULL, x,     y + 6,  x + 7, y + 7);
-    VgaInvertRect(NULL, x,     y + 7,  x + 8, y + 8);
-
-    VgaInvertRect(NULL, x,     y + 8,  x + 5, y + 9);
-    VgaInvertRect(NULL, x,     y + 9,  x + 3, y + 10);
-
-    VgaInvertRect(NULL, x + 3, y + 9,  x + 5, y + 12);
-    VgaInvertRect(NULL, x + 4, y + 12, x + 6, y + 15);
-    VgaInvertRect(NULL, x + 5, y + 15, x + 6, y + 16);
-}
-
-void BoundMouse(int* x, int* y, struct rect* mouse_bounds) {
-    if (*x < mouse_bounds->x) *x = mouse_bounds->x;
-    if (*y < mouse_bounds->y) *y = mouse_bounds->y;
-    if (*x >= mouse_bounds->x + mouse_bounds->w) *x = mouse_bounds->x + mouse_bounds->w - 1;
-    if (*y >= mouse_bounds->y + mouse_bounds->h) *y = mouse_bounds->y + mouse_bounds->h - 1;
-}
-
-void HandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, int scrollx, int scrolly) {
-    static int mx = 320 - 4;
-    static int my = 240 - 8;
-    
-    int new_mx = mx + delta_x;
-    int new_my = my + delta_y;
-    BoundMouse(&new_mx, &new_my, &mouse_bounds);
-
-    if (new_mx != mx || new_my != my) {
-        DrawMouse(mx, my);
-        mx = new_mx;
-        my = new_my;
-        DrawMouse(mx, my);
-    }
-
-    (void) click_bits;
-    (void) scrollx;
-    if (scrolly != 0) {
-        LogStringAndHexLine("Scroll wheel: ", scrolly);
-    }
-}
+extern void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, int scrollx, int scrolly);
 
 /* Standard PS/2 Mouse Commands */
 #define PS2_MOUSE_CMD_ENABLE_DATA_REPORTING  0xF4
@@ -197,7 +147,7 @@ static void Ps2MouseIrqHandler(struct x86_regs*) {
             }
         }
 
-        HandleMouseInput(click_bits, delta_x, delta_y, scrollx, scrolly);
+        WmHandleMouseInput(click_bits, delta_x, delta_y, scrollx, scrolly);
     }
 }
 
@@ -246,5 +196,4 @@ void InitPs2Mouse(void) {
     /* Enable packet reporting on the mouse device */
     Ps2DeviceWrite(PS2_MOUSE_CMD_ENABLE_DATA_REPORTING, true);
 
-    DrawMouse(320 - 4, 240 - 8);
 }

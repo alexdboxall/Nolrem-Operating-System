@@ -12,6 +12,35 @@ static inline uint8_t VGAClipByteMask(int byteX, int clipX0, int clipX1) {
     return mask;
 }
 
+colour_t VGAReadPixel(struct graphics_driver*, int x, int y) {
+    volatile uint8_t* vram = VRAM_BASE;
+
+    int byte_offset = x >> 3;
+    uint8_t bit_mask = 0x80 >> (x & 7);
+
+    volatile uint8_t* ptr = vram + (y * BYTES_PER_ROW) + byte_offset;
+
+    outb(VGA_GC_INDEX, 0x05);
+    outb(VGA_GC_DATA, 0x00);
+
+    int vgacol = 0;
+
+    for (int plane = 0; plane < 4; plane++) {
+        outb(VGA_GC_INDEX, 0x04);
+        outb(VGA_GC_DATA, plane);
+
+        uint8_t byte = *ptr;
+        if (byte & bit_mask) {
+            vgacol |= (1 << plane);
+        }
+    }
+
+    outb(VGA_GC_INDEX, 0x04);
+    outb(VGA_GC_DATA, 0x00);
+
+    return ConvertVgaColourToARGB(vgacol);
+}
+
 void VGADrawRawCharBounded(int x, int y, uint8_t color, uint8_t* bitmap, int height, bool italic, struct rect clip) {
     volatile uint8_t* vram = VRAM_BASE;
 
@@ -314,6 +343,7 @@ struct graphics_capabilities VGAGetCapabilities(struct graphics_driver*) {
     caps.screen_w_mm = 169;
     caps.screen_h_mm = 127;
     caps.flags = GFXCAPS_CAN_READPIXELS;
+    caps.desired_mouse_restore_buffer_mode = MOUSE_BUFFER_UINT8;
     strcpy(caps.name, "VGA 16-colour");
     return caps;
 }
@@ -324,6 +354,7 @@ void InitVga() {
     InitVgaPalette();
 
     struct graphics_driver drv;
+    drv.mouse_restore_buffer = NULL;
     drv.log = VGALog;
     drv.panic = VGAPanic;
     drv.fill_rect = VgaPutSolidRect;
@@ -332,6 +363,9 @@ void InitVga() {
     drv.scroll_rect = VgaScrollRect;
     drv.read_pixel = VGAGetPixel;
     drv.get_capabilities = VGAGetCapabilities;
+    drv.read_pixel = VGAReadPixel;
+    drv.draw_mouse = VGADrawMouse;
+    drv.remove_mouse = VGARemoveMouse;
 
     RegisterPrimaryGraphicsDriver(drv);
     

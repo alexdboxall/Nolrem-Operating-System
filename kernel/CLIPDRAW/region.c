@@ -26,7 +26,6 @@ static void ExpandToFit(struct region* rgn, int extra_bytes) {
 }
 
 void BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt) {
-    memcpy(rgn->sig, "RGN!", 4);
     rgn->used_length = sizeof(struct region_data);
     rgn->allocated_length = 32;
     rgn->data = AllocHeap(rgn->allocated_length);
@@ -1049,7 +1048,6 @@ export struct rect CdGetRegionBounds(struct region rgn) {
 
 struct region CdEmptyRegion(void) {
     struct region rgn;
-    memcpy(rgn.sig, "RGN.", 4);
     rgn.allocated_length = sizeof(struct region_data);
     rgn.used_length = rgn.allocated_length;
     rgn.data = AllocHeap(rgn.allocated_length);
@@ -1088,7 +1086,6 @@ export struct region CdCreateRectRegion(int x, int y, int width, int height) {
     }
 
     struct region rgn;
-    memcpy(rgn.sig, "RGNr", 4);
     rgn.allocated_length = sizeof(struct region_data) + 10;
     rgn.data = AllocHeap(rgn.allocated_length);
     rgn.used_length = rgn.allocated_length;

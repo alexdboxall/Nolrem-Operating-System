@@ -34,7 +34,7 @@ static inline uint8_t inb(uint16_t port) {
     return ret;
 }
 
-extern const uint8_t bayer_4x4_masks[17][4];
+void GetDither(uint32_t col, uint8_t* outbuffer);
 
 void SwitchToMode12h(void);
 void ReadVgaGlyphs(void);
@@ -49,3 +49,5 @@ void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int y2, ui
 void VgaPutBrushRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t primary,
     uint32_t secondary, uint8_t* pattern);
 void VgaPenLine(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour, int thickness, uint8_t* pattern, int pat_width, int pat_height);
+void VGADrawMouse(struct graphics_driver*, int x, int y, const uint32_t* black, const uint32_t* white, void* _restore_buffer, int width, int height);
+void VGARemoveMouse(struct graphics_driver*, int x, int y, void* _restore_buffer, int width, int height);

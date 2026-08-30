@@ -7,6 +7,7 @@
 #include <scheduler.h>
 
 struct sem {
+    struct obj_header hdr;
     int count;
     int max;
     struct thread* waiting_list_start;

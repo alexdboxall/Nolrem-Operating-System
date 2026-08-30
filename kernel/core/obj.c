@@ -15,11 +15,6 @@ void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*)) {
 
 void InitObject(void* obj, uint8_t type) {
     struct obj_header* hdr = obj;
-    hdr->sig[0] = 'O';
-    hdr->sig[1] = 'B';
-    hdr->sig[2] = 'J';
-    hdr->sig[3] = (type == OBJTYPE_USEROBJ) ? 'u' : 'k';
-    hdr->sig[4] = '=';
     atomic_store_explicit(&hdr->ref_count, 1, memory_order_relaxed);
     atomic_store_explicit(&hdr->objtype, type, memory_order_relaxed);
     atomic_thread_fence(memory_order_release);

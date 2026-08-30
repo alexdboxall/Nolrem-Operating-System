@@ -126,39 +126,8 @@ export int CdPaintGradientRectHz(struct dc* dc, int x, int y, int width, int hei
         uint32_t new_b = CLAMP(b1, 0, 255 * 65536) >> 16;
         uint32_t new_a = CLAMP(a1, 0, 255 * 65536) >> 16;
         colour_t new_col = (new_a << 24) | (new_r << 16) | (new_g << 8) | new_b;
-
-        // whacko testing bit
-        typedef struct { uint8_t r, g, b; } RGB16;
-        static const RGB16 vga_palette[16] = {
-            {  0,  0,  0}, // 0  black
-            {128,  0,  0}, // 1  maroon (dark red)
-            {  0,128,  0}, // 2  green (dark green)
-            {128,128,  0}, // 3  olive (dark yellow -- no "brown" in this palette)
-            {  0,  0,128}, // 4  navy (dark blue)
-            {128,  0,128}, // 5  purple (dark magenta)
-            {  0,128,128}, // 6  teal (dark cyan)
-            {192,192,192}, // 7  silver (light gray)
-            {128,128,128}, // 8  gray (dark gray)
-            {255,  0,  0}, // 9  red
-            {  0,255,  0}, // 10 lime (green)
-            {255,255,  0}, // 11 yellow
-            {  0,  0,255}, // 12 blue
-            {255,  0,255}, // 13 fuchsia (magenta)
-            {  0,255,255}, // 14 aqua (cyan)
-            {255,255,255}, // 15 white
-        };
-        extern void GetDither(uint32_t col, uint8_t* outbuffer);
-        uint8_t buffer[8][8];
-        GetDither(new_col, (uint8_t*) buffer);
-        
-        for (int j = 0; j < height; ++j) {
-            int index = buffer[(y + j) % 8][(x + i) % 8];
-            RGB16 v = vga_palette[index];
-            colour_t specific_col = 0xFF000000 + (v.r << 16) + (v.g << 8) + v.b;
-            CdSetBrushColour(grad_brush, specific_col);
-            ActualPaintRectWithBrush(dc, x + i, y + j, 1, 1, grad_brush);
-        }
-
+        CdSetBrushColour(grad_brush, new_col);
+        CdPaintRectWithBrush(dc, x + i, y, 1, height, grad_brush);
         r1 += adj_r;
         g1 += adj_g;
         b1 += adj_b;

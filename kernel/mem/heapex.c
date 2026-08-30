@@ -81,21 +81,15 @@ static userexec int GetSmallestListIndexThatFits(size_t size_without_metadata) {
  * and so it should not normally be used to look up where a block should be.
  */
 static userexec int GetInsertionIndex(size_t size_without_metadata) {
-    /*
-     * We can't round down to the next one when it's the smallest possible size,
-     * so handle this case specially.
-     */
-    if (size_without_metadata == free_list_block_sizes[0]) {
-        return 0;
-    }
-  
-    for (int i = 0; i < TOTAL_NUM_FREE_LISTS - 1; ++i) {
-        if (size_without_metadata <= free_list_block_sizes[i]) {
-            return i - 1;
+    int result = 0;
+    for (int i = 0; i < TOTAL_NUM_FREE_LISTS; ++i) {
+        if (free_list_block_sizes[i] <= size_without_metadata) {
+            result = i;
+        } else {
+            break;
         }
     }
-
-    return TOTAL_NUM_FREE_LISTS - 1;
+    return result;
 }
 
 /**
@@ -130,7 +124,7 @@ static userexec struct block** GetHeap(struct heap* heap) {
  * account the flags on the size field and removes them from the return value. 
  */
 static userexec size_t GetSize(struct block* block) {
-    return block->size & ~3;
+    return block->size & ~1;
 }
 
 /**
@@ -140,7 +134,7 @@ static userexec size_t GetSize(struct block* block) {
  * back tags.
  */
 static userexec void SetSizeTags(struct block* block, size_t size) {
-    block->size = (block->size & 3) | size;
+    block->size = (block->size & 1) | size;
     *(((size_t*) block) + (size / sizeof(size_t)) - 1) = size;
 }
 
@@ -381,13 +375,14 @@ static userexec struct block* FindBlock(struct heap* heap, size_t user_requested
         return NULL;
     }
 
+    
     /*  
      * Put the new memory in the free list (which ought to be empty, as wouldn't
      * need to request new memory otherwise). Then we can allocate the block.
      */
-    int sys_index = GetInsertionIndex(GetSize(sys_block) - METADATA_TOTAL);
-    head_list[sys_index] = sys_block;
-    return AllocateBlock(heap, head_list[sys_index], sys_index, user_requested_size);
+    struct block* inserted = AddBlock(heap, sys_block);
+    int inserted_index = GetInsertionIndex(GetSize(inserted) - METADATA_TOTAL);
+    return AllocateBlock(heap, inserted, inserted_index, user_requested_size);
 }
 
 export userexec void* AllocHeapEx(struct heap* heap, size_t size) {
@@ -417,8 +412,14 @@ export userexec void FreeHeapEx(struct heap* heap, void* ptr) {
 }
 
 export userexec void* ReallocHeapEx(struct heap* heap, void* ptr, size_t new_size) {
-    size_t old_size = GetSize(SubVoidPtr(ptr, METADATA_LEADING));
-    if (new_size <= old_size) {
+    if (ptr == NULL) {
+        return AllocHeapEx(heap, new_size);
+    }
+
+    size_t old_total = GetSize(SubVoidPtr(ptr, METADATA_LEADING));
+    size_t old_payload = old_total - METADATA_TOTAL;
+
+    if (new_size <= old_payload) {
         return ptr;
     }
 
@@ -426,14 +427,14 @@ export userexec void* ReallocHeapEx(struct heap* heap, void* ptr, size_t new_siz
     if (new_ptr == NULL) {
         return NULL;
     }
-    memcpy(new_ptr, ptr, old_size);
+    memcpy(new_ptr, ptr, old_payload);
     FreeHeapEx(heap, ptr);
     return new_ptr;
 }
 
 export userexec size_t GetAllocationSizeEx(struct heap* heap, void* ptr) {
     (void) heap;
-    return GetSize(SubVoidPtr(ptr, METADATA_LEADING));
+    return GetSize(SubVoidPtr(ptr, METADATA_LEADING)) - METADATA_TOTAL;
 }
 
 export userexec void InitHeapEx(struct heap* heap, void*(*get_memory)(size_t)) {

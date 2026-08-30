@@ -6,7 +6,7 @@
 #include <spinlock.h>
 
 #define ALIGN       (sizeof(size_t))    // must be power of 2
-#define BOOTSTRAP_HEAP_SIZE (1024 * 16)
+#define BOOTSTRAP_HEAP_SIZE (1024 * 8)
 
 static uint8_t bootstrap_heap[BOOTSTRAP_HEAP_SIZE];
 static size_t bootstrap_heap_index = 0;
@@ -16,9 +16,10 @@ static struct heap kernel_heap;
 
 static void* AllocBootstrapHeap(size_t bytes) {
     if (bootstrap_heap_index + bytes > BOOTSTRAP_HEAP_SIZE) {
-        LogStringAndHexLine("OUT OF HEAP! HEAT STARTS AT 0x", (size_t) bootstrap_heap);
         return NULL;
     }
+    LogStringAndHexLine("Heap at 0x", (size_t) bootstrap_heap);
+
     void* retv = bootstrap_heap + bootstrap_heap_index;
     bootstrap_heap_index += bytes;
     return retv;
@@ -64,6 +65,11 @@ export void KeFreeHeap(void* ptr) {
     if (ptr == NULL) {
         return;
     }
+
+    // for debugging
+    size_t s = KeGetAllocationSize(ptr);
+    memset(ptr, 0xCC, s);
+
     AcquireSpinlock(&heap_lock);
     FreeHeapEx(&kernel_heap, ptr);
     ReleaseSpinlock(&heap_lock);

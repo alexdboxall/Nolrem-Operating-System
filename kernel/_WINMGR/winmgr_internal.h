@@ -46,3 +46,7 @@ struct window* WmGetDesktop(void);
 int WmCallWinProc(struct window* win, struct msg msg);
 void WmInvalidateRegion(struct window* win, struct region rgn, bool lock);
 void WmInvalidateWindow(struct window* win, bool lock);
+struct window* WmGetForegroundWindow();
+void WmSetForegroundWindow(struct window* win);
+
+struct point WmGetMousePositionGlobal(void);

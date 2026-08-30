@@ -16,7 +16,6 @@
 #define OBJTYPE_USEROBJ         8
 
 struct obj_header {
-    char sig[15];
     _Atomic uint8_t objtype;
     _Atomic uint16_t ref_count;
 };

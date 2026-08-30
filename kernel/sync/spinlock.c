@@ -16,3 +16,7 @@ export void AcquireSpinlock(struct spinlock* lock) {
 export inline __attribute__((__always_inline__)) void ReleaseSpinlock(struct spinlock* lock) {
     atomic_flag_clear_explicit(&lock->lock, memory_order_release);
 }
+
+export inline __attribute__((__always_inline__)) bool TryAcquireSpinlock(struct spinlock* lock) {
+    return !atomic_flag_test_and_set_explicit(&lock->lock, memory_order_acquire);
+}

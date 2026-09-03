@@ -38,7 +38,7 @@ static void DrawBootMessage() {
 static void DisplayBootingHeader(void) {
     Clear();
     SetCursor(2, 1);
-    Puts("Booting Nolrem", BOOTCOL_WHITE_ON_BLACK);
+    Puts("Booting kernel", BOOTCOL_WHITE_ON_BLACK);
 }
 
 static void ShowRamTable(void) {

@@ -231,7 +231,7 @@ void InitPs2Keyboard(void) {
 
     int res = Ps2ControllerTestPort(false);
     if (res != 0) {
-        return;
+        LogString("PS/2 keyboard self test failed.\n");
     }
 
     bool translation_on = Ps2ControllerGetConfiguration() & (1 << 6);

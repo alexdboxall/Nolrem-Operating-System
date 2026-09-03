@@ -156,7 +156,6 @@ void InitPs2Mouse(void) {
     int res = Ps2ControllerTestPort(true);
     if (res != 0) {
         LogString("PS/2 mouse port test failed.\n");
-        return;
     }
 
     /* Enable second PS/2 port */

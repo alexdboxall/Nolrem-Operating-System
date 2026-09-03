@@ -30,7 +30,8 @@ static int Ps2Wait(bool writing) {
             }
         }
 
-        if (++timeout >= 2000 || (status & PS2_STATUS_BIT_TIMEOUT) || (status & PS2_STATUS_BIT_PARITY)) {
+        /* approx 400ms */
+        if (++timeout >= 400000 || (status & PS2_STATUS_BIT_TIMEOUT) || (status & PS2_STATUS_BIT_PARITY)) {
             return EIO;
         }
     } 

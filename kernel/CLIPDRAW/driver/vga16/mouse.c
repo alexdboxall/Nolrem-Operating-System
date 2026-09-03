@@ -91,9 +91,76 @@ void VGADrawMouse(struct graphics_driver*, int x, int y, const uint32_t* black, 
 void VGARemoveMouse(struct graphics_driver*, int x, int y, void* _restore_buffer, int width, int height) {
     volatile uint8_t* vram = VRAM_BASE;
     volatile uint8_t dummy;
-    
+
     /* We requested MOUSE_BUFFER_UINT8 to save memory. */
     uint8_t* restore_buffer = (uint8_t*) _restore_buffer;
 
-    
+    int start_byte = x >> 3;
+    int end_byte   = (x + width - 1) >> 3;
+
+    // Write mode 2, same convention as VGADrawMouse/VgaSimpleRect.
+    outb(VGA_GC_INDEX, 0x05);
+    outb(VGA_GC_DATA, 0x02);
+
+    for (int row = 0; row < height; row++) {
+        int yy = y + row;
+        uint8_t* row_buf = restore_buffer + (row * width);
+
+        for (int b = start_byte; b <= end_byte; b++) {
+            volatile uint8_t* ptr = vram + (yy * BYTES_PER_ROW) + b;
+
+            // Latch this byte's current contents across all 4 planes, so
+            // any bit we don't explicitly mask on a given write falls
+            // through unchanged rather than getting clobbered.
+            dummy = *ptr;
+
+            // Track which of the up to 8 bit positions in this byte we've
+            // already written, so we don't redo a value once its run has
+            // been flushed.
+            uint8_t done_mask = 0;
+
+            for (int k = 0; k < 8; k++) {
+                uint8_t bitmask = 0x80 >> k;
+                if (done_mask & bitmask) continue;
+
+                int abs_x = b * 8 + k;
+                int col = abs_x - x;
+                if (col < 0 || col >= width) {
+                    done_mask |= bitmask;
+                    continue; // outside cursor bounds - nothing was drawn here, skip
+                }
+
+                uint8_t value = row_buf[col];
+
+                // Group every other bit in this byte that shares the same
+                // restore value into a single masked write.
+                uint8_t group_mask = bitmask;
+                for (int k2 = k + 1; k2 < 8; k2++) {
+                    uint8_t bitmask2 = 0x80 >> k2;
+                    if (done_mask & bitmask2) continue;
+                    int col2 = (b * 8 + k2) - x;
+                    if (col2 < 0 || col2 >= width) continue;
+                    if (row_buf[col2] == value) group_mask |= bitmask2;
+                }
+
+                outb(VGA_GC_INDEX, 0x08);
+                outb(VGA_GC_DATA, group_mask);
+                *ptr = value;
+
+                done_mask |= group_mask;
+
+                // Re-latch before the next distinct-value group in this byte,
+                // so its unmasked bits pick up the write we just made rather
+                // than the stale pre-loop background.
+                if (done_mask != 0xFF) {
+                    dummy = *ptr;
+                }
+            }
+        }
+    }
+
+    // Restore standard bitmask register state.
+    outb(VGA_GC_INDEX, 0x08);
+    outb(VGA_GC_DATA, 0xFF);
+    (void) dummy;
 }

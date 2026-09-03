@@ -92,11 +92,23 @@ export _Noreturn void InitKernelResidentPortion(void) {
         .type = WM_PAINT
     });
 
+    struct point oldm = {.x = 0, .y = 0};
     while (true) {
-        w1pos.y = (((w1pos.y - 75) + 1) % 35) + 75;
-        w2pos.x = (((w2pos.x - 175) + 3) % 100) + 175;
-        WmChangePosition(win, w1pos, true);
-        WmChangePosition(win2, w2pos, true);
+        //w1pos.y = (((w1pos.y - 75) + 1) % 35) + 75;
+        //w2pos.x = (((w2pos.x - 175) + 3) % 100) + 175;
+        //
+        //WmChangePosition(win2, w2pos, true);
+        asm ("sti");
+        asm ("hlt");
+        struct point m = WmGetMousePositionGlobal();
+        if (m.x == oldm.x && m.y == oldm.y) {
+
+        } else {
+            oldm = m;
+            w2pos.x = m.x;
+            w2pos.y = m.y;
+            WmChangePosition(win2, w2pos, true);
+        }
         WmCallWinProc(WmGetDesktop(), (struct msg) {
             .type = WM_PAINT
         });

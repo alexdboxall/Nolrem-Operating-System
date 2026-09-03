@@ -111,6 +111,20 @@ static bool WmInvalidateExposedRegionOnWindow(struct window* win, struct region*
 }
 
 static void WmInvalidateExposedRegion(struct window* win, struct region* exposed_rgn, bool actually_cover) {
+    if (!actually_cover) {
+        /* Anything still covered by a sibling in front of win stays hidden no matter
+           what win just did. Don't let that area leak through to windows behind win
+           or the parent — they'd paint over whatever's legitimately on top there. */
+        struct window* big_bro = win->parent ? win->parent->first_child : NULL;
+        while (big_bro != NULL && big_bro != win) {
+            CdSubtractRegionInPlace(exposed_rgn, big_bro->win_rgn);
+            if (CdIsRegionEmpty(*exposed_rgn)) {
+                return;
+            }
+            big_bro = big_bro->next_sibling;
+        }
+    }
+
     struct window* bro = win->next_sibling;
     while (bro) {
         bool now_empty = WmInvalidateExposedRegionOnWindow(bro, exposed_rgn, actually_cover);

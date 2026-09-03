@@ -98,7 +98,8 @@ generate_memory_map:
 	mov [es:di + 20], dword 1	; force a valid ACPI 3.X entry
 	mov ecx, 24		; ask for 24 bytes
 	int 0x15
-	;jc short .failed	; carry set on first call means "unsupported function"
+	stc
+	jc short .not_supported	; carry set on first call means "unsupported function"
 	;mov edx, 0x0534D4150	; Some BIOSes apparently trash this register?
 	;cmp eax, edx		; on success, eax must have been reset to "SMAP"
 	;jne short .failed
@@ -132,6 +133,54 @@ generate_memory_map:
 .failed:
 	ret
 
+.not_supported:
+	; ========================
+	; First get low memory in KB.
+	; ========================
+	int 0x12
+	movzx eax, ax
+	shl eax, 10
+
+	mov [0x500], dword 1
+	mov di, 0x504
+
+	; Starts at addr 0
+	mov [di + 0], dword 0
+	mov [di + 4], dword 0
+
+	; Length
+	mov [di + 8], eax
+	mov [di + 12], dword 0
+
+	; Type
+	mov [di + 16], dword 1
+	add di, 24
+
+	; ========================
+	; This gets contiguous RAM in KB from 1MB to 64MB.
+	; ========================
+	mov ah, 0x88
+	int 0x15
+	jc short .failed
+
+	; check if for length = 0 and skip adding entry if so
+	test ax, ax
+	jz short .failed
+
+	; Convert KB to bytes
+	movzx eax, ax	
+	shl eax, 10
+
+	inc dword [0x500]
+	mov [di + 0], dword 0x100000
+	mov [di + 4], dword 0
+
+	mov [di + 8], eax
+	mov [di + 12], dword 0
+
+	mov [di + 16], dword 1
+
+	ret
 
 enableA20:
 	cli
@@ -187,13 +236,10 @@ protected_mode_main:
 	mov	ss, ax
 	mov	es, ax
 	mov esp, 0x10000
-	
-	mov [0xB8002], word 0x3579
 
 	mov cx, [0x500]
 	mov [num_ram_entries], cx
 
-	
 	mov edi, proper_ram_table
 	mov esi, 0x504
 .ram_table_loop:
@@ -240,9 +286,49 @@ protected_mode_main:
 	push dword 0x8000
 	push bootload_path
 	call read_file
+
 	add esp, 8
 	push firmware_info
 	call 0x8000
+
+
+STR_reached_protected_mode db "Reached protected mode...", 0xA, 0
+STR_processed_ram_table db "Processed RAM table...", 0xA, 0
+STR_read_file db "Read file...", 0xA, 0
+
+; IN: ESI = string, null terminated
+cur_pos_x db 0
+cur_pos_y db 0
+dbgprint:
+    pusha
+.print_loop:
+    mov al, [esi]
+    test al, al
+    jz .done                 ; null terminator -> done
+    cmp al, 0x0A              ; '\n' ?
+    je .do_newline
+    xor ebx, ebx
+    mov bl, [cur_pos_y]
+    imul ebx, ebx, 80         ; ebx = y*80
+    xor ecx, ecx
+    mov cl, [cur_pos_x]
+    add ebx, ecx              ; ebx = y*80 + x
+    shl ebx, 1                ; byte offset (2 bytes per cell)
+    mov edi, 0xB8000
+    add edi, ebx
+    mov ah, 0x07               ; light grey on black
+    mov [edi], ax              ; al = char, ah = attribute
+    inc byte [cur_pos_x]
+    jmp .advance
+.do_newline:
+    mov byte [cur_pos_x], 0
+    inc byte [cur_pos_y]
+.advance:
+    inc esi
+    jmp .print_loop
+.done:
+    popa
+    ret
 
 bootload_path db "System/bootload.exe", 0
 
@@ -297,7 +383,7 @@ get_file_size:
 	call demofs_find_file
 	mov ecx, eax
 	or ecx, ebx
-	jz fail_generic
+	jz fail_generic1
 
 	mov eax, [esp + 8 + 8 * 4]
 	mov [eax], ebx
@@ -311,7 +397,7 @@ read_file:
 	call demofs_find_file
 	mov ecx, eax
 	or ecx, ebx
-	jz fail_generic
+	jz fail_generic2
 
 	add ebx, 511
 	shr ebx, 9
@@ -338,7 +424,12 @@ read_file:
 	xor eax, eax
 	ret
 
-fail_generic:
+fail_generic1:
+	popa
+	mov eax, 1
+	ret
+
+fail_generic2:
 	popa
 	mov eax, 1
 	ret
@@ -346,6 +437,8 @@ fail_generic:
 exit_firmware:
 	ret
 
+STR_fail_generic1_reached db "Could not find file (op: size)", 0xA, 0
+STR_fail_generic2_reached db "Could not find file (op: read)", 0xA, 0
 
 ; IN:
 ; 	ESI = path to file
@@ -409,6 +502,9 @@ segment_buffer_ptr db 0
 segment_buffer:
 	times 24 db 0
 
+
+STR_about_to_read_sector db " <<< ", 0
+STR_done_read_sector db ">>> ", 0
 ; IN:
 ; 	EAX = root inode
 ; 	ESI = 24 byte, null padded path component
@@ -598,7 +694,10 @@ bios_wait_100ms:
 	int 0x15
 	jmp goBackHome
 
+retry_count db 5
 bios_read_sector:
+	mov [retry_count], byte 5
+
 	mov [biglba], dword 0
 	mov eax, [realModeData1]
 	mov [d_lba], eax
@@ -612,7 +711,23 @@ bios_read_sector:
 	mov ah, 0x42
 	mov si, DAPACK
 	int 0x13
-	jnc goBackHome
+	jnc goBackHomeEX
+
+retry_fdc:
+
+	pusha
+	push es
+	mov bx, 0xB804
+	mov es, bx
+	xor bx, bx
+	mov cx, 0x9A00
+	mov [es:bx], cx
+	inc bx
+	inc bx
+	mov cl, '-'
+	mov [es:bx], cx
+	pop es
+	popa
 
 	; do a 'non-extended read'
 	; Get disk geometry
@@ -623,6 +738,10 @@ bios_read_sector:
 	int 0x13
 	jc short .readfail
 	inc dh				;BIOS returns one less than actual value
+
+		dec dh		; @@@ TODO HACK GOOFY FIX FOR DODGY FLOPPY DRIVE
+				; @@@ REMOVE THIS LINE WHEN FDD IS FIXED!!
+
 	and cx, 0x3F		;NUM SECTORS PER CYLINDER IN CX
 	mov bl, dh			
 	xor bh, bh			;NUM HEADS IN BX
@@ -646,10 +765,54 @@ bios_read_sector:
 	mov es, bx
 	xor bx, bx
 	int 0x13
-	jc short .readfail
+	jnc short .GOOD
+	
+	dec byte [retry_count]
+	jz short .readfail
+
+	; reset
+	mov ah, 0           ; Reset disk system function
+    mov dl, [boot_drive]         ; Drive 0 (A:)
+    int 0x13             ; Call BIOS to reset controller
+
+	jmp short retry_fdc
+
+.GOOD:
+	pusha
+	push es
+	mov bx, 0xB80C
+	mov es, bx
+	xor bx, bx
+	mov cx, 0xF100
+	mov [es:bx], cx
+	inc bx
+	inc bx
+	mov cl, '0'
+	add cl, ah
+	mov [es:bx], cx
+	pop es
+	popa
+
 	jmp goBackHome
 .readfail:
+	pusha
+	push es
+	mov bx, 0xB808
+	mov es, bx
+	xor bx, bx
+	mov cx, 0xF100
+	mov [es:bx], cx
+	inc bx
+	inc bx
+	mov cl, 'A'
+	add cl, ah
+	mov [es:bx], cx
+	pop es
+	popa
 	mov [realModeRet1], dword 1
+	jmp goBackHome
+
+goBackHomeEX:
 	jmp goBackHome
 
 align 8

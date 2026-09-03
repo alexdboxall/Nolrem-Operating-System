@@ -699,8 +699,37 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
     struct region_data* a_data = a.data;
     struct region_data* b_data = b.data;
 
-    /* TODO: sort out if a or b, or both, are empty. in all those cases, it
-    * should suffice to also just return a, b, or the empty region. */
+    bool a_empty = a_data->num_bands == 0;
+    bool b_empty = b_data->num_bands == 0;
+
+    if (a_empty || b_empty) {
+        switch (mode) {
+        case REGION_COMBINE_INTERSECT:
+            return CdEmptyRegion();
+
+        case REGION_COMBINE_DIFFERENCE:
+            /* a && !b : empty if a is empty, else b contributes nothing. */
+            return a_empty ? CdEmptyRegion() : CdCopyRegion(a);
+
+        case REGION_COMBINE_UNION:
+        case REGION_COMBINE_XOR:
+            if (b_empty) {
+                return CdCopyRegion(a);
+            }
+            /*
+             * a is empty, so the answer is b -- but only if b isn't being
+             * remapped. With a scale_dc we'd have to transform it, so fall
+             * through to the general path instead.
+             */
+            if (scale_dc == NULL) {
+                return CdCopyRegion(b);
+            }
+            break;
+
+        default:
+            return CdEmptyRegion();
+        }
+    }
 
     /* 
      * Get, in order, all the Y edges across both regions where something 
@@ -1015,7 +1044,7 @@ static int GetRegionBoundsCallback(struct rect r, void* ctxt, int rv, bool* canc
         bound_rect->x = r.x;
     }
     if (r.x + r.w > bound_rect->w) {
-        bound_rect->h = r.x + r.w;
+        bound_rect->w = r.x + r.w;
     }
     if (r.y + r.h > bound_rect->h) {
         bound_rect->h = r.y + r.h;

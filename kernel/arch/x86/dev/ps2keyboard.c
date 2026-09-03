@@ -1,9 +1,7 @@
-
 #include <common.h>
 #include <interrupt.h>
 #include <log.h>
 #include <string.h>
-#include <errno.h>
 #include <ctype.h>
 #include <machine/x86.h>
 #include "ps2controller.h"
@@ -25,7 +23,6 @@ static const char set1_map_upper_caps[] =
     "  !@#$%^&*()_+  qwertyuiop{}  asdfghjkl:\"~ |zxcvbnm<>? *       "
     "        789-456+1230.                                           ";
 
-
 #define SET1_ENTER          0x1C
 #define SET1_BACKSPACE      0x0E
 #define SET1_TAB            0x0F
@@ -46,11 +43,11 @@ static bool control_held = false;
 static bool shift_held = false;
 static bool shift_r_held = false;
 static bool caps_lock_on = false;
+static bool extended = false;
 
 static void Ps2KeyboardSetLEDs(void) {
     uint8_t data = caps_lock_on << 2;
-
-    Ps2DeviceWrite(0xED, false);
+    if (Ps2DeviceWrite(0xED, false) != 0) return;
     Ps2DeviceWrite(data, false);
 }
 
@@ -67,7 +64,6 @@ static void SendKeystrokeConsole(char c) {
     LogCharacter(c);
 }
 
-static bool extended = false;
 static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
     if (scancode == 0xFA || scancode == 0xFE || scancode == 0xAA) {
         extended = false;
@@ -95,44 +91,35 @@ static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
             c = KEYCODE_RIGHT_ARROW;
             break;
         }
-
     } else {
         switch (scancode) {
         case SET1_ENTER:
             c = KEYCODE_ENTER;
             break;
-
         case SET1_BACKSPACE:
             c = KEYCODE_BACKSPACE;
             break;
-
         case SET1_TAB:
             c = KEYCODE_TAB;
             break;
-
         case SET1_ESCAPE:
             c = KEYCODE_ESCAPE;
             break;
-
         case SET1_SHIFT:
             shift_held = !release_mode;
             break;
-
         case SET1_SHIFT_R:
             shift_r_held = !release_mode;
             break;
-
         case SET1_CTRL:
             control_held = !release_mode;
             break;
-
         case SET1_CAPS_LOCK:
             if (!release_mode) {
                 caps_lock_on = !caps_lock_on;
                 Ps2KeyboardSetLEDs();
             }
             break;
-
         default:
             if (scancode < strlen(set1_map_lower_norm)) {
                 c = TranslateCharacter(scancode, shift_held ^ shift_r_held);
@@ -151,22 +138,18 @@ static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
             SendKeystrokeConsole('\x1B');
             SendKeystrokeConsole('[');
             SendKeystrokeConsole('A');
-
         } else if (c == KEYCODE_DOWN_ARROW) {
             SendKeystrokeConsole('\x1B');
             SendKeystrokeConsole('[');
             SendKeystrokeConsole('B');
-
         } else if (c == KEYCODE_RIGHT_ARROW) {
             SendKeystrokeConsole('\x1B');
             SendKeystrokeConsole('[');
             SendKeystrokeConsole('C');
-
         } else if (c == KEYCODE_LEFT_ARROW) {
             SendKeystrokeConsole('\x1B');
             SendKeystrokeConsole('[');
             SendKeystrokeConsole('D');
-        
         } else {
             SendKeystrokeConsole(c);
         }
@@ -180,88 +163,74 @@ static void Ps2KeyboardIrqHandler(struct x86_regs*) {
         return;
     }
 
-	uint8_t scancode = inb(0x60);
+    uint8_t scancode = inb(0x60);
     if (scancode == 0xE0) {
         extended = true;
     } else {
-        Ps2KeyboardTranslateSet1((size_t) scancode);
+        Ps2KeyboardTranslateSet1(scancode);
     }
 }
 
 static int Ps2KeyboardGetScancodeSet(void) {
-    Ps2DeviceWrite(0xF0, false);
-    Ps2DeviceWrite(0, false);
+    if (Ps2DeviceWrite(0xF0, false) != 0) return -1;
+    if (Ps2DeviceWrite(0x00, false) != 0) return -1;
 
-    uint8_t set = Ps2DeviceRead();
-    /*
-     * Technically we should get 0x43, 0x41 or 0x3F, but Bochs returns 1, 2, or
-     * 3 instead. There's probably some crusty USB to PS/2 emulation out there
-     * that acts the same, so we'll check for both.
-     */
-    if (set == 0x43 || set == 1) {
-        return 1;
-    } else if (set == 0x41 || set == 2) {
-        return 2;
-    } else if (set == 0x3F || set == 3) {
-        return 3;
-    } else {
-        return -1;
-    }
+    uint8_t set;
+    if (Ps2DeviceRead(&set) != 0) return -1;
+
+    if (set == 0x43 || set == 1) return 1;
+    if (set == 0x41 || set == 2) return 2;
+    if (set == 0x3F || set == 3) return 3;
+    return -1;
 }
 
 static int Ps2KeyboardSetScancodeSet(int num) {
-    Ps2DeviceWrite(0xF0, false);
-    Ps2DeviceWrite(num, false);
-    return num == Ps2KeyboardGetScancodeSet() ? 0 : EIO;
-}
-
-static void Ps2KeyboardSetTranslation(bool enable) {
-    uint8_t config = Ps2ControllerGetConfiguration();
-    if (enable) {
-        config |= 1 << 6;
-    } else {
-        config &= ~(1 << 6);
-    }
-    Ps2ControllerSetConfiguration(config);
+    if (Ps2DeviceWrite(0xF0, false) != 0) return -1;
+    if (Ps2DeviceWrite((uint8_t)num, false) != 0) return -1;
+    
+    int result = Ps2KeyboardGetScancodeSet();
+    return (result == num) ? 0 : -1;
 }
 
 void InitPs2Keyboard(void) {
-    Ps2KeyboardSetTranslation(true);
-    Ps2KeyboardSetScancodeSet(1);
+    LogString("[keyboard] detecting translation...\n");
+    
+    /* Read controller config to check translation bit. */
+    uint8_t config = Ps2ControllerGetConfiguration();
+    bool translation_on = (config & (1 << 6)) != 0;
+    
+    LogString(translation_on ? "[keyboard] translation ON\n" : "[keyboard] translation OFF\n");
 
-    int res = Ps2ControllerTestPort(false);
-    if (res != 0) {
-        LogString("PS/2 keyboard self test failed.\n");
+    /* If translation is on, disable it. We want set 1 scancodes from the keyboard
+     * directly, not set 2 converted by the controller. */
+    if (translation_on) {
+        LogString("[keyboard] disabling translation...\n");
+        config &= ~(1 << 6);
+        Ps2ControllerSetConfiguration(config);
     }
 
-    bool translation_on = Ps2ControllerGetConfiguration() & (1 << 6);
-    int set = Ps2KeyboardGetScancodeSet();
+    /* Read current scancode set. */
+    int current_set = Ps2KeyboardGetScancodeSet();
+    LogString("[keyboard] current scancode set: ");
+    LogHex(current_set);
+    LogString("\n");
 
-    if (set == 3 || set == -1) {
-        int res = Ps2KeyboardSetScancodeSet(translation_on ? 2 : 1);
-        if (res != 0) {
-            LogStringAndHexLine("[keybrd]: couldn't switch out of set %d!\n", set);
-        }
-
-    } else if (set == 1 && translation_on) {
-        int res = Ps2KeyboardSetScancodeSet(2);
-        if (res != 0) {
-            Ps2KeyboardSetScancodeSet(1);
-            Ps2KeyboardSetTranslation(false);
-        }
-
-    } else if (set == 2 && !translation_on) {
-        int res = Ps2KeyboardSetScancodeSet(1);
-        if (res != 0) {
-            Ps2KeyboardSetScancodeSet(2);
-            Ps2KeyboardSetTranslation(true);
-        }
+    /* Make sure we're in set 1. */
+    if (current_set != 1) {
+        LogString("[keyboard] switching to set 1...\n");
+        Ps2KeyboardSetScancodeSet(1);
     }
 
-    while (inb(0x64) & 0x01) {
-        inb(0x60);
+    /* Enable scanning. */
+    if (Ps2DeviceWrite(0xF4, false) != 0) {
+        LogString("[keyboard] WARNING: enable-scanning not ACKed\n");
     }
 
+    /* Flush stray bytes. */
+    Ps2ControllerFlushOutputBuffer();
+
+    /* Register handler. */
     RegisterInterruptHandler(1, Ps2KeyboardIrqHandler);
-    Ps2ControllerEnableDevice(false);
+    
+    LogString("[keyboard] init done\n");
 }

@@ -65,6 +65,15 @@ void draw_test(struct graphics_driver* drv, uint8_t* pattern, int x, int y) {
     drv->pen_line(drv, x + 400, y, x, y, 0xFFFF0000, 2, pattern, 2, 2, true);
 }
 
+static void DrawInvFrame(struct dc* dc, struct rect pos) {
+    const int BORDER = 3;
+    ActualInvertRect(dc, pos.x, pos.y, pos.x + pos.w, pos.y + BORDER, true);
+    ActualInvertRect(dc, pos.x, pos.y + pos.h - BORDER, pos.x + pos.w, pos.y + pos.h, true);
+
+    ActualInvertRect(dc, pos.x, pos.y + BORDER, pos.x + BORDER, pos.y + pos.h - BORDER, true);
+    ActualInvertRect(dc, pos.x + pos.w - BORDER, pos.y + BORDER, pos.x + pos.w, pos.y + pos.h - BORDER, true);
+}
+
 /* 
  * We want to be able to page out some of the very early bootstrap code.
  * So this is the part of the kernel that runs when discarding is permitted.
@@ -92,7 +101,22 @@ export _Noreturn void InitKernelResidentPortion(void) {
         .type = WM_PAINT
     });
 
+    struct dc* dc = CdCreateDc();
+
     struct point oldm = {.x = 0, .y = 0};
+    int ticks_since_mouse_moved = 9;
+    bool has_inv_region = false;
+
+    WmCallWinProc(WmGetDesktop(), (struct msg) {
+                        .type = WM_PAINT
+                    });
+                    WmCallWinProc(win, (struct msg) {
+                        .type = WM_PAINT
+                    });
+                    WmCallWinProc(win2, (struct msg) {
+                        .type = WM_PAINT
+                    });
+                    
     while (true) {
         //w1pos.y = (((w1pos.y - 75) + 1) % 35) + 75;
         //w2pos.x = (((w2pos.x - 175) + 3) % 100) + 175;
@@ -102,22 +126,36 @@ export _Noreturn void InitKernelResidentPortion(void) {
         asm ("hlt");
         struct point m = WmGetMousePositionGlobal();
         if (m.x == oldm.x && m.y == oldm.y) {
-
+            if (ticks_since_mouse_moved != -1) {
+                ticks_since_mouse_moved++;
+                if (ticks_since_mouse_moved >= 10) {
+                    WmCallWinProc(WmGetDesktop(), (struct msg) {
+                        .type = WM_PAINT
+                    });
+                    WmCallWinProc(win, (struct msg) {
+                        .type = WM_PAINT
+                    });
+                    WmCallWinProc(win2, (struct msg) {
+                        .type = WM_PAINT
+                    });
+                    ticks_since_mouse_moved = -1;
+                    has_inv_region = false;
+                }
+            }
+            
         } else {
+            if (has_inv_region) {
+                DrawInvFrame(dc, w2pos);
+            }
             oldm = m;
             w2pos.x = m.x;
             w2pos.y = m.y;
+            ticks_since_mouse_moved = 0;
             WmChangePosition(win2, w2pos, true);
+            has_inv_region = true;
+            DrawInvFrame(dc, w2pos);
         }
-        WmCallWinProc(WmGetDesktop(), (struct msg) {
-            .type = WM_PAINT
-        });
-        WmCallWinProc(win, (struct msg) {
-            .type = WM_PAINT
-        });
-        WmCallWinProc(win2, (struct msg) {
-            .type = WM_PAINT
-        });
+        
     }
     
     (void) win;

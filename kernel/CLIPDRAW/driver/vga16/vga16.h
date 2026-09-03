@@ -43,7 +43,7 @@ void FindVgaColours(uint32_t rgb, uint8_t* col_out, uint8_t* level_out);
 colour_t ConvertVgaColourToARGB(int vgacol);
 void InitVgaPalette(void);
 
-void VgaInvertRect(struct graphics_driver*, int x1, int y1, int x2, int y2);
+void VgaInvertRect(struct graphics_driver*, int x1, int y1, int x2, int y2, bool half);
 void VgaScrollRect(struct graphics_driver*, int x_start, int y_start, int x_end, int y_end, int delta_y);
 void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour);
 void VgaPutBrushRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t primary,

@@ -8,10 +8,10 @@ static void NormaliseBrushPattern(uint8_t* output, struct brush* brush) {
     }
 }
 
-int ActualInvertRect(struct dc* dc, int x1, int y1, int x2, int y2) {
+int ActualInvertRect(struct dc* dc, int x1, int y1, int x2, int y2, bool half) {
     struct graphics_driver* drv = GetOutputDriver(dc);
     CdStartVideoUpdate(x1, y1, x2, y2);
-    drv->invert_rect(drv, x1, y1, x2, y2);
+    drv->invert_rect(drv, x1, y1, x2, y2, half);
     CdEndVideoUpdate(x1, y1, x2, y2);
     return 0;
 }

@@ -18,7 +18,6 @@ static void* AllocBootstrapHeap(size_t bytes) {
     if (bootstrap_heap_index + bytes > BOOTSTRAP_HEAP_SIZE) {
         return NULL;
     }
-    LogStringAndHexLine("Heap at 0x", (size_t) bootstrap_heap);
 
     void* retv = bootstrap_heap + bootstrap_heap_index;
     bootstrap_heap_index += bytes;

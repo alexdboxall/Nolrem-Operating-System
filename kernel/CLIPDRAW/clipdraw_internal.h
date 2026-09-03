@@ -134,7 +134,7 @@ struct pen {
 
 int ActualPaintRectWithBrush(struct dc* dc, int x, int y, int x2, int y2, 
     struct brush* brush);
-int ActualInvertRect(struct dc* dc, int x, int y, int x2, int y2);
+int ActualInvertRect(struct dc* dc, int x, int y, int x2, int y2, bool half);
 
 void CdResetDC(struct dc* dc);
 

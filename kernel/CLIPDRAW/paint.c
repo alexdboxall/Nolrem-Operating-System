@@ -32,7 +32,7 @@ static int InvertRectCallback(struct rect r, void* _ctxt, int rv, bool* cancel) 
     int y1 = r.y;
     int x2 = r.x + r.w;
     int y2 = r.y + r.h;
-    ActualInvertRect(dc, x1, y1, x2, y2);
+    ActualInvertRect(dc, x1, y1, x2, y2, false);
     *cancel = false;
     return rv;
 }
@@ -136,7 +136,6 @@ export int CdPaintGradientRectHz(struct dc* dc, int x, int y, int width, int hei
     DerefObject(grad_brush);
     return 0;
 }
-
 
 export int CdInvertRect(struct dc* dc, int x, int y, int width, int height) {
     struct region rr = CdCreateRectRegion(x, y, width, height);

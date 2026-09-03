@@ -3,6 +3,7 @@
 #include <heap.h>
 #include <log.h>
 #include <mutex.h>
+#include <kgfx.h>
 #include "winmgr_internal.h"
 
 #define BORDER_WIDTH    3
@@ -287,12 +288,14 @@ export void WmRaiseToTop(struct window* win, bool lock) {
     if (lock) WmUnlock();
 }
 
+static bool UseGradientTitlebar(struct dc* dc) {
+    struct graphics_driver* drv = GetOutputDriver(dc);
+    struct graphics_capabilities caps = drv->get_capabilities(drv);
+    return caps.bits_per_pixel >= 15;
+}
+
 export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
     int width = win->local_client_bound.w;
-    int initial_part = width / 3;//width < 100 ? width : width / 2;
-    int remaining_part = width - initial_part;
-    int gradient_part = remaining_part / 4 * 3;
-    int end_part = remaining_part - gradient_part;
 
     bool foreground = WmGetForegroundWindow() == win;
 
@@ -300,17 +303,29 @@ export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
     uint32_t col2 = foreground ? TITLEBAR_COL_2 : TITLEBAR_INACTIVE_COL_2;
 
     struct brush* blue = CdCreateSolidBrush(col1);
-    CdPaintRectWithBrush(
-        dc, BORDER_WIDTH, BORDER_WIDTH, initial_part, TITLEBAR_HEIGHT, blue
-    );
-    CdPaintGradientRectHz(
-        dc, BORDER_WIDTH + initial_part, BORDER_WIDTH, gradient_part, TITLEBAR_HEIGHT,
-        col1, col2
-    );
-    CdSetBrushColour(blue, col2);
-    CdPaintRectWithBrush(
-        dc, BORDER_WIDTH + initial_part + gradient_part, BORDER_WIDTH, end_part, TITLEBAR_HEIGHT, blue
-    );
+
+    if (UseGradientTitlebar(dc)) {
+        int initial_part = width / 3;
+        int remaining_part = width - initial_part;
+        int gradient_part = remaining_part / 4 * 3;
+        int end_part = remaining_part - gradient_part;
+        CdPaintRectWithBrush(
+            dc, BORDER_WIDTH, BORDER_WIDTH, initial_part, TITLEBAR_HEIGHT, blue
+        );
+        CdPaintGradientRectHz(
+            dc, BORDER_WIDTH + initial_part, BORDER_WIDTH, gradient_part, TITLEBAR_HEIGHT,
+            col1, col2
+        );
+        CdSetBrushColour(blue, col2);
+        CdPaintRectWithBrush(
+            dc, BORDER_WIDTH + initial_part + gradient_part, BORDER_WIDTH, end_part, TITLEBAR_HEIGHT, blue
+        );
+    } else {
+        CdPaintRectWithBrush(
+            dc, BORDER_WIDTH, BORDER_WIDTH, width, TITLEBAR_HEIGHT, blue
+        );
+    }
+    
     DerefObject(blue);
 
     CdPaintRectWithBrush(dc, 

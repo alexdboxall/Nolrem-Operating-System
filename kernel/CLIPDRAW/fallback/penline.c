@@ -28,7 +28,7 @@ static void SetPenPixel(struct graphics_driver* drv, int x, int y, int u, int v,
     if (GetPatternBitHorizontal(u, v, pattern, pat_width, pat_height)) {
         CdStartVideoUpdate(x, y, x + 1, y + 1);
         if (inv_instead_of_col) {
-            drv->invert_rect(drv, x, y, x + 1, y + 1);
+            drv->invert_rect(drv, x, y, x + 1, y + 1, false);
         } else {
             drv->fill_rect(drv, x, y, x + 1, y + 1, colour);
         }

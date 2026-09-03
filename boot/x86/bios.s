@@ -714,21 +714,6 @@ bios_read_sector:
 	jnc goBackHomeEX
 
 retry_fdc:
-
-	pusha
-	push es
-	mov bx, 0xB804
-	mov es, bx
-	xor bx, bx
-	mov cx, 0x9A00
-	mov [es:bx], cx
-	inc bx
-	inc bx
-	mov cl, '-'
-	mov [es:bx], cx
-	pop es
-	popa
-
 	; do a 'non-extended read'
 	; Get disk geometry
 	mov ah, 0x8
@@ -778,37 +763,8 @@ retry_fdc:
 	jmp short retry_fdc
 
 .GOOD:
-	pusha
-	push es
-	mov bx, 0xB80C
-	mov es, bx
-	xor bx, bx
-	mov cx, 0xF100
-	mov [es:bx], cx
-	inc bx
-	inc bx
-	mov cl, '0'
-	add cl, ah
-	mov [es:bx], cx
-	pop es
-	popa
-
 	jmp goBackHome
 .readfail:
-	pusha
-	push es
-	mov bx, 0xB808
-	mov es, bx
-	xor bx, bx
-	mov cx, 0xF100
-	mov [es:bx], cx
-	inc bx
-	inc bx
-	mov cl, 'A'
-	add cl, ah
-	mov [es:bx], cx
-	pop es
-	popa
 	mov [realModeRet1], dword 1
 	jmp goBackHome
 

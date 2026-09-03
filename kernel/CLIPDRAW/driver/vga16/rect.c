@@ -270,6 +270,15 @@ void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int y2, ui
     if (y1 < 0) y1 = 0;
     if (y2 > 480) y2 = 480;
 
+    switch (colour) {
+    case 0xFF000000: VgaSimpleRect(x1, y1, x2, y2, 0); return;
+    case 0xFF808080: VgaSimpleRect(x1, y1, x2, y2, 8); return;
+    case 0xFFC0C0C0: VgaSimpleRect(x1, y1, x2, y2, 7); return;
+    case 0xFFFFFFFF: VgaSimpleRect(x1, y1, x2, y2, 15); return;
+    case 0xFF000080: VgaSimpleRect(x1, y1, x2, y2, 4); return;
+    case 0xFF008080: VgaSimpleRect(x1, y1, x2, y2, 6); return;
+    }
+
     uint8_t tile[64];
     GetDither(colour, tile);
 
@@ -277,7 +286,7 @@ void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int y2, ui
 }
 
 
-void VgaPutBrushRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t primary,
+void VgaPutBrushRect(struct graphics_driver* drv, int x1, int y1, int x2, int y2, uint32_t primary,
     uint32_t secondary, uint8_t* pattern) {
 
     if (x1 >= 640 || y1 >= 480) return;
@@ -292,6 +301,11 @@ void VgaPutBrushRect(struct graphics_driver*, int x1, int y1, int x2, int y2, ui
     int secondary_opaque = IsOpaqueColour(secondary);
 
     if (!primary_opaque && !secondary_opaque) {
+        return;
+    }
+
+    if (primary == secondary) {
+        VgaPutSolidRect(drv, x1, y1, x2, y2, primary);
         return;
     }
 

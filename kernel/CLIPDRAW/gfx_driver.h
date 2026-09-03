@@ -23,7 +23,7 @@ struct graphics_driver {
     void* mouse_restore_buffer;      // ALLOCATED BY KERNEL THE FIRST TIME IT IS USED
     void (*fill_rect)(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t col);
     void (*brush_rect)(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t primary, uint32_t secondary, uint8_t* pattern);
-    void (*invert_rect)(struct graphics_driver*, int x1, int y1, int x2, int y2);
+    void (*invert_rect)(struct graphics_driver*, int x1, int y1, int x2, int y2, bool half);
     void (*scroll_rect)(struct graphics_driver*, int x1, int y1, int x2, int y2, int delta_y);
     uint32_t (*read_pixel)(struct graphics_driver*, int x, int y);
     struct graphics_capabilities (*get_capabilities)(struct graphics_driver*);

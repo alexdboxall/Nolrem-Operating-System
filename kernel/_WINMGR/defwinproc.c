@@ -7,7 +7,7 @@
 static void HandleWmPaint(struct window* win) {
     struct dc* dc = WmBeginPaint(win);
 
-    struct brush* b = CdCreateSolidBrush(0xFFFF0000);
+    //struct brush* b = CdCreateSolidBrush(0xFFFF0000);
     CdPaintRectWithBrush(
         dc, 
         0,
@@ -17,12 +17,12 @@ static void HandleWmPaint(struct window* win) {
         CdGetStockBrush(STOCK_BRUSH_WHITE)
     );
 
-    CdSetGraphicsObject(dc, b);
+    /*CdSetGraphicsObject(dc, b);
     struct region rgn = CdCreateEllipseRegion(50, 50, 500, 500);
     CdPaintRegion(dc, rgn);
     CdFreeRegion(rgn);
     
-    DerefObject(b);
+    DerefObject(b);*/
     
     WmEndPaint(win, dc);
 }

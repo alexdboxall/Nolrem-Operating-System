@@ -62,7 +62,8 @@ set_cs:
 	inc ax
 	mov cx, 8
 	mov di, 0x7C00 + 512
-	call read_sector
+	xor bx, bx
+	call BiosReadSector
 
 	; Read the kernel's inode number, and size.
 	mov eax, [0x7C00 + 512 * 8 + 12]
@@ -81,145 +82,26 @@ set_cs:
 	; ie. 0x10000. This allows sizes of approx. 448KB (our filesystem
 	; only supports a kernel size of 255KB anyway).
 	mov bx, 0xC00
-	mov gs, bx
 	xor di, di	
 
 next_sector:
 	push cx
 	mov cx, 1
-	call read_sector
+	call BiosReadSector
 	pop cx
 
 	; Move to next sector
 	inc eax
 	
 	; Move 512 bytes along ( = 0x200 bytes = offset change of 0x20)
-	mov bx, gs
 	add bx, 0x20
-	mov gs, bx
 	loop next_sector
 
 	mov [boot_drive_number], dl
 	jmp 0xC000
 	
-vga_pos dw 4
-retry_count db 5
-read_sector:
-	mov [retry_count], byte 5
 
-	; Put sector number in EAX. Put the number of sectors in CX.
-	; Put the destination offset in DI. The segment will be GS.
-
-	pushad
-	push es
-
-	; This attempts to read from an 'extended' hard drive (i.e. all
-	; modern drives)
-	mov [io_lba], eax
-	mov ax, gs
-	mov [io_segment], ax
-	mov dl, byte [boot_drive_number]
-	mov ah, 0x42
-	mov si, disk_io_packet
-	mov [disk_io_packet], byte 0x10
-	mov [io_offset], di
-	mov [io_count], cx
-	;int 0x13
-	
-	; If succeeded, we can exit.
-	;jnc skip_floppy_read
-	
-	; Otherwise we must call the older CHS method of reading (likely
-	; from a floppy).
-
-	;mov ah, 0x8
-	;xor di, di			;guard against BIOS bugs
-	;mov es, di
-	;mov dl, byte [boot_drive_number]
-	;int 0x13
-	;jnc short .got_parameters
-
-.retry_floppy:
-	; assume floppy
-	; 80 cylinders, 2 heads, and 18 sectors per track
-	mov ch, 80
-	mov cl, 18
-	mov dh, 1
-.got_parameters:
-	inc dh				;BIOS returns one less than actual value
-
-	dec dh		; @@@ TODO HACK GOOFY FIX FOR DODGY FLOPPY DRIVE
-				; @@@ REMOVE THIS LINE WHEN FDD IS FIXED!!
-				
-	and cx, 0x3F		;NUM SECTORS PER CYLINDER IN CX
-	mov bl, dh			
-	xor bh, bh			;NUM HEADS IN BX
-	
-	lfs ax, [io_lba]	;first load [d_lba] into GS:AX
-	mov dx, fs			;then copy GS to DX to make it DX:AX
-
-	div cx
-
-	inc dl
-	mov cl, dl
-
-	xor dx, dx
-	div bx
-
-	;LBA					0x2000
-	;ABSOLUTE SECTOR:	CL	0x03
-	;ABSOLUTE HEAD:		DL	0x0A
-	;ABSOLUTE CYLINDER:	AX	0x08
-
-	;get the low two bits of AH into the top 2 bits of CL
-	and ah, 3
-	shl ah, 6
-	or cl, ah
-						;SECTOR ALREADY IN CL
-	mov ch, al			;CYL
-	mov ax, [io_count]	;SECTOR COUNT
-	mov ah, 0x02		;FUNCTION NUMBER
-	mov dh, dl			;HEAD
-	mov dl, [boot_drive_number]
-	mov bx, [io_segment]
-	mov es, bx
-	mov bx, [io_offset]
-	int 0x13
-	jnc short skip_floppy_read
-
-	;dec byte [retry_count]
-
-	; need retry
-	mov dl, [boot_drive_number]
-	mov ah, 0
-	int 0x13
-
-	push cx
-	xor cx, cx
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	loop $
-	pop cx
-	
-	jmp .retry_floppy
-
-
-skip_floppy_read:
-	pop es
-	popad
-	
-
-	ret
-
+%include "boot/x86/int13h.s"
 
 
 ; The GDT. We are required to have this setup before we go into 32 bit mode, as
@@ -272,22 +154,6 @@ db 0x01
 db 0x01
 dd 16384				; start sector (we put a dummy VBR here)
 dd 100000    			; total sectors in partition
-
-; A data packet we use to interface with the BIOS extended disk functions.
-; We'll borrow the memory from the partition table
-align 16
-disk_io_packet:
-	db 0x00
-	db 0x00
-io_count:
-	dw 0x0000
-io_offset:
-	dw 0x0000
-io_segment:
-	dw 0x0000
-io_lba:
-	dd 0
-	dd 0
 
 times 0x1FE - ($-$$) db 0
 dw 0xAA55

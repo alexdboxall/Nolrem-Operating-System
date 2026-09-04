@@ -51,6 +51,12 @@ static void Ps2ControllerWrite(uint8_t data) {
     if (Ps2Wait(true) != 0) {
         LogStringAndHexLine("  (retrying after wait timeout) cmd 0x", data);
     }
+    if (data == 0xFE) {
+        LogString("outb(0x64, 0xFE);\n");
+        while (true) {
+            asm ("hlt");
+        }
+    }
     outb(0x64, data);
 }
 
@@ -198,24 +204,21 @@ void InitPs2(void) {
     Ps2ControllerDisableDevice(true);
     Ps2ControllerFlushOutputBuffer();
 
-    /* Seed the shadow config from hardware. */
     Ps2ControllerGetConfiguration();
-
-    /* Park IRQs off while we initialize. */
     Ps2ControllerSetIrqEnable(false, false);
     Ps2ControllerSetIrqEnable(false, true);
 
-    /* Initialize the keyboard first; it will enable its own IRQ. */
+    Ps2ControllerEnableDevice(false);  // <-- ENABLE before init
     InitPs2Keyboard();
+    Ps2ControllerDisableDevice(false); // Disable again
 
-    /* If the mouse port is present, initialize it; it will enable its IRQ. */
-    /* For now, we always try - the mouse init will bail gracefully if there's
-     * no mouse. TODO: implement proper port 2 detection if needed. */
+    Ps2ControllerEnableDevice(true);   // <-- ENABLE before init
     InitPs2Mouse();
+    Ps2ControllerDisableDevice(true);  // Disable again
 
     Ps2ControllerSetIrqEnable(true, false);
     Ps2ControllerSetIrqEnable(true, true);
 
-    /* Enable global interrupts and idle. */
-    asm volatile ("sti; hlt");
+    Ps2ControllerEnableDevice(false);  // Final enable
+    Ps2ControllerEnableDevice(true);
 }

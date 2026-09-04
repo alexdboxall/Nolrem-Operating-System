@@ -16,9 +16,8 @@ section .bss
 align 4096
 boot_page_directory: resb 4096
 boot_page_table1: resb 4096
-
 stack_bottom:
-resb 4 * 1024
+resb 16 * 1024
 stack_top:
 
 ; The start of the kernel itself - this will be called by the bootloader.
@@ -101,6 +100,7 @@ KernelEntryPoint:
 	; On x86, we'll store the current CPU number in the DR3 register (so user 
 	; code cannot modify it). Set it correctly now.
 	xor eax, eax
+	mov dr7, eax
 	mov dr3, eax
 
 	; Set the stack to the one we defined

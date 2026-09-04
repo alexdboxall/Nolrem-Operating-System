@@ -83,9 +83,6 @@ start:
 	hlt
 	jmp $
 
-boot_drive db 0
-
-
 ; The number of entries will be stored at 0x500, the map will be put at 0x504
 ; From here:
 ;		https://wiki.osdev.org/Detecting_Memory_(x86)
@@ -694,100 +691,20 @@ bios_wait_100ms:
 	int 0x15
 	jmp goBackHome
 
-retry_count db 5
+
+%include "int13h.s"
+
 bios_read_sector:
-	mov [retry_count], byte 5
-
-	mov [biglba], dword 0
 	mov eax, [realModeData1]
-	mov [d_lba], eax
-
-	mov [aaab], byte 0x10
-	mov [aaac], byte 0x00
-	mov [blkcnt], word 1
-	mov [d_add], word 0
-	mov [d_seg], word 0xD00
-	mov dl, byte [boot_drive]
-	mov ah, 0x42
-	mov si, DAPACK
-	int 0x13
-	jnc goBackHomeEX
-
-retry_fdc:
-	; do a 'non-extended read'
-	; Get disk geometry
-	mov ah, 0x8
-	xor di, di			;guard against BIOS bugs
-	mov es, di
-	mov dl, byte [boot_drive]
-	int 0x13
-	jc short .readfail
-	inc dh				;BIOS returns one less than actual value
-
-		dec dh		; @@@ TODO HACK GOOFY FIX FOR DODGY FLOPPY DRIVE
-				; @@@ REMOVE THIS LINE WHEN FDD IS FIXED!!
-
-	and cx, 0x3F		;NUM SECTORS PER CYLINDER IN CX
-	mov bl, dh			
-	xor bh, bh			;NUM HEADS IN BX
-	lfs ax, [realModeData1]	;first load [d_lba] into GS:AX
-	mov dx, fs			;then copy GS to DX to make it DX:AX
-	div cx
-	inc dl
-	mov cl, dl
-	xor dx, dx
-	div bx
-	and ah, 3
-	shl ah, 6
-	or cl, ah
-						;SECTOR ALREADY IN CL
-	mov ch, al			;CYL
-	mov ax, 1			;SECTOR COUNT
-	mov ah, 0x02		;FUNCTION NUMBER
-	mov dh, dl			;HEAD
+	mov cx, 1				; 1 sector
+	mov bx, 0xD00			; Read to:
+	xor di, di				; 0D00:0000 = 0xD000
 	mov dl, [boot_drive]
-	mov bx, 0xD00
-	mov es, bx
-	xor bx, bx
-	int 0x13
-	jnc short .GOOD
-	
-	dec byte [retry_count]
-	jz short .readfail
-
-	; reset
-	mov ah, 0           ; Reset disk system function
-    mov dl, [boot_drive]         ; Drive 0 (A:)
-    int 0x13             ; Call BIOS to reset controller
-
-	jmp short retry_fdc
-
-.GOOD:
+	call BiosReadSector
 	jmp goBackHome
-.readfail:
-	mov [realModeRet1], dword 1
-	jmp goBackHome
-
-goBackHomeEX:
-	jmp goBackHome
-
-align 8
-DAPACK:
-aaab	db	0x10
-aaac	db	0
-blkcnt:	dw	1		; int 13 resets this to # of blocks actually read/written
-d_add:	dw	0x0000	; memory buffer destination address (0:7c00)
-d_seg:	dw	0x0000	; in memory page zero
-d_lba:	dd	0		; put the lba to read in this spot
-biglba:	dd	0		; more storage bytes only for big lbas ( > 4 bytes )
 
 goBackHome:
 	cli
-
-	mov [aaab], byte 0x10
-	mov [aaac], byte 0
-	mov [biglba], dword 0
-
 
 	mov [realModeRet1], eax
 	mov [realModeRet2], ebx

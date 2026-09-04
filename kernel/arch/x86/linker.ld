@@ -8,7 +8,6 @@ SECTIONS
 		*(.lowram.text)
 	}
 	
-	
 	. += 0xC0000000;
 	
 	.text ALIGN(16) : AT (ADDR (.text) - 0xC0000000)

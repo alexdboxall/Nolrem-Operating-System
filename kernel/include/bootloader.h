@@ -36,7 +36,7 @@ struct boot_memory_entry {
 struct firmware_info {
     size_t num_ram_table_entries;
     struct boot_memory_entry* ram_table;
-    size_t kernel_load_point;
+    size_t reserved2;
     size_t reserved;
     char kernel_filename[32];
     void (*putchar)(int x, int y, char c, uint8_t col);

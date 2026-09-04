@@ -22,14 +22,17 @@ export struct window* WmGetForegroundWindow() {
     return foreground_window;
 }
 
-export void WmSetForegroundWindow(struct window* win) {
+export void WmSetForegroundWindow(struct window* win, bool lock) {
+    if (lock) WmLock();
     if (foreground_window != NULL) {
+        WmInvalidateWindow(foreground_window, false);
         DerefObject(foreground_window);
     }
     foreground_window = win;
     if (win != NULL) {
         RefObject(win);
     }
+    if (lock) WmUnlock();
 }
 
 static void CleanupWindow(void* _win) {
@@ -42,11 +45,11 @@ void WmInitWindowSubsystem(void) {
     RegisterUserObjectType(UOBJ_WINDOW, CleanupWindow);
 }
 
-static void WmLock(void) {
+void WmLock(void) {
     AcquireSpinlock(&winmgr_lock);
 }
 
-static void WmUnlock(void) {
+void WmUnlock(void) {
     ReleaseSpinlock(&winmgr_lock);
 }
 
@@ -66,6 +69,18 @@ export bool WmIsAncestor(struct window* potential_ancestor, struct window* refer
         }
     }
     return false;
+}
+
+struct rect WmGetGlobalPosition(struct window* win, bool lock) {
+    if (lock) WmLock();
+    struct rect r = {
+        .x = win->global_offset_cached.x,
+        .y = win->global_offset_cached.y,
+        .w = win->local_win_bound.w,
+        .h = win->local_win_bound.h
+    };
+    if (lock) WmUnlock();
+    return r;
 }
 
 export void WmInvalidateRegion(struct window* win, struct region rgn, bool lock) {
@@ -232,7 +247,7 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
     }
 
     if (parent == WmGetDesktop()) {
-        WmSetForegroundWindow(win);
+        WmSetForegroundWindow(win, false);
     }
 
     SetInternalWindowBounds(win, local_r);

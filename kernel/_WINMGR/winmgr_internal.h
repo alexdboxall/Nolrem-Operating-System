@@ -33,6 +33,10 @@ struct window {
     struct window_class* winclass;
 };
 
+
+void WmLock(void);
+void WmUnlock(void);
+
 struct dc* WmGetDC(void);
 int WmReturnDC(struct dc* dc);
 struct dc* WmBeginPaint(struct window* win);
@@ -47,6 +51,9 @@ int WmCallWinProc(struct window* win, struct msg msg);
 void WmInvalidateRegion(struct window* win, struct region rgn, bool lock);
 void WmInvalidateWindow(struct window* win, bool lock);
 struct window* WmGetForegroundWindow();
-void WmSetForegroundWindow(struct window* win);
-
+void WmSetForegroundWindow(struct window* win, bool lock);
+struct window* WmGetToplevelAtPoint(int x, int y, bool lock);
+bool WmIsPointInRect(int x, int y, struct rect r);
 struct point WmGetMousePositionGlobal(void);
+struct rect WmGetGlobalPosition(struct window* win, bool lock);
+void WmRaiseToTop(struct window* win, bool lock);

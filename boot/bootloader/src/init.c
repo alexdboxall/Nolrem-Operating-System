@@ -145,9 +145,13 @@ static size_t LoadProgramHeaders(size_t base) {
 
 			uint32_t additionalNullBytes = (progHeaders + i)->p_memsz - (progHeaders + i)->p_filesz;
 
-            DiagnosticPrintf("Loading here: 0x%X \n  ", addr & 0xFFFFFFF);
+            DiagnosticPrintf("Loading here: 0x%X - 0x%X \n  ", addr & 0xFFFFFFF, (addr & 0xFFFFFFF) + size);
 			xmemcpy(addr & 0xFFFFFFF, filePos, size);
-			xmemset((addr & 0xFFFFFFF) + size, 0, additionalNullBytes);
+            
+            if (additionalNullBytes > 0) {
+                DiagnosticPrintf("BSS here: 0x%X - 0x%X \n  ", (addr & 0xFFFFFFF) + size, (addr & 0xFFFFFFF) + size + additionalNullBytes);
+			    xmemset((addr & 0xFFFFFFF) + size, 0, additionalNullBytes);
+            }
 		}
 	}
 
@@ -173,22 +177,34 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
     LoadFile(fw->kernel_filename, 0x40000);
     DiagnosticPrintf("The kernel image has been loaded into RAM.\n  ");
 
+
+    uint32_t hash = 0;
+    for (size_t i = 0; i < file_size; ++i) {
+        hash ^= ((uint8_t*) 0x40000)[i];
+        hash = (hash << 3) | (hash >> 29);
+    }
+    DiagnosticPrintf("KERNEL IMAGE HASH: 0x%X\n  ", hash);
+
     size_t entry_point = LoadProgramHeaders(0x40000);
-    DiagnosticPrintf("The kernel's executable has been fully loaded to address 0x%X.\n  ", fw->kernel_load_point);
     DiagnosticPrintf("The kernel entry point is at 0x%X\n  ", entry_point);
+
+    hash = 0;
+    for (size_t i = 0; i < 0x1A000; ++i) {
+        hash ^= ((uint8_t*) 0x10000)[i];
+        hash = (hash << 3) | (hash >> 29);
+    }
+    DiagnosticPrintf("KERNEL LOAD HASH: 0x%X\n  ", hash);
 
     kboot_info.enable_floppy = 1;
     kboot_info.num_ram_table_entries = fw->num_ram_table_entries;
     kboot_info.ram_table = fw->ram_table;
 
     if (show_boot_options) {
+        while (true);
         BootOptionsMenu();
     }
 
     ExitBootServices();
-
-    DiagnosticPrintf("The fw table is at 0x%X\n  ", fw->ram_table);
-    DiagnosticPrintf("... and has 0x%X entries\n  ", fw->num_ram_table_entries);
 
     ((void(*)(struct kernel_boot_info*)) entry_point)(&kboot_info);
 }

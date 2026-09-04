@@ -7,8 +7,7 @@
 
 ////#define DESKTOP_COLOUR 0xFF00C0F0
 //#define DESKTOP_COLOUR 0xFF00E0E0
-#define DESKTOP_COLOUR 0xFF00E0E0
-
+#define DESKTOP_COLOUR 0xFF00C9FF
 
 static struct window* desktop_window;
 static struct brush* desktop_brush;

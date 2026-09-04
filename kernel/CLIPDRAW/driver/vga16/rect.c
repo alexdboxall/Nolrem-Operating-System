@@ -10,6 +10,14 @@ void VgaSimpleRect(int x1, int y1, int x2, int y2, uint8_t color) {
     volatile uint8_t* vram = VRAM_BASE;
     volatile uint8_t dummy;
 
+    if (x1 >= 640 || y1 >= 480) return;
+    if (x1 >= x2) { return; }
+    if (y1 >= y2) { return; }
+    if (x1 < 0) x1 = 0;
+    if (x2 > 640) x2 = 640;
+    if (y1 < 0) y1 = 0;
+    if (y2 > 480) y2 = 480;
+    
     int start_byte = x1 >> 3;
     int end_byte   = (x2 - 1) >> 3;
 

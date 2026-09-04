@@ -57,7 +57,6 @@ static const userrodata uint16_t free_list_block_sizes[TOTAL_NUM_FREE_LISTS] = {
     40,         48,         56,         64,
     80,         96,         128,        160,
     192,        256,        384,        512
-    //192,        256,        2048,       4096
 };
 
 /**

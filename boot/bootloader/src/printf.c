@@ -85,7 +85,7 @@ void Printf(const char* format, ...)
 
 void DiagnosticPrintf(const char* format, ...)
 {
-#if 0
+#if 1
 	va_list list;
 	va_start(list, format);
 	Vprintf(format, list);

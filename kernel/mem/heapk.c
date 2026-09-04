@@ -78,7 +78,7 @@ void* KernelHeapRequestMemory(size_t size) {
     return AllocBootstrapHeap(size);
 }
 
-void InitBoostrapHeap(void) {
+void InitBootstrapHeap(void) {
     InitSpinlock(&heap_lock);
     InitHeapEx(&kernel_heap, KernelHeapRequestMemory);
 }

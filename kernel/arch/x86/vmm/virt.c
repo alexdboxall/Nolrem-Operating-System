@@ -1,0 +1,149 @@
+#include <common.h>
+#include <spinlock.h>
+#include <heap.h>
+#include <vmm.h>
+#include <log.h>
+#include <machine/x86.h>
+#include <phys.h>
+#include <string.h>
+#include <arch.h>
+
+#define KRNL_TABLES_START   (ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t)))
+
+#define RECURSIVE_BASE_TABLES           0xFFC00000
+
+#define PAGE_PRESENT        (1ULL << 0) // Bit 0: Page is present in memory
+#define PAGE_WRITE          (1ULL << 1) // Bit 1: Read/Write (1 = writable, 0 = read-only)
+#define PAGE_USER           (1ULL << 2) // Bit 2: User/Supervisor (1 = user mode accessible)
+#define PAGE_PWT            (1ULL << 3) // Bit 3: Page-level write-through caching
+#define PAGE_PCD            (1ULL << 4) // Bit 4: Page-level cache disable
+#define PAGE_ACCESSED       (1ULL << 5) // Bit 5: Set by CPU when read/written
+#define PAGE_DIRTY          (1ULL << 6) // Bit 6: Set by CPU when written to
+#define PAGE_SIZE_HUGE      (1ULL << 7) // Bit 7: 2MB/1GB page (or PAT at 4KB PTE level)
+#define PAGE_GLOBAL         (1ULL << 8) // Bit 8: Global translation (don't flush on CR3 switch)
+
+
+// The address of these symbols is the important thing, not the symbol
+// value itself.
+extern size_t boot_page_directory;
+extern size_t boot_page_table1;
+
+static size_t kernel_page_tables_phys[256] = {0};
+
+
+static struct vas* kernel_vas;
+
+static void Invalidate(size_t virt) {
+    asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
+}
+
+static size_t* GetRecursiveTable(size_t table_num) {
+    return ((size_t*) RECURSIVE_BASE_TABLES) + (table_num * PAGE_SIZE / sizeof(size_t));
+}
+
+/* 
+ * If it handled the page fault, returns true. If it has not handled it, and
+ * needs the normal handler to run, returns false. 
+ */
+bool ArchTryHandleSpecialPageFault(size_t virt) {
+    /* 
+     * Check if this page fault was due to a new kernel page table being added,
+     * but has not yet been lazy loaded into this VAS.
+     */
+    size_t table_idx = virt / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t));
+    size_t* cr3 = GetRecursiveTable(1023);
+    if (!(cr3[table_idx] & PAGE_PRESENT) 
+        && kernel_page_tables_phys[table_idx + KRNL_TABLES_START] != 0
+    ) {
+        cr3[table_idx] = kernel_page_tables_phys[table_idx + KRNL_TABLES_START] | PAGE_PRESENT | PAGE_WRITE;
+        Invalidate((size_t) GetRecursiveTable(table_idx));
+        return true;
+    }
+    return false;
+}
+
+
+void ArchSwitchToVas(struct vas* vas) {
+    asm volatile ("mov %0, %%cr3" : : "r" (vas->arch_data));
+}
+
+void ArchInitVas(struct vas* vas, bool first) {
+    if (first) {
+        kernel_page_tables_phys[0] = ((size_t) &boot_page_table1) - ARCH_KRNL_MAPPING_BASE;
+        vas->arch_data = SubVoidPtr((void*) &boot_page_directory, ARCH_KRNL_MAPPING_BASE);
+        kernel_vas = vas;
+
+        /* Set up recursive mapping. */
+        (&boot_page_directory)[1023] = ((size_t) vas->arch_data) | PAGE_PRESENT | PAGE_WRITE;
+        
+    } else {
+        
+    }
+
+    /* Make the recursive mapping go live. */
+    if (first) {
+        ArchSwitchToVas(vas);
+    }
+}
+
+static bool InKernelRange(struct virt_page* vp) {
+    return vp->virt >= ARCH_KRNL_MAPPING_BASE;
+}
+
+static size_t TranslateToEntry(struct virt_page* vp) {
+    size_t phys = vp->phys & ~0xFFF;
+    size_t flags = 0;
+
+    
+    flags |= (vp->present && !vp->busy) ? PAGE_PRESENT : 0;
+    flags |= vp->write ? PAGE_WRITE : 0;
+    flags |= vp->user ? PAGE_USER : 0;
+    flags |= InKernelRange(vp) ? PAGE_GLOBAL : 0;
+    
+    return phys | flags;
+}
+
+void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
+    // TODO: do we need to check if this VAS is currently in? and if not, 
+    //       temporarily map it in?
+    // or does this only ever get called on the current vas?
+
+    (void) vas;
+
+    LogString("ArchSyncVirt\n");
+
+    size_t virt_index = vp->virt / PAGE_SIZE;
+    size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
+    size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
+    
+    size_t* directory = GetRecursiveTable(1023);
+    LogString("1\n");
+    if (!(directory[level1_index] & PAGE_PRESENT)) {
+        /* Time to map a new table. */
+            LogString("2\n");
+
+        size_t phys = AllocPhys(true);
+            LogString("3\n");
+
+        directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
+        size_t* table = GetRecursiveTable(level1_index);
+        Invalidate((size_t) table);
+        memset(table, 0, PAGE_SIZE);
+    LogString("4\n");
+
+        if (InKernelRange(vp)) {
+            kernel_page_tables_phys[level1_index - ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t))] = phys;
+        }
+            LogString("5\n");
+
+    }
+    LogString("6\n");
+
+    size_t* table = GetRecursiveTable(level1_index);
+    table[level2_index] = TranslateToEntry(vp);
+    LogStringAndHexLine("7 0x", table[level2_index]);
+
+    // TODO: only needed if current VAS
+    Invalidate(vp->virt);
+    LogString("8\n");
+}

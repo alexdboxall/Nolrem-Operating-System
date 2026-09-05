@@ -69,7 +69,7 @@ void draw_test(struct graphics_driver* drv, uint8_t* pattern, int x, int y) {
  * We want to be able to page out some of the very early bootstrap code.
  * So this is the part of the kernel that runs when discarding is permitted.
  */
-export _Noreturn pageable void InitKernelResidentPortion(void) {
+export _Noreturn void InitKernelResidentPortion(void) {
     LogString("Ready!\n");
 
     extern void CdInit();
@@ -127,7 +127,7 @@ export _Noreturn pageable void InitKernelResidentPortion(void) {
  * This stuff will be discardable, so we'd better finish up this before we turn
  * on the discarder!
  */
-export _Noreturn void InitKernel(struct kernel_boot_info* boot_info) {
+export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitLog();
     InitBootstrapHeap();
     InitKernelVirtArena();
@@ -148,9 +148,20 @@ export _Noreturn void InitKernel(struct kernel_boot_info* boot_info) {
     InitUserObjectType();
     InitThread();
     InitScheduler();
-
     InitVfs();
     InitNullDevice();
+
+    InitVga();
+
+    CreateInitialVas();
+
+    uint8_t* m = AllocAnonMemory(100, VP_WRITE);
+    LogStringAndHexLine("Got memory at 0x", (size_t) m);
+    m[0] = 'A';
+    LogString("It didn't crash?!\n");
+    while (true) {
+        ;
+    }
 
     struct file* f;
     int res = OpenFile("null:", O_WRONLY, 0, &f);
@@ -159,6 +170,5 @@ export _Noreturn void InitKernel(struct kernel_boot_info* boot_info) {
     res = WriteFile(f, &tr);
     LogStringAndHexLine("The write call returned: ", res);
 
-    InitVga();
     InitKernelResidentPortion();
 }

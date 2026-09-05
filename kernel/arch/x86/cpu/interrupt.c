@@ -3,6 +3,7 @@
 #include <log.h>
 #include <machine/x86.h>
 #include <interrupt.h>
+#include <vmm.h>
 #include <syscall.h>
 
 #define ISR_SYSTEM_CALL 96
@@ -26,10 +27,17 @@ void x86HandleInterrupt(struct x86_regs* r) {
         return;
     }
 
+    if (num == ISR_PAGE_FAULT) {
+        size_t cr2 = GetCr2();
+        LogStringAndHexLine("Page fault: EIP 0x", r->eip);
+        LogStringAndHexLine("            CR2 0x", cr2);
+        HandlePageFault(cr2);
+        return;
+    }
+
     if (num < PIC_IRQ_BASE) {
         LogStringAndHexLine("Interrupt 0x", num);
         LogStringAndHexLine("EIP = ", r->eip);
-        LogStringAndHexLine("CR2 = ", GetCr2());
         while (true) {
             ;
         }

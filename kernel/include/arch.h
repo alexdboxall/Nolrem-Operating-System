@@ -15,6 +15,7 @@ void ArchInit(void);
 //      #define ARCH_KRNL_VIRT_RANGE_BYTES
 //      #define ARCH_USER_AREA_BASE
 //      #define ARCH_USER_AREA_LIMIT
+//      #define ARCH_KRNL_MAPPING_BASE
 /*
 * Non-inclusive of ARCH_USER_AREA_LIMIT
 */
@@ -33,3 +34,12 @@ export uint64_t ArchGetUtcTime(int64_t timezone_offset);
 export int ArchSetUtcTime(uint64_t time, int64_t timezone_offset);
 
 void ArchCallGlobalConstructors();
+
+
+struct virt_page;
+struct vas;
+
+void ArchInitVas(struct vas* vas, bool first);
+void ArchSyncVirt(struct vas* vas, struct virt_page* vp);
+void ArchSwitchToVas(struct vas* vas);
+bool ArchTryHandleSpecialPageFault(size_t virt);

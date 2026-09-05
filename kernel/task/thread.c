@@ -2,6 +2,9 @@
 #include <thread.h>
 #include <obj.h>
 #include <scheduler.h>
+#include <heap.h>
+
+#define KSTACK_SIZE     (4096 * 2)
 
 static struct thread* current_thread;
 static struct thread dummy;
@@ -35,6 +38,27 @@ void UnblockThread(struct thread* thr, int retv) {
     thr->block_return_val = retv;
 }
 
+struct thread* CreateThread(void(*entry)(void*), void* context) {
+    struct thread* thr = AllocHeap(sizeof(struct thread));
+    InitObject(thr, OBJTYPE_THREAD);
+    thr->state = THREAD_STATE_READY;
+
+    // TODO: need to alloc virt
+    //thr->kernel_stack_top = 
+    thr->kernel_stack_size = KSTACK_SIZE;
+
+    (void) entry;
+    (void) context;
+
+    return thr;
+}
+
+static void CleanupThread(void* _thr) {
+    struct thread* thr = _thr;
+    FreeHeap(thr);
+}
+
 void InitThread(void) { 
     current_thread = &dummy;
+    RegisterObjectType(OBJTYPE_THREAD, CleanupThread);
 }

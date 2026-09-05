@@ -17,7 +17,7 @@ struct phys_page* GetPhysPage(size_t addr) {
 }
 
 size_t GetPhysAddr(struct phys_page* pp) {
-    return (((size_t) (pp - sys_pp_table)) / sizeof(struct phys_page)) * PAGE_SIZE;
+    return ((size_t) (pp - sys_pp_table)) * PAGE_SIZE;
 }
 
 struct phys_page* GetFirstPhysPage(void) {
@@ -44,7 +44,11 @@ export size_t GetFreeMemory(void) {
 export size_t AllocPhys(bool pin) {
     struct phys_page* curr = GetFirstPhysPage();
     while (curr != NULL) {
-        AcquireSpinlock(&curr->lock);
+        bool acquired = TryAcquireSpinlock(&curr->lock);
+        if (!acquired) {
+            curr = GetNextPhysPage(curr);
+            continue;
+        }
         if (curr->exists && !curr->allocated) {
             curr->allocated = 1;
             curr->wired = pin;
@@ -110,7 +114,7 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
                 if (j < sys_pp_table_max_index) {
                     ++sys_total_pp;
                     ++sys_free_pp;
-                    sys_pp_table[i].exists = true;
+                    sys_pp_table[j].exists = true;
                 }
             }
         }

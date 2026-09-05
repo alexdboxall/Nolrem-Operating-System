@@ -67,4 +67,23 @@ struct phys_page {
 };
 
 
+#define MAPPINGS_PER_LEVEL  1024
+
+struct vas {
+    struct obj_header hdr;
+    void* arch_data;
+    struct virt_page*** mappings;
+    struct mutex* lock;
+};
+
+#define VP_WRITE    1
+#define VP_USER     2
+#define VP_EXEC     4
+
 void InitVmm(void);
+
+struct vas* CreateVas(void);
+void CreateInitialVas(void);
+
+void* AllocAnonMemory(size_t bytes, int flags);
+void HandlePageFault(size_t virt);

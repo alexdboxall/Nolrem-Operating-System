@@ -1,5 +1,7 @@
 #pragma once
 
+#include <obj.h>
+
 struct sem;
 
 #define THREAD_STATE_RUNNING    0
@@ -7,6 +9,8 @@ struct sem;
 #define THREAD_STATE_BLOCKED    2
 
 struct thread {
+    struct obj_header hdr;
+
     size_t kernel_stack_top;
     size_t stack_pointer;
     struct vas* vas;
@@ -19,6 +23,8 @@ struct thread {
     struct thread* next_waiting_timer;
     struct sem* waiting_sem;
 };
+
+struct thread* CreateThread(void(*entry)(void*), void* context);
 
 struct thread* GetCurrentThread(void);
 void SetThreadWaitingSem(struct thread* thr, struct sem* sem);

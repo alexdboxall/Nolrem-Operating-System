@@ -92,7 +92,9 @@ static void RealDrawMouse(int x, int y) {
 
 static void RealRemoveMouse(int x, int y) {
     struct graphics_driver* drv = GetMouseDriver();
-    drv->remove_mouse(drv, x, y, drv->mouse_restore_buffer, MOUSE_WIDTH, MOUSE_HEIGHT);
+    if (mouse_onscreen) {
+        drv->remove_mouse(drv, x, y, drv->mouse_restore_buffer, MOUSE_WIDTH, MOUSE_HEIGHT);
+    }
     mouse_onscreen = false;
 }
 

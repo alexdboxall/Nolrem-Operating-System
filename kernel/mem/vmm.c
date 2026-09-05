@@ -4,35 +4,124 @@
 #include <common.h>
 #include <mutex.h>
 #include <arch.h>
+#include <string.h>
 #include <vmm.h>
 #include <errno.h>
 #include <phys.h>
+#include <mutex.h>
+#include <allocvirt.h>
+#include <log.h>
 
-void LockVas(struct vas*) {
+struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset, size_t base, size_t phys);
 
+void LockVas(struct vas* vas) {
+    AcquireMutex(vas->lock, TIMEOUT_INFINITE);
 }
-void UnlockVas(struct vas*) {
 
+void UnlockVas(struct vas* vas) {
+    ReleaseMutex(vas->lock);
 }
-void SynchroniseVirt(struct virt_page*) {
 
+struct virt_page* GetVirtualPageFromVirt(struct vas* vas, size_t virt) {
+    size_t index = virt / PAGE_SIZE;
+    size_t level_1 = index / MAPPINGS_PER_LEVEL;
+    size_t level_2 = index % MAPPINGS_PER_LEVEL;
+    struct virt_page** table = vas->mappings[level_1];
+    if (table == NULL) {
+        return NULL;
+    }
+    return table[level_2];
 }
-struct vas {
-    int x;
-};
-struct vas dummyvas;
-struct vas* GetCurrentVas() {
-    return &dummyvas;
+
+void AddVirtPageToVas(struct vas* vas, struct virt_page* vp) {
+    // Assumes VAS lock held.
+    size_t index = vp->virt / PAGE_SIZE;
+    size_t level_1 = index / MAPPINGS_PER_LEVEL;
+    size_t level_2 = index % MAPPINGS_PER_LEVEL;
+    struct virt_page** table = vas->mappings[level_1];
+    if (table == NULL) {
+        table = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+        memset(table, 0, MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+        vas->mappings[level_1] = table;
+    }
+    table[level_2] = vp;
 }
-struct virt_page dummypg;
-struct virt_page* GetVirtualPageFromVirt(struct vas*, size_t) {
-    return &dummypg;
+
+static struct vas* current_vas = NULL;
+static struct vas* kernel_vas = NULL;
+
+export struct vas* GetKernelVas(void) {
+    return kernel_vas;
 }
+
+export struct vas* GetCurrentVas(void) {
+    return current_vas;
+}
+
 
 bool virt_initialised = false;
 
 bool IsVirtInitialised(void) {
     return virt_initialised;
+}
+
+export struct vas* CreateVas(void) {
+    struct vas* vas = AllocHeap(sizeof(struct vas));
+    InitObject(vas, OBJTYPE_VAS);
+
+    vas->lock = CreateMutex();
+    vas->mappings = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+    memset(vas->mappings, 0, MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+
+    ArchInitVas(vas, false);
+    return vas;
+}
+
+void CreateInitialVas(void) {
+    struct vas* vas = AllocHeap(sizeof(struct vas));
+    InitObject(vas, OBJTYPE_VAS);
+
+    vas->lock = CreateMutex();
+    vas->mappings = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+    memset(vas->mappings, 0, MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+
+    kernel_vas = vas;
+    current_vas = vas;
+    ArchInitVas(vas, true);
+    virt_initialised = true;
+}
+
+export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base) {
+    struct virt_page* vp = AllocHeap(sizeof(struct virt_page));
+    InitObject(vp, OBJTYPE_PAGE_VIRT);
+
+    vp->vas = vas;
+    vp->virt = virt;
+
+    vp->executable = !!(flags & VP_EXEC);
+    vp->write = !!(flags & VP_WRITE);
+    vp->user = !!(flags & VP_USER);
+
+    vp->accessed = 0;
+    vp->busy = 0;
+    vp->dirty = 0;
+    vp->present = 0;
+    vp->phys = 0;
+    vp->origin = CreatePageOrigin(file, file_offset, base, 0);
+
+    LockVas(vas);
+    AddVirtPageToVas(vas, vp);
+    UnlockVas(vas);
+
+    return vp;
+}
+
+export void* AllocAnonMemory(size_t bytes, int flags) {
+    return (void*) CreateVirtPage(GetCurrentVas(), AllocVirt(bytes), flags, NULL, 0, 0)->virt;
+}
+
+static void SynchroniseVirt(struct virt_page* vp) {
+    ArchSyncVirt(vp->vas, vp);
 }
 
 struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset, size_t base, size_t phys) {
@@ -57,8 +146,20 @@ static void CleanupPageOrigin(void* _po) {
     FreeHeap(po);
 }
 
+static void CleanupVas(void* _vas) {
+    struct vas* vas = _vas;
+    FreeHeap(vas);
+}
+
+static void CleanupVirtPage(void* _vp) {
+    struct virt_page* vp = _vp;
+    FreeHeap(vp);
+}
+
 void InitVmm(void) {
     RegisterObjectType(OBJTYPE_PAGE_ORIGIN, CleanupPageOrigin);
+    RegisterObjectType(OBJTYPE_VAS, CleanupVas);
+    RegisterObjectType(OBJTYPE_PAGE_VIRT, CleanupVirtPage);
 }
 
 void CallOnVirtualUsers(struct phys_page* pp, void(*func)(struct phys_page*, struct virt_page*)) {
@@ -95,6 +196,7 @@ static void LeaveCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
 }
 
 /* Don't go calling these willy-nilly! */
+/* These prevent anyone else accessing the physical page while held. */
 export void EnterPhysPageCriticalSection(struct phys_page* pp) {
     AcquireSpinlock(&pp->lock);
     pp->excl = 1;
@@ -197,30 +299,43 @@ static void RegisterVasAsPhysUser(
     pp->chain = *link;
 }
 
-export void HandlePageFault(size_t virt) {
-    struct vas* vas = GetCurrentVas();
 
+void HandlePageFault(size_t virt) {
+    struct vas* vas = GetCurrentVas();
+    LogString("handling page fault!\n");
+
+    bool phys_needs_setting = false;
 retry:
     LockVas(vas);
+
+    /* 
+     * For lazy loading of global page tables, etc. 
+     */
+    bool handled = ArchTryHandleSpecialPageFault(virt);
+    if (handled) {
+        UnlockVas(vas);
+        return;
+    }
+
     struct virt_page* vp = GetVirtualPageFromVirt(vas, virt);
     struct page_origin* origin = vp->origin;
     UnlockVas(vas);                         // drop before crossing into phys/origin territory
+    LogStringAndHexLine("VP 0x", (size_t) vp);
+    LogStringAndHexLine("OR 0x", (size_t) origin);
 
     size_t phys = origin->phys;             // unlocked peek, rechecked below
+    LogStringAndHexLine("PH 0x", (size_t) phys);
 
     if (phys == 0) {
         AcquireMutex(origin->mtx, TIMEOUT_INFINITE);
         if (origin->phys == 0) {
             struct phys_page* newpp = GetPhysPage(AllocPhys(true));
             EnterPhysPageCriticalSection(newpp);   // safe: fresh frame, no discard can hold this yet
-            // TODO: this needs to be moved outside the critical section, into a buffer page,
-            // this is then copied over or assigned in
-            // TODO: LoadFromDisk(origin->file, origin->file_offset, newpp);
             newpp->origin = origin;
             RefObject(origin);
             origin->phys = GetPhysAddr(newpp);
             LeavePhysPageCriticalSection(newpp);
-            // TODO: how do we unpin this phys?
+            phys_needs_setting = true;
         }
         ReleaseMutex(origin->mtx);
         goto retry;                          // uniform re-entry through the dedup path below
@@ -244,16 +359,35 @@ retry:
         LeavePhysPageCriticalSection(pp);
         goto retry;
     }
+
+    
+    /* if phys_needs_setting, then:*/
+    /* TODO: you probably load file data here into a buffer*/
+    /* you probably memset the buffer to 0 otherwise .*/
+
+    /* vp->phys and vp->origin are shared in a UNION! */
     DerefObject(vp->origin);
+
     vp->phys = phys;
     vp->present = 1;
     RegisterVasAsPhysUser(pp, vas, vp, &link);      // under both locks — discard can't miss this
+    LogStringAndHexLine("vp->virt 0x", vp->virt);
+    LogStringAndHexLine("vp->phys 0x", vp->phys);
+    LogStringAndHexLine("vp->present 0x", vp->present);
+    LogStringAndHexLine("vp->busy 0x", vp->busy);
+    --vp->busy;
     SynchroniseVirt(vp);
+    ++vp->busy;
+    LogStringAndHexLine("vp->virt 0x", vp->virt);
+    if (phys_needs_setting) {
+        // TODO: you probably copy from the buffer you created above.
+        memset((void*) vp->virt, 0, PAGE_SIZE);
+    }
     UnlockVas(vas);
 
     LeavePhysPageCriticalSection(pp);
 
-    if (link == NULL) {
+    if (link != NULL) {
         FreeHeap(link);
     }
 }

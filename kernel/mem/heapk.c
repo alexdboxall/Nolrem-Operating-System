@@ -6,7 +6,7 @@
 #include <spinlock.h>
 
 #define ALIGN       (sizeof(size_t))    // must be power of 2
-#define BOOTSTRAP_HEAP_SIZE (1024 * 8)
+#define BOOTSTRAP_HEAP_SIZE (1024 * 16)
 
 static uint8_t bootstrap_heap[BOOTSTRAP_HEAP_SIZE];
 static size_t bootstrap_heap_index = 0;

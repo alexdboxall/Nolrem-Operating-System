@@ -292,7 +292,7 @@ void VGALog(char c) {
     int pre, post;
     GetGlyphMetrics(c, 8, &pre, &post);
     curx += pre;
-    VGADrawChar(curx, cury, 0x1, c);
+    VGADrawChar(curx, cury, 0x7, c);
     curx += post;
     if (curx >= 640 - 24 || c == '\n') {
         curx = 16;

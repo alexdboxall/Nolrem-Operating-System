@@ -15,6 +15,7 @@ struct thread {
     size_t stack_pointer;
     struct vas* vas;
     size_t kernel_stack_size;
+    size_t user_stack_base;
 
     int state;
     int block_return_val;
@@ -24,7 +25,7 @@ struct thread {
     struct sem* waiting_sem;
 };
 
-struct thread* CreateThread(void(*entry)(void*), void* context);
+struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context);
 
 struct thread* GetCurrentThread(void);
 void SetThreadWaitingSem(struct thread* thr, struct sem* sem);

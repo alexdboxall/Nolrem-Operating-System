@@ -17,3 +17,7 @@ export size_t AllocVirt(size_t bytes) {
 export void FreeVirt(size_t start, size_t bytes) {
     FreeVirtEx(&krnl_va, start, bytes);
 }
+
+struct virt_arena* GetKernelVirtArena(void) {
+    return &krnl_va;
+}

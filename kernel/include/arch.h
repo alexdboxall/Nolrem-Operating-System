@@ -43,3 +43,4 @@ void ArchInitVas(struct vas* vas, bool first);
 void ArchSyncVirt(struct vas* vas, struct virt_page* vp);
 void ArchSwitchToVas(struct vas* vas);
 bool ArchTryHandleSpecialPageFault(size_t virt);
+void ArchReadVirtDirtyAndAccessed(struct virt_page* vp);

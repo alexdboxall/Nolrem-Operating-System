@@ -70,6 +70,9 @@ export struct vas* CreateVas(void) {
     InitObject(vas, OBJTYPE_VAS);
 
     vas->lock = CreateMutex();
+    vas->va = AllocHeap(sizeof(struct virt_arena));
+    InitVirtArena(vas->va, ARCH_USER_AREA_BASE, ARCH_USER_AREA_LIMIT);
+
     vas->mappings = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
     memset(vas->mappings, 0, MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
 
@@ -81,6 +84,7 @@ void CreateInitialVas(void) {
     struct vas* vas = AllocHeap(sizeof(struct vas));
     InitObject(vas, OBJTYPE_VAS);
 
+    vas->va = GetKernelVirtArena();
     vas->lock = CreateMutex();
     vas->mappings = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
     memset(vas->mappings, 0, MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
@@ -88,10 +92,11 @@ void CreateInitialVas(void) {
     kernel_vas = vas;
     current_vas = vas;
     ArchInitVas(vas, true);
+    
     virt_initialised = true;
 }
 
-export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base) {
+export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base, size_t phys) {
     struct virt_page* vp = AllocHeap(sizeof(struct virt_page));
     InitObject(vp, OBJTYPE_PAGE_VIRT);
 
@@ -106,8 +111,8 @@ export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
     vp->busy = 0;
     vp->dirty = 0;
     vp->present = 0;
-    vp->phys = 0;
-    vp->origin = CreatePageOrigin(file, file_offset, base, 0);
+    vp->phys = phys;
+    vp->origin = CreatePageOrigin(file, file_offset, base, phys);
 
     LockVas(vas);
     AddVirtPageToVas(vas, vp);
@@ -116,8 +121,28 @@ export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
     return vp;
 }
 
+export void* AllocFixedMemory(size_t phys, size_t bytes, int flags) {
+    struct virt_page* vp = CreateVirtPage(GetCurrentVas(), AllocVirt(bytes), flags, NULL, 0, 0, phys);
+    if (vp == NULL) {
+        return NULL;
+    }
+    return (void*) vp->virt;
+}
+
 export void* AllocAnonMemory(size_t bytes, int flags) {
-    return (void*) CreateVirtPage(GetCurrentVas(), AllocVirt(bytes), flags, NULL, 0, 0)->virt;
+    struct virt_page* vp = CreateVirtPage(GetCurrentVas(), AllocVirt(bytes), flags, NULL, 0, 0, 0);
+    if (vp == NULL) {
+        return NULL;
+    }
+    return (void*) vp->virt;
+}
+
+export void* AllocFileMemory(struct file* file, size_t file_offset, size_t bytes, int flags, size_t reloc_base) {
+    struct virt_page* vp = CreateVirtPage(GetCurrentVas(), AllocVirt(bytes), flags, file, file_offset, reloc_base, 0);
+    if (vp == NULL) {
+        return NULL;
+    }
+    return (void*) vp->virt;
 }
 
 static void SynchroniseVirt(struct virt_page* vp) {
@@ -217,6 +242,7 @@ static void DiscardVirt(struct phys_page* pp, struct virt_page* vp) {
 }
 
 static void UpdateLRUAndDirtyOnVirt(struct phys_page* pp, struct virt_page* vp) {
+    ArchReadVirtDirtyAndAccessed(vp);
     if (vp->accessed) {
         pp->lru |= 0x8000;
     }
@@ -302,7 +328,6 @@ static void RegisterVasAsPhysUser(
 
 void HandlePageFault(size_t virt) {
     struct vas* vas = GetCurrentVas();
-    LogString("handling page fault!\n");
 
     bool phys_needs_setting = false;
 retry:
@@ -320,11 +345,8 @@ retry:
     struct virt_page* vp = GetVirtualPageFromVirt(vas, virt);
     struct page_origin* origin = vp->origin;
     UnlockVas(vas);                         // drop before crossing into phys/origin territory
-    LogStringAndHexLine("VP 0x", (size_t) vp);
-    LogStringAndHexLine("OR 0x", (size_t) origin);
 
     size_t phys = origin->phys;             // unlocked peek, rechecked below
-    LogStringAndHexLine("PH 0x", (size_t) phys);
 
     if (phys == 0) {
         AcquireMutex(origin->mtx, TIMEOUT_INFINITE);
@@ -364,6 +386,17 @@ retry:
     /* if phys_needs_setting, then:*/
     /* TODO: you probably load file data here into a buffer*/
     /* you probably memset the buffer to 0 otherwise .*/
+    uint8_t buffer[PAGE_SIZE];
+    if (phys_needs_setting) {
+        if (vp->origin && vp->origin->file) {
+            // TODO: load from disk
+        } else {
+            // TODO: this would also be where we load from swapfile
+
+            // but for now it can only be inital load, so blank memory
+            memset(buffer, 0, PAGE_SIZE);
+        }
+    }
 
     /* vp->phys and vp->origin are shared in a UNION! */
     DerefObject(vp->origin);
@@ -371,17 +404,11 @@ retry:
     vp->phys = phys;
     vp->present = 1;
     RegisterVasAsPhysUser(pp, vas, vp, &link);      // under both locks — discard can't miss this
-    LogStringAndHexLine("vp->virt 0x", vp->virt);
-    LogStringAndHexLine("vp->phys 0x", vp->phys);
-    LogStringAndHexLine("vp->present 0x", vp->present);
-    LogStringAndHexLine("vp->busy 0x", vp->busy);
     --vp->busy;
     SynchroniseVirt(vp);
     ++vp->busy;
-    LogStringAndHexLine("vp->virt 0x", vp->virt);
     if (phys_needs_setting) {
-        // TODO: you probably copy from the buffer you created above.
-        memset((void*) vp->virt, 0, PAGE_SIZE);
+        memcpy((void*) vp->virt, buffer, PAGE_SIZE);
     }
     UnlockVas(vas);
 

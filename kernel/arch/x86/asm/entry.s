@@ -19,7 +19,7 @@ global boot_page_table1
 boot_page_directory: resb 4096
 boot_page_table1: resb 4096
 stack_bottom:
-resb 8 * 1024
+resb 16 * 1024
 stack_top:
 
 ; The start of the kernel itself - this will be called by the bootloader.

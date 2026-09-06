@@ -12,6 +12,7 @@ struct virt_arena {
 
 void InitVirtArena(struct virt_arena* va, size_t start, size_t bytes);
 void InitKernelVirtArena(void);
+struct virt_arena* GetKernelVirtArena(void);
 
 size_t AllocVirtEx(struct virt_arena* va, size_t bytes);
 size_t AllocVirt(size_t bytes);

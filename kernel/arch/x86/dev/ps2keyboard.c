@@ -61,7 +61,7 @@ static uint8_t TranslateCharacter(uint8_t scancode, bool shift) {
 }
 
 static void SendKeystrokeConsole(char c) {
-    LogCharacter(c);
+    LogPrintf("%c", c);
 }
 
 static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
@@ -211,9 +211,7 @@ void InitPs2Keyboard(void) {
 
     /* Read current scancode set. */
     int current_set = Ps2KeyboardGetScancodeSet();
-    LogString("[keyboard] current scancode set: ");
-    LogHex(current_set);
-    LogString("\n");
+    LogPrintf("[keyboard] current scancode set: %d\n", current_set);
 
     /* Make sure we're in set 1. */
     if (current_set != 1) {

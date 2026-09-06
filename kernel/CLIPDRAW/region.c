@@ -1011,15 +1011,7 @@ export bool CdIsRegionEmpty(struct region rgn) {
 
 int LogRect(struct rect r, void*, int rv, bool* cancel) {
     *cancel = false;
-    LogString("RECT: ");
-    LogInt(r.x);
-    LogString(", ");
-    LogInt(r.y);
-    LogString(" (W: ");
-    LogInt(r.w);
-    LogString(", H: ");
-    LogInt(r.h);
-    LogString(")\n");
+    LogPrintf("RECT: %d, %d (W: %d, H: %d)\n", r.x, r.y, r.w, r.h);
     return rv;
 }
 

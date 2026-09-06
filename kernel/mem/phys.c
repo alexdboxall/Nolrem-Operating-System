@@ -120,7 +120,6 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
         }
     }
 
-    LogInt(sys_total_pp * PAGE_SIZE / 1024);
-    LogString("KB\n");
+    LogPrintf("%dKB\n", sys_total_pp * PAGE_SIZE / 1024);
 }
 

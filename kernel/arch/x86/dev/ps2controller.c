@@ -81,9 +81,7 @@ static int Ps2ControllerRead(uint8_t* out) {
         return EIO;
     }
     *out = inb(0x60);
-    LogString("PS/2 read [");
-    LogHex(*out);
-    LogString("] ");
+    LogPrintf("PS/2 read [%x] ", *out);
     return 0;
 }
 

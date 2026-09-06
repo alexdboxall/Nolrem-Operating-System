@@ -28,16 +28,22 @@ SECTIONS
 		*(.cold_text)
 
 		. = ALIGN(4096);
+		__start_kuser = .;
 		*(.kuser)
 		*(.kuserrodata)
+		__end_kuser = .;
 
 		. = ALIGN(4096);
+		__start_pageable = .;
 		*(.pageable)
 		*(.pageablerodata)
+		__end_pageable = .;
 
 		. = ALIGN(4096);
+		__start_pageablekuser = .;
 		*(.pageablekuser)
 		*(.pageablekuserrodata)
+		__end_pageablekuser = .;
 	}
 	
 	.bss ALIGN(4096) : AT (ADDR (.bss) - 0xC0000000)

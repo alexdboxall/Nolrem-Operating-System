@@ -76,6 +76,33 @@ void ArchInitVas(struct vas* vas, bool first) {
         /* Set up recursive mapping. */
         (&boot_page_directory)[1023] = ((size_t) vas->arch_data) | PAGE_PRESENT | PAGE_WRITE;
         
+        extern char __start_kuser[];
+        extern char __end_kuser[];
+        extern char __start_pageablekuser[];
+        extern char __end_pageablekuser[];
+
+        size_t user_start_page = ((size_t) __start_kuser) / PAGE_SIZE;
+        size_t user_end_page = (((size_t) __end_kuser) + PAGE_SIZE - 1) / PAGE_SIZE;
+        size_t userpageable_start_page = ((size_t) __start_pageablekuser) / PAGE_SIZE;
+        size_t userpageable_end_page = (((size_t) __end_pageablekuser) + PAGE_SIZE - 1) / PAGE_SIZE;
+        
+        /* 
+         * For the user-accessible pages of the kernel, mark them as PAGE_USER,
+         * but we also must make them read-only for the user (the kernel code
+         * pages we don't *need* to mark as read-only, as the user can't get to
+         * those anyway).
+         */
+        for (size_t i = user_start_page; i < user_end_page; ++i) {
+            size_t* table = GetRecursiveTable(i / (PAGE_SIZE / sizeof(size_t)));
+            table[i % (PAGE_SIZE / sizeof(size_t))] |= PAGE_USER;
+            table[i % (PAGE_SIZE / sizeof(size_t))] &= ~PAGE_WRITE;
+        }
+        for (size_t i = userpageable_start_page; i < userpageable_end_page; ++i) {
+            size_t* table = GetRecursiveTable(i / (PAGE_SIZE / sizeof(size_t)));
+            table[i % (PAGE_SIZE / sizeof(size_t))] |= PAGE_USER;
+            table[i % (PAGE_SIZE / sizeof(size_t))] &= ~PAGE_WRITE;
+        }
+    
     } else {
         
     }
@@ -103,6 +130,23 @@ static size_t TranslateToEntry(struct virt_page* vp) {
     return phys | flags;
 }
 
+void ArchReadVirtDirtyAndAccessed(struct virt_page* vp) {
+    size_t virt_index = vp->virt / PAGE_SIZE;
+    size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
+    size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
+    
+    size_t* directory = GetRecursiveTable(1023);
+    if (!(directory[level1_index] & PAGE_PRESENT)) {
+        /* Can't be dirty or accessed if it doesn't exist. */
+        return;
+    }
+
+    size_t* table = GetRecursiveTable(level1_index);
+    size_t entry = table[level2_index];
+    vp->dirty = !!(entry & PAGE_DIRTY);
+    vp->accessed = !!(entry & PAGE_ACCESSED);
+}
+
 void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
     // TODO: do we need to check if this VAS is currently in? and if not, 
     //       temporarily map it in?
@@ -110,40 +154,27 @@ void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
 
     (void) vas;
 
-    LogString("ArchSyncVirt\n");
-
     size_t virt_index = vp->virt / PAGE_SIZE;
     size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
     size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
     
     size_t* directory = GetRecursiveTable(1023);
-    LogString("1\n");
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Time to map a new table. */
-            LogString("2\n");
-
         size_t phys = AllocPhys(true);
-            LogString("3\n");
-
         directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
         size_t* table = GetRecursiveTable(level1_index);
         Invalidate((size_t) table);
         memset(table, 0, PAGE_SIZE);
-    LogString("4\n");
 
         if (InKernelRange(vp)) {
             kernel_page_tables_phys[level1_index - ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t))] = phys;
         }
-            LogString("5\n");
-
     }
-    LogString("6\n");
 
     size_t* table = GetRecursiveTable(level1_index);
     table[level2_index] = TranslateToEntry(vp);
-    LogStringAndHexLine("7 0x", table[level2_index]);
 
     // TODO: only needed if current VAS
     Invalidate(vp->virt);
-    LogString("8\n");
 }

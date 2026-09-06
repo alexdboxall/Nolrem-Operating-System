@@ -150,7 +150,6 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitScheduler();
     InitVfs();
     InitNullDevice();
-
     InitVga();
 
     CreateInitialVas();
@@ -159,9 +158,6 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     LogStringAndHexLine("Got memory at 0x", (size_t) m);
     m[0] = 'A';
     LogString("It didn't crash?!\n");
-    while (true) {
-        ;
-    }
 
     struct file* f;
     int res = OpenFile("null:", O_WRONLY, 0, &f);

@@ -6,10 +6,9 @@
 void ArchInit(void) {
     x86InitGdt();
     x86InitIdt();
+    x86InitTss();
     x86InitPic();
     x86InitPit(25);
-    asm volatile ("sti");
-
     x86InitCmos();
     InitPs2();
 }

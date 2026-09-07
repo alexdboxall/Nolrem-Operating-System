@@ -406,6 +406,7 @@ extern void WmInitDesktopWindowSubsystem();
 
 void WmInit(void) {
     InitSpinlock(&winmgr_lock);
+    WmInitSystemMessageBox();
     WmInitDcCache();
     WmInitWindowClassSubsystem();
     WmInitDesktopWindowSubsystem();    

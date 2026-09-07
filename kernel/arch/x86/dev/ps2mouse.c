@@ -64,6 +64,7 @@ static bool Ps2MouseTryEnable5Button(void) {
 }
 
 static void Ps2MouseIrqHandler(struct x86_regs*) {
+    LogPrintf("GOT MOUSE IRQ\n");
     uint8_t status = inb(0x64);
     if ((status & 0x01) == 0 || (status & 0x20) == 0) {
         return;

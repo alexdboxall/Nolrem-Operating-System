@@ -16,6 +16,8 @@ void ArchInit(void);
 //      #define ARCH_USER_AREA_BASE
 //      #define ARCH_USER_AREA_LIMIT
 //      #define ARCH_KRNL_MAPPING_BASE
+//      #define ARCH_MAX_CPUS
+//      typedef ... platform_cpu_data_t 
 /*
 * Non-inclusive of ARCH_USER_AREA_LIMIT
 */
@@ -43,4 +45,20 @@ void ArchInitVas(struct vas* vas, bool first);
 void ArchSyncVirt(struct vas* vas, struct virt_page* vp);
 void ArchSwitchToVas(struct vas* vas);
 bool ArchTryHandleSpecialPageFault(size_t virt);
+
+/* must also clear them */
 void ArchReadVirtDirtyAndAccessed(struct virt_page* vp);
+
+size_t ArchLockToCpu(void);
+void ArchUnlockFromCpu(size_t rv);
+size_t ArchGetTemporaryPage(size_t phys);
+void ArchReleaseTemporaryPage(size_t virt);
+int ArchGetCpuNum(void);
+
+struct cpu_data;
+
+void ArchInitPlatformSpecificData(struct cpu_data* cpu);
+
+struct thread;
+void ArchSwitchThread(struct thread* old_thr, struct thread* new_thr);
+void ArchSetupNewThreadEntry(struct thread* thr, void(*entry)(void*), void*);

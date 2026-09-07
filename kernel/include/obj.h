@@ -14,6 +14,7 @@
 #define OBJTYPE_FILE            6
 #define OBJTYPE_MODULE          7
 #define OBJTYPE_USEROBJ         8
+#define OBJTYPE_MSGBOX          9
 
 struct obj_header {
     _Atomic uint8_t objtype;

@@ -11,6 +11,7 @@
 #include <dc.h>
 #include <vnode.h>
 #include <vfs.h>
+#include <cpu.h>
 #include <file.h>
 #include <module.h>
 #include <fcntl.h>
@@ -20,6 +21,7 @@
 #include <thread.h>
 #include <diskutil.h>
 #include <dev.h>
+#include <msgbox.h>
 
 typedef int rhandle_t;
 #define USED __attribute__((used))
@@ -65,62 +67,63 @@ void draw_test(struct graphics_driver* drv, uint8_t* pattern, int x, int y) {
     drv->pen_line(drv, x + 400, y, x, y, 0xFFFF0000, 2, pattern, 2, 2, true);
 }
 
-/* 
- * We want to be able to page out some of the very early bootstrap code.
- * So this is the part of the kernel that runs when discarding is permitted.
- */
 export _Noreturn void InitKernelResidentPortion(void) {
-    LogString("Ready!\n");
-
     extern void CdInit();
     extern void WmInit();
 
     CdInit();
     WmInit();
+  
+    WmMainloop();
+}
 
-    struct rect w1pos = (struct rect) {
-        .x = 75, .y = 75, .w = 300, .h = 350
-    };
-    struct rect w2pos = (struct rect) {
-        .x = 175, .y = 175, .w = 450, .h = 150
-    };
-
-    struct window* win = WmCreateWindow(WmGetDesktop(), NULL, w1pos, true);
-    struct window* win2 = WmCreateWindow(WmGetDesktop(), NULL, w2pos, true);
+void TestTask(void*) {
+    BeginNewThread();
     
-    WmCallWinProc(WmGetDesktop(), (struct msg) {
-        .type = WM_PAINT
-    });
-    WmCallWinProc(win, (struct msg) {
-        .type = WM_PAINT
-    });
-    WmCallWinProc(win2, (struct msg) {
-        .type = WM_PAINT
-    });
-             
+    LogPrintf("Running test task...!\n");
+    Schedule();
+    LogPrintf("Running test task... again!\n");
+    Schedule();
     while (true) {
-        //w1pos.y = (((w1pos.y - 75) + 1) % 35) + 75;
-        //w2pos.x = (((w2pos.x - 175) + 3) % 100) + 175;
-        //
-        //WmChangePosition(win2, w2pos, true);
-        asm ("hlt");
-        WmCallWinProc(WmGetDesktop(), (struct msg) {
-            .type = WM_PAINT
-        });
-        WmCallWinProc(win, (struct msg) {
-            .type = WM_PAINT
-        });
-        WmCallWinProc(win2, (struct msg) {
-            .type = WM_PAINT
-        });
+        LogPrintf("Ok, that's enough of the test task!\n");
+        Schedule();
     }
-    
-    (void) win;
-    (void) win2;
+}
 
-    while (true) {
-        ArchIdle();
-    }
+/* 
+ * We want to be able to page out some of the very early bootstrap code.
+ * So this is the part of the kernel that runs when discarding is permitted.
+ */
+export _Noreturn pageable void KernelTask(void*) {
+    asm ("sti");
+        LogString("Ready\n");
+        Schedule();
+        LogString("Ready3!\n");
+        (void) TestTask;
+        //CreateThread(GetKernelVas(), TestTask, NULL);
+        LogString("Added thread!\n");
+        Schedule();
+        LogString("Scheduled!\n");
+    InitMessageBox();
+    InitModule();
+    InitVnode();
+        LogString("Ready4!\n");
+        Schedule();
+    InitDiskUtil();
+    InitFile();
+    InitUserObjectType();
+        LogString("Ready5!\n");
+        Schedule();
+    InitVfs();
+        LogString("Ready6!\n");
+
+    //InitNullDevice();
+        LogString("Ready7!\n");
+
+    InitVga();
+    LogString("Ready!\n");
+
+    InitKernelResidentPortion();
 } 
 
 /* 
@@ -130,41 +133,23 @@ export _Noreturn void InitKernelResidentPortion(void) {
 export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitLog();
     InitBootstrapHeap();
+    InitCpuTable();
     InitKernelVirtArena();
     InitTimer();
     ArchInit();
     ArchCallGlobalConstructors();
 
     InitPhys(
-        (void*)((size_t) boot_info->ram_table + 0xC0000000), 
+        (void*)((size_t) boot_info->ram_table + ARCH_KRNL_MAPPING_BASE), 
         boot_info->num_ram_table_entries
     );
     InitVmm();
     InitSem();
-    InitModule();
-    InitVnode();
-    InitDiskUtil();
-    InitFile();
-    InitUserObjectType();
     InitThread();
-    InitScheduler();
-    InitVfs();
-    InitNullDevice();
-    InitVga();
-
     CreateInitialVas();
-
-    uint8_t* m = AllocAnonMemory(100, VP_WRITE);
-    LogStringAndHexLine("Got memory at 0x", (size_t) m);
-    m[0] = 'A';
-    LogString("It didn't crash?!\n");
-
-    struct file* f;
-    int res = OpenFile("null:", O_WRONLY, 0, &f);
-    char* buffer = "This is some text.";
-    struct transfer tr = CreateKernelTransfer(buffer, 12, 0, TRANSFER_WRITE);
-    res = WriteFile(f, &tr);
-    LogStringAndHexLine("The write call returned: ", res);
-
-    InitKernelResidentPortion();
+    InitScheduler(NULL);
+    KernelTask(NULL);
+    while (true) {
+        ;
+    }
 }

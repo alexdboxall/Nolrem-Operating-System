@@ -1,6 +1,8 @@
 
 #include <common.h>
 #include <log.h>
+#include <arch.h>
+#include <cpu.h>
 
 struct gdt_entry
 {
@@ -32,7 +34,7 @@ static struct gdt_entry CreateGdtEntry(size_t base, size_t limit, uint8_t access
 	};
 }
 
-static struct gdt_entry gdt[5];
+static struct gdt_entry gdt[6];
 static struct gdt_ptr gdtr;
 
 void x86LoadGdt(size_t gdtPtr) {
@@ -61,4 +63,9 @@ void x86InitGdt(void) {
 	gdtr.location = (size_t) &gdt;
 
 	x86LoadGdt((size_t) &gdtr);
+}
+
+uint16_t x86AddTssToGdt(struct tss* tss) {
+	gdt[5] = CreateGdtEntry((size_t) tss, sizeof(struct tss), 0x89, 0x0);
+	return 5 * 0x8;
 }

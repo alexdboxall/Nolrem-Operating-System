@@ -5,6 +5,7 @@
 #include <interrupt.h>
 #include <vmm.h>
 #include <syscall.h>
+#include <scheduler.h>
 
 #define ISR_SYSTEM_CALL 96
 #define ISR_PAGE_FAULT  14
@@ -29,9 +30,17 @@ void x86HandleInterrupt(struct x86_regs* r) {
 
     if (num == ISR_PAGE_FAULT) {
         size_t cr2 = GetCr2();
+        int reason = 0;
+        if (r->err_code & 1) reason |= PF_PRESENT;
+        if (r->err_code & 2) reason |= PF_WRITE;
+        if (r->err_code & 4) reason |= PF_USER;
+        if (r->err_code & 8) reason |= PF_FETCH;
+
         LogStringAndHexLine("Page fault: EIP 0x", r->eip);
         LogStringAndHexLine("            CR2 0x", cr2);
-        HandlePageFault(cr2);
+        LogStringAndHexLine("         REASON 0x", reason);
+
+        HandlePageFault(cr2, reason);
         return;
     }
 
@@ -47,4 +56,7 @@ void x86HandleInterrupt(struct x86_regs* r) {
         HandleInterrupt(num - PIC_IRQ_BASE, r);
         SendPicEoi(num);
     }
+
+    ProcessIrqPostMessage();    
 }
+

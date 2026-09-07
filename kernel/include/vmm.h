@@ -7,6 +7,11 @@
 #include <spinlock.h>
 #include <allocvirt.h>
 
+#define PF_PRESENT  1   /* protection violation, rather than a missing page */
+#define PF_WRITE    2   /* the access was a write */
+#define PF_USER     4   /* the access came from user mode */
+#define PF_FETCH    8   /* the access was an instruction fetch */
+ 
 struct file;
 struct mutex;
 
@@ -17,6 +22,7 @@ struct page_origin {
     size_t file_offset;
     struct mutex* mtx;
     size_t phys;
+    bool fixed;
 };
 
 struct vas_chain {
@@ -49,8 +55,8 @@ struct virt_page {
     uint8_t user     : 1;
     uint8_t accessed : 1;
     uint8_t dirty    : 1;
-    uint8_t busy     : 2;
     uint8_t executable : 1;
+    uint8_t busy;
 };
 
 struct phys_page {
@@ -63,17 +69,16 @@ struct phys_page {
     uint8_t allocated : 1;    
     uint8_t exists : 1;     /* there's actually RAM here */
     uint8_t dirty  : 1;     /* synced in critical section on eviction */
-    uint8_t excl   : 1;     /* exclusively held in critical section */
     uint8_t wired  : 1;     /* set to prevent swapping (doesn't load in an unload page on 0->1 though)*/
 };
 
 
-#define MAPPINGS_PER_LEVEL  1024
+#define MAPPINGS_PER_LEVEL  128
 
 struct vas {
     struct obj_header hdr;
     void* arch_data;
-    struct virt_page*** mappings;
+    struct virt_page**** mappings;
     struct mutex* lock;
     struct virt_arena* va;
 };
@@ -88,7 +93,10 @@ struct vas* CreateVas(void);
 void CreateInitialVas(void);
 
 void* AllocAnonMemory(size_t bytes, int flags);
-void HandlePageFault(size_t virt);
-struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base, size_t phys);
+void HandlePageFault(size_t virt, int reason);
+struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base, size_t phys, bool fixed);
 struct vas* GetKernelVas(void);
 struct vas* GetCurrentVas(void); 
+
+void CopyToPhysPage(size_t phys, void* data);
+void ZeroPhysPage(size_t phys);

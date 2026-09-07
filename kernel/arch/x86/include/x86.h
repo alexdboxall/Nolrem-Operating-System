@@ -3,10 +3,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+struct tss;
+
 void x86InitGdt(void);
 void x86InitIdt(void);
 void x86InitPic(void);
 void x86InitPit(int hertz);
+void x86InitTss(void);
+uint16_t x86AddTssToGdt(struct tss* tss);
 
 void x86InitCmos(void);
 uint8_t ReadCmos(uint8_t reg);

@@ -22,7 +22,8 @@ static void LogCharacter(char c) {
         ;
     }
     outb(PORT, c);
-    KernelDisplayLog(c);
+    (void) c;
+    //KernelDisplayLog(c);
 }
 
 static void LogInt(int i) {

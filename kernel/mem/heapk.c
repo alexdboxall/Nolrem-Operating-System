@@ -80,10 +80,13 @@ void* KernelHeapRequestMemory(size_t size) {
     if (retv != NULL) {
         return retv;
     }
+    LogPrintf("No more bootstrap heap available! AllocAnonMemory...\n");
     return AllocAnonMemory(size, VP_WRITE);
 }
 
 void InitBootstrapHeap(void) {
+    memset(bootstrap_heap, 0xEE, sizeof(bootstrap_heap));
     InitSpinlock(&heap_lock);
     InitHeapEx(&kernel_heap, KernelHeapRequestMemory);
+    LogPrintf("Bootstrap heap is at 0x%X\n", bootstrap_heap);
 }

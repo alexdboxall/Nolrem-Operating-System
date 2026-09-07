@@ -8,7 +8,7 @@ struct mutex;
 
 void InitSem(void);
 
-struct sem* CreateSem(int max);
+struct sem* CreateSem(int max, int inital);
 struct mutex* CreateMutex(void);
 
 int AcquireSem(struct sem* sem, int64_t timeout);

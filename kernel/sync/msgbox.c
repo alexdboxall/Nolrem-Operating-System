@@ -1,0 +1,157 @@
+#include <obj.h>
+#include <heap.h>
+#include <common.h>
+#include <sem.h>
+#include <errno.h>
+#include <thread.h>
+#include <scheduler.h>
+#include <string.h>
+#include <log.h>
+#include <msgbox.h>
+
+struct msgbox {
+    struct obj_header hdr;
+    uint8_t* data;
+    size_t message_size;
+    size_t max_count;
+    size_t start_idx;
+    size_t end_idx;
+    struct mutex* lock;
+    struct sem* empty_sem;
+    struct sem* filled_sem;
+    int count;
+};
+
+static void CleanupMsgbox(void* _mbox) {
+    struct msgbox* mbox = _mbox;
+    FreeHeap(mbox->data);
+    FreeHeap(mbox);
+}
+
+void InitMessageBox(void) {
+    RegisterObjectType(OBJTYPE_MSGBOX, CleanupMsgbox);
+}
+
+export struct msgbox* CreateMessageBox(size_t message_size, size_t max_count) {
+    struct msgbox* mbox = AllocHeap(sizeof(struct msgbox));
+    InitObject(mbox, OBJTYPE_MSGBOX);
+    mbox->message_size = message_size;
+    mbox->max_count = max_count;
+    mbox->data = AllocHeap(message_size * max_count);
+    mbox->start_idx = 0;
+    mbox->end_idx = 0;
+    mbox->lock = CreateMutex();
+    mbox->empty_sem = CreateSem(max_count, 0);
+    mbox->filled_sem = CreateSem(max_count, max_count);
+    mbox->count = 0;
+    return mbox;
+}
+
+export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) {
+    if (mbox == NULL || msg == NULL) {
+        return EINVAL;
+    }
+
+    LogPrintf("KePostMessage: ");
+    int res = AcquireSem(mbox->empty_sem, timeout);
+    if (res != 0) {
+        return res;
+    }
+
+    res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
+    if (res != 0) {
+        ReleaseSem(mbox->empty_sem);
+        return res;
+    }
+
+    memcpy(mbox->data + mbox->end_idx * mbox->message_size, msg, mbox->message_size);
+    mbox->end_idx = (mbox->end_idx + 1) % mbox->max_count;
+    mbox->count++;
+    ReleaseMutex(mbox->lock);
+    LogPrintf("KePostMessage: ");
+    ReleaseSem(mbox->filled_sem);
+    return 0;
+}
+
+static int GetMessageCommon(struct msgbox* mbox, void* msg, int64_t timeout, bool remove) {
+    if (mbox == NULL || msg == NULL) {
+        return EINVAL;
+    }
+
+    LogPrintf("GetMessageCommon: ");
+    int res = AcquireSem(mbox->filled_sem, timeout);
+    if (res != 0) {
+        return res;
+    }
+    LogPrintf("Wait, we got the semaphore...?\n");
+
+    res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
+    if (res != 0) {
+        ReleaseSem(mbox->filled_sem);
+        return res;
+    }
+
+    memcpy(msg, mbox->data + mbox->start_idx * mbox->message_size, mbox->message_size);
+    if (remove) {
+        mbox->start_idx = (mbox->start_idx + 1) % mbox->max_count;
+        mbox->count--;
+    }
+    ReleaseMutex(mbox->lock);
+    LogPrintf("GetMessageCommon: ");
+    if (remove) {
+        ReleaseSem(mbox->empty_sem);
+    } else {
+        ReleaseSem(mbox->filled_sem);
+    }
+    return 0;
+}
+
+export int KeGetMessage(struct msgbox* mbox, void* msg, int64_t timeout) {
+    return GetMessageCommon(mbox, msg, timeout, true);
+}
+
+export int KePeekMessage(struct msgbox* mbox, void* msg, int64_t timeout) {
+    return GetMessageCommon(mbox, msg, timeout, false);
+}
+
+export int KeTryReplaceOrAddMessage(struct msgbox* mbox, const void* compare_to,
+                             const void* replace_with, int64_t timeout) {
+    if (mbox == NULL || compare_to == NULL || replace_with == NULL) {
+        return EINVAL;
+    }
+
+    LogPrintf("KeTryReplaceOrAddMessage: ");
+    int res = AcquireSem(mbox->empty_sem, timeout);
+    if (res != 0) {
+        return res;
+    }
+    LogPrintf("Got the sem...\n");
+
+    res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
+    if (res != 0) {
+        ReleaseSem(mbox->empty_sem);
+        return res;
+    }
+    LogPrintf("Got the mutex...\n");
+
+    if (mbox->count != 0) {
+        size_t tail = (mbox->end_idx + mbox->max_count - 1) % mbox->max_count;
+        uint8_t* tail_ptr = mbox->data + tail * mbox->message_size;
+        if (memcmp(tail_ptr, compare_to, mbox->message_size) == 0) {
+            memcpy(tail_ptr, replace_with, mbox->message_size);
+            ReleaseMutex(mbox->lock);
+            LogPrintf("KeTryReplaceOrAddMessage: ");
+            ReleaseSem(mbox->empty_sem);
+            return 0;
+        }
+    }
+
+    memcpy(mbox->data + mbox->end_idx * mbox->message_size,
+           replace_with, mbox->message_size);
+    mbox->end_idx = (mbox->end_idx + 1) % mbox->max_count;
+    mbox->count++;
+    ReleaseMutex(mbox->lock);
+    LogPrintf("KeTryReplaceOrAddMessage: ");
+    ReleaseSem(mbox->filled_sem);
+    return 0;
+}

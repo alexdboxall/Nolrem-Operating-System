@@ -7,6 +7,7 @@
 #include <phys.h>
 #include <string.h>
 #include <arch.h>
+#include <panic.h>
 
 #define KRNL_TABLES_START   (ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t)))
 
@@ -30,6 +31,7 @@ extern size_t boot_page_table1;
 
 static size_t kernel_page_tables_phys[256] = {0};
 
+static size_t scratch_virt_region;
 
 static struct vas* kernel_vas;
 
@@ -51,11 +53,14 @@ bool ArchTryHandleSpecialPageFault(size_t virt) {
      * but has not yet been lazy loaded into this VAS.
      */
     size_t table_idx = virt / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t));
+    if (table_idx < KRNL_TABLES_START) {
+        return false;
+    }
     size_t* cr3 = GetRecursiveTable(1023);
     if (!(cr3[table_idx] & PAGE_PRESENT) 
-        && kernel_page_tables_phys[table_idx + KRNL_TABLES_START] != 0
+        && kernel_page_tables_phys[table_idx - KRNL_TABLES_START] != 0
     ) {
-        cr3[table_idx] = kernel_page_tables_phys[table_idx + KRNL_TABLES_START] | PAGE_PRESENT | PAGE_WRITE;
+        cr3[table_idx] = kernel_page_tables_phys[table_idx - KRNL_TABLES_START] | PAGE_PRESENT | PAGE_WRITE;
         Invalidate((size_t) GetRecursiveTable(table_idx));
         return true;
     }
@@ -65,6 +70,90 @@ bool ArchTryHandleSpecialPageFault(size_t virt) {
 
 void ArchSwitchToVas(struct vas* vas) {
     asm volatile ("mov %0, %%cr3" : : "r" (vas->arch_data));
+}
+
+static bool InKernelRange(size_t virt) {
+    return virt >= ARCH_KRNL_MAPPING_BASE;
+}
+
+static size_t TranslateToEntry(struct virt_page* vp) {
+    size_t phys = vp->phys & ~0xFFF;
+    size_t flags = 0;
+
+    
+    flags |= (vp->present && !vp->busy) ? PAGE_PRESENT : 0;
+    flags |= vp->write ? PAGE_WRITE : 0;
+    flags |= vp->user ? PAGE_USER : 0;
+    flags |= InKernelRange(vp->virt) ? PAGE_GLOBAL : 0;
+    
+    return phys | flags;
+}
+
+void ArchReadVirtDirtyAndAccessed(struct virt_page* vp) {
+    size_t virt_index = vp->virt / PAGE_SIZE;
+    size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
+    size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
+    
+    size_t* directory = GetRecursiveTable(1023);
+    if (!(directory[level1_index] & PAGE_PRESENT)) {
+        /* Can't be dirty or accessed if it doesn't exist. */
+        return;
+    }
+
+    size_t* table = GetRecursiveTable(level1_index);
+    size_t entry = table[level2_index];
+    vp->dirty = !!(entry & PAGE_DIRTY);
+    vp->accessed = !!(entry & PAGE_ACCESSED);
+    *table &= ~(PAGE_DIRTY | PAGE_ACCESSED);
+}
+
+static void SetPte(struct vas* vas, size_t virt, size_t entry) {
+    // TODO: do we need to check if this VAS is currently in? and if not, 
+    //       temporarily map it in?
+    // or does this only ever get called on the current vas?
+
+    if (vas != GetCurrentVas()){ 
+        LogString("SetPte called in non-current VAS!");
+        Panic(PANIC_INVALID_ARCH_OPERATION);
+    }
+
+    size_t virt_index = virt / PAGE_SIZE;
+    size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
+    size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
+    
+    size_t* directory = GetRecursiveTable(1023);
+    if (!(directory[level1_index] & PAGE_PRESENT)) {
+        /* Time to map a new table. */
+        size_t phys = AllocPhys(true);
+        directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
+        size_t* table = GetRecursiveTable(level1_index);
+        Invalidate((size_t) table);
+        memset(table, 0, PAGE_SIZE);
+
+        if (InKernelRange(virt)) {
+            kernel_page_tables_phys[level1_index - ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t))] = phys;
+        }
+    }
+
+    size_t* table = GetRecursiveTable(level1_index);
+    table[level2_index] = entry;
+
+    // TODO: only needed if current VAS
+    Invalidate(virt);
+}
+
+void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
+    SetPte(vas, vp->virt, TranslateToEntry(vp));
+}
+
+size_t ArchGetTemporaryPage(size_t phys) {
+    size_t cpu_num = ArchGetCpuNum();
+    SetPte(GetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
+    return scratch_virt_region + cpu_num * PAGE_SIZE;
+}
+
+void ArchReleaseTemporaryPage(size_t virt) {
+    SetPte(GetCurrentVas(), virt, 0);
 }
 
 void ArchInitVas(struct vas* vas, bool first) {
@@ -102,6 +191,11 @@ void ArchInitVas(struct vas* vas, bool first) {
             table[i % (PAGE_SIZE / sizeof(size_t))] |= PAGE_USER;
             table[i % (PAGE_SIZE / sizeof(size_t))] &= ~PAGE_WRITE;
         }
+
+        scratch_virt_region = AllocVirt(PAGE_SIZE * ARCH_MAX_CPUS);
+        for (size_t i = 0; i < (size_t) ARCH_MAX_CPUS; ++i) {
+            SetPte(vas, scratch_virt_region + i * PAGE_SIZE, 0);
+        }
     
     } else {
         
@@ -111,70 +205,4 @@ void ArchInitVas(struct vas* vas, bool first) {
     if (first) {
         ArchSwitchToVas(vas);
     }
-}
-
-static bool InKernelRange(struct virt_page* vp) {
-    return vp->virt >= ARCH_KRNL_MAPPING_BASE;
-}
-
-static size_t TranslateToEntry(struct virt_page* vp) {
-    size_t phys = vp->phys & ~0xFFF;
-    size_t flags = 0;
-
-    
-    flags |= (vp->present && !vp->busy) ? PAGE_PRESENT : 0;
-    flags |= vp->write ? PAGE_WRITE : 0;
-    flags |= vp->user ? PAGE_USER : 0;
-    flags |= InKernelRange(vp) ? PAGE_GLOBAL : 0;
-    
-    return phys | flags;
-}
-
-void ArchReadVirtDirtyAndAccessed(struct virt_page* vp) {
-    size_t virt_index = vp->virt / PAGE_SIZE;
-    size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
-    size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
-    
-    size_t* directory = GetRecursiveTable(1023);
-    if (!(directory[level1_index] & PAGE_PRESENT)) {
-        /* Can't be dirty or accessed if it doesn't exist. */
-        return;
-    }
-
-    size_t* table = GetRecursiveTable(level1_index);
-    size_t entry = table[level2_index];
-    vp->dirty = !!(entry & PAGE_DIRTY);
-    vp->accessed = !!(entry & PAGE_ACCESSED);
-}
-
-void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
-    // TODO: do we need to check if this VAS is currently in? and if not, 
-    //       temporarily map it in?
-    // or does this only ever get called on the current vas?
-
-    (void) vas;
-
-    size_t virt_index = vp->virt / PAGE_SIZE;
-    size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
-    size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
-    
-    size_t* directory = GetRecursiveTable(1023);
-    if (!(directory[level1_index] & PAGE_PRESENT)) {
-        /* Time to map a new table. */
-        size_t phys = AllocPhys(true);
-        directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
-        size_t* table = GetRecursiveTable(level1_index);
-        Invalidate((size_t) table);
-        memset(table, 0, PAGE_SIZE);
-
-        if (InKernelRange(vp)) {
-            kernel_page_tables_phys[level1_index - ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t))] = phys;
-        }
-    }
-
-    size_t* table = GetRecursiveTable(level1_index);
-    table[level2_index] = TranslateToEntry(vp);
-
-    // TODO: only needed if current VAS
-    Invalidate(vp->virt);
 }

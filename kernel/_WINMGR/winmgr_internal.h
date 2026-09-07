@@ -57,3 +57,7 @@ bool WmIsPointInRect(int x, int y, struct rect r);
 struct point WmGetMousePositionGlobal(void);
 struct rect WmGetGlobalPosition(struct window* win, bool lock);
 void WmRaiseToTop(struct window* win, bool lock);
+_Noreturn void WmMainloop(void);
+struct msgbox* WmGetSystemMessageBox(void);
+void WmInitSystemMessageBox(void);
+extern bool wm_mainloop_started;

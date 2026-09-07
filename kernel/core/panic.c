@@ -11,6 +11,7 @@ char* panic_msgs[] = {
     "Out of memory",
     "Invalid arch operation",
     "Idle thread has blocked",
+    "Fuck me"
 };
 
 _Noreturn void Panic(int panic_reason) {

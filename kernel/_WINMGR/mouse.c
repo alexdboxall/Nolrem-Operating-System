@@ -32,6 +32,7 @@ void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, in
     bool moved = new_mx != mouse_x || new_my != mouse_y;
     BoundMouse(&new_mx, &new_my, &mouse_bounds);
 
+    LogPrintf("CLICK BITS %d\n", click_bits);
     if (moved) {
         CdRemoveMouse(mouse_x, mouse_y);
         mouse_x = new_mx;

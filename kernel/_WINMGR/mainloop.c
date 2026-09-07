@@ -98,8 +98,6 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     prev_mouse_buttons = mouse_buttons;
     mouse_buttons = click_bits;
 
-
-
     // Mouse down
     if ((mouse_buttons & MOUSE_BUTTON_LEFT) && !(prev_mouse_buttons & MOUSE_BUTTON_LEFT)) {
         struct window* win = WmGetToplevelAtPoint(mouse_x, mouse_y, true);
@@ -116,6 +114,7 @@ static bool HandleMouse(int mx, int my, int click_bits) {
             WmStopDraggingWindow();
             retv = true;
         }
+        LogPrintf("MOUSE UP RECEIVED!\n");
     }
 
     prev_mouse_pt = mouse_pt;

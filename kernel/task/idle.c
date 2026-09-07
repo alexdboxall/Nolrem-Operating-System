@@ -6,12 +6,11 @@
 #include <thread.h>
 
 export void IdleTask(void*) {
+    LogPrintf("IdleTask\n");
+    BeginNewThread();
     SetThreadPriority(GetCurrentThread(), PRIORITY_IDLE);
     
     while (true) {
-        LogPrintf("Idle task is running...\n");
-        ArchIdle();
-
         /* As we don't yet have a way to pre-empt, manually switch. */
         Schedule();
     }

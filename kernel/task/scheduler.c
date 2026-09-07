@@ -34,13 +34,33 @@ export void AcquireScheduler(void) {
     ReleaseSpinlock(&sched_lock);
 }
 
+void SwitchToThread(struct thread* thr);
+
+static inline bool are_interrupts_enabled()
+{
+    unsigned long flags;
+    asm volatile ( "pushf\n\t"
+                   "pop %0"
+                   : "=g"(flags) );
+    return flags & (1 << 9);
+}
+
+
 export void ReleaseScheduler(void) {
+    if (are_interrupts_enabled()) {
+        Panic(PANIC_FUCK_ME);
+    }
     AcquireSpinlock(&sched_lock);
     bool zero = (--sched_prevent_count) == 0;
-    ReleaseSpinlock(&sched_lock);
-    asm ("sti");
     if (zero && sched_postponed) {
-        Schedule();
+        sched_postponed = false;
+        struct thread* thr = sched_postponed_thr;
+        sched_postponed_thr = NULL;
+        SwitchToThread(thr);
+    }
+    ReleaseSpinlock(&sched_lock);
+    if (zero) {
+        asm ("sti");
     }
 }
 
@@ -53,13 +73,28 @@ export void ProcessIrqPostMessage(void) {
     if (has_defer_msg) {
         has_defer_msg = false;
         extern struct msgbox* WmGetSystemMessageBox(void);
+        LogPrintf("Handling deferred message...\n");
+
+        sched_prevent_count++;
         KePostMessage(WmGetSystemMessageBox(), &defer_msg, -1);
+        sched_prevent_count--;
+        if (sched_prevent_count == 0 && sched_postponed) {
+            sched_postponed = false;
+            struct thread* thr = sched_postponed_thr;
+            sched_postponed_thr = NULL;
+            SwitchToThread(thr);
+        }
     }
 }
 
 static struct thread* FindNextThread(void) {
-    while (ready_list_head == NULL) {
+    /*while (ready_list_head == NULL) {
+        ReleaseScheduler();
         ArchIdle();
+        AcquireScheduler();
+    }*/
+    if (ready_list_head == NULL) {
+        Panic(PANIC_IDLE_TASK_HAS_BLOCKED);
     }
     struct thread* thr = ready_list_head;
     ready_list_head = ready_list_head->next_ready;
@@ -88,7 +123,12 @@ static void SetupInitialThread(void) {
 }
 
 void BeginNewThread(void) {
+    LogPrintf("lalala\n");
+    bool zero = sched_prevent_count == 0;
     ReleaseSpinlock(&sched_lock);
+    if (zero) {
+        asm ("sti");
+    }
 }
 
 void SwitchToThread(struct thread* thr) {
@@ -168,20 +208,9 @@ void UnblockThread(struct thread* thr, int retv) {
 }
 
 export void Schedule(void) {
-    asm ("cli");
-    AcquireSpinlock(&sched_lock);
-    if (sched_prevent_count != 0) {
-        sched_postponed = true;
-    } else {
-        sched_postponed = false;
-        sched_postponed_thr = NULL;
-        struct thread* thr = sched_postponed_thr;
-        SwitchToThread(thr);
-    }
-    ReleaseSpinlock(&sched_lock);
-    if (sched_prevent_count == 0) {
-        asm ("sti");
-    }
+    AcquireScheduler();
+    sched_postponed = true;
+    ReleaseScheduler();
 }
 
 void InitScheduler(void(*entry)(void*)) {
@@ -189,6 +218,7 @@ void InitScheduler(void(*entry)(void*)) {
     InitSpinlock(&sched_lock);
     LogPrintf("About to create kernel thread...\n");
     struct thread* krnl_thr = CreateThread(GetKernelVas(), entry, NULL);
+    CreateThread(GetKernelVas(), IdleTask, NULL);
     LogPrintf("About to create idle thread...\n");
     (void) krnl_thr;
     LogPrintf("About to switch to kernel thread...\n");

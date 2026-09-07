@@ -70,6 +70,13 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
     ReleaseMutex(mbox->lock);
     LogPrintf("KePostMessage: ");
     ReleaseSem(mbox->filled_sem);
+    
+    extern void PrintSemCount(struct sem* sem);
+    LogPrintf("\n!!! ");
+    PrintSemCount(mbox->empty_sem);
+    LogPrintf(" VERSUS ");
+    PrintSemCount(mbox->filled_sem);
+    LogPrintf("\n");
     return 0;
 }
 
@@ -103,6 +110,13 @@ static int GetMessageCommon(struct msgbox* mbox, void* msg, int64_t timeout, boo
     } else {
         ReleaseSem(mbox->filled_sem);
     }
+
+    extern void PrintSemCount(struct sem* sem);
+    LogPrintf("\n::: ");
+    PrintSemCount(mbox->empty_sem);
+    LogPrintf(" VERSUS ");
+    PrintSemCount(mbox->filled_sem);
+    LogPrintf("\n");
     return 0;
 }
 

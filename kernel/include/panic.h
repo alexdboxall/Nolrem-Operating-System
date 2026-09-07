@@ -9,6 +9,7 @@ enum panic_codes {
         PANIC_OUT_OF_MEMORY,
         PANIC_INVALID_ARCH_OPERATION,
         PANIC_IDLE_TASK_HAS_BLOCKED,
+        PANIC_FUCK_ME
 };
 
 _Noreturn void Panic(int panic_reason);

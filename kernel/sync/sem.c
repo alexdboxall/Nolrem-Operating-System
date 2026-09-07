@@ -28,6 +28,10 @@ void InitSem(void) {
     RegisterObjectType(OBJTYPE_SEM, CleanupSem);
 }
 
+export void PrintSemCount(struct sem* sem) {
+    LogPrintf("%d", sem->count);
+}
+
 export struct sem* CreateSem(int max, int inital) {
     struct sem* sem = AllocHeap(sizeof(struct sem));
     InitObject(sem, OBJTYPE_SEM);
@@ -76,6 +80,7 @@ export int AcquireSem(struct sem* sem, int64_t timeout) {
         if (sem->waiting_list_start == NULL) {
             sem->waiting_list_start = curr_thr;
         }
+        curr_thr->next_waiting_sem = NULL;
 
         // TODO: add to sleep queue if needed
         

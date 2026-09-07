@@ -48,9 +48,6 @@ static void DrawInvFrame(struct rect pos) {
 
 // Needs ref count already added from WmGetToplevelAtPoint.
 static void WmStartDraggingWindow(struct window* win) {
-    // the mouse IRQ ought not to be doing this - should be done on a msg
-    // thread. probably need to send a message to the desktop? and it can
-    // process this
     drag_mouse_start_x = mouse_x;
     drag_mouse_start_y = mouse_y;
     drag_win_og_bounds = win->local_client_bound;
@@ -61,9 +58,6 @@ static void WmStartDraggingWindow(struct window* win) {
 }
 
 static void WmStopDraggingWindow(void) {
-    // the mouse IRQ ought not to be doing this - should be done on a msg
-    // thread. probably need to send a message to the desktop? and it can
-    // process this
     if (dragging_win != NULL) {
         struct rect r = dragging_win->local_win_bound;
         r.x += mouse_x - drag_mouse_start_x;
@@ -82,6 +76,7 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     bool moved = prev_mouse_pt.x != mouse_x || prev_mouse_pt.y != mouse_y;
 
     if (moved) {
+        CdRemoveMouse(prev_mouse_pt.x, prev_mouse_pt.y);
         if (dragging_win) {
             struct rect r = dragging_win->local_win_bound;
             r.x += prev_mouse_pt.x - drag_mouse_start_x;
@@ -93,6 +88,7 @@ static bool HandleMouse(int mx, int my, int click_bits) {
             r.y += mouse_y - drag_mouse_start_y;
             DrawInvFrame(r);
         }
+        CdDrawMouse(mouse_x, mouse_y);
     }
 
     prev_mouse_buttons = mouse_buttons;
@@ -102,6 +98,8 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     if ((mouse_buttons & MOUSE_BUTTON_LEFT) && !(prev_mouse_buttons & MOUSE_BUTTON_LEFT)) {
         struct window* win = WmGetToplevelAtPoint(mouse_x, mouse_y, true);
         if (win != NULL) {
+            // TODO: make this something that involves sending a message to the window
+            //       so that it can properly paint itself at toplevel before being dragged
             WmStartDraggingWindow(win);
         }
     }
@@ -114,7 +112,6 @@ static bool HandleMouse(int mx, int my, int click_bits) {
             WmStopDraggingWindow();
             retv = true;
         }
-        LogPrintf("MOUSE UP RECEIVED!\n");
     }
 
     prev_mouse_pt = mouse_pt;
@@ -125,16 +122,19 @@ _Noreturn void WmMainloop(void) {
     struct msg msg;
     wm_mainloop_started = true;
 
-
     struct rect w1pos = (struct rect) {
         .x = 75, .y = 75, .w = 300, .h = 350
     };
     struct rect w2pos = (struct rect) {
         .x = 175, .y = 175, .w = 450, .h = 150
     };
+    struct rect w3pos = (struct rect) {
+        .x = 50, .y = 50, .w = 50, .h = 50
+    };
 
     struct window* win = WmCreateWindow(WmGetDesktop(), NULL, w1pos, true);
     struct window* win2 = WmCreateWindow(WmGetDesktop(), NULL, w2pos, true);
+    struct window* win3 = WmCreateWindow(win2, NULL, w3pos, true);
     
     WmCallWinProc(WmGetDesktop(), (struct msg) {
         .type = WM_PAINT
@@ -145,6 +145,10 @@ _Noreturn void WmMainloop(void) {
     WmCallWinProc(win2, (struct msg) {
         .type = WM_PAINT
     });
+    (void) win3;
+    /*WmCallWinProc(win3, (struct msg) {
+        .type = WM_PAINT
+    });*/
            
     while (true) {
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
@@ -161,7 +165,11 @@ _Noreturn void WmMainloop(void) {
                 WmCallWinProc(win2, (struct msg) {
                     .type = WM_PAINT
                 });
+                WmCallWinProc(win3, (struct msg) {
+                    .type = WM_PAINT
+                });
             }
+            
             break;
         }
     }

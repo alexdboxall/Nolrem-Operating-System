@@ -24,20 +24,15 @@ export struct point WmGetMousePositionGlobal(void) {
     return (struct point) {.x = mouse_x, .y = mouse_y};
 }
 
-static struct msg recent_mouse_message = {0};
-
 void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, int scrollx, int scrolly) {
     int new_mx = mouse_x + delta_x;
     int new_my = mouse_y + delta_y;
     bool moved = new_mx != mouse_x || new_my != mouse_y;
     BoundMouse(&new_mx, &new_my, &mouse_bounds);
 
-    LogPrintf("CLICK BITS %d\n", click_bits);
     if (moved) {
-        CdRemoveMouse(mouse_x, mouse_y);
         mouse_x = new_mx;
         mouse_y = new_my;
-        CdDrawMouse(mouse_x, mouse_y);
     }
 
     if (wm_mainloop_started) {
@@ -47,8 +42,6 @@ void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, in
             .rect_arg.x = mouse_x,
             .rect_arg.y = mouse_y
         };
-        (void) new_mouse_message;
-        (void) recent_mouse_message;
 
         PostMessageIrq(new_mouse_message);
     }

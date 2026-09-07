@@ -126,6 +126,40 @@ static bool WmInvalidateExposedRegionOnWindow(struct window* win, struct region*
     }
 }
 
+/* Applies to `win` and its whole subtree. Children first, since they're in front. */
+static bool WmApplyExposureToSubtree(struct window* win, struct region* exposed_rgn, bool actually_cover) {
+    struct region claimed = CdIntersectRegion(win->win_rgn, *exposed_rgn);
+    if (CdIsRegionEmpty(claimed)) {
+        CdFreeRegion(claimed);
+        return false;
+    }
+
+    /* The whole of `claimed` is opaquely accounted for by this subtree, so nothing
+       further back may have it. Do this now, before the children eat into it. */
+    CdSubtractRegionInPlace(exposed_rgn, claimed);
+
+    struct region remaining = CdCopyRegion(claimed);
+    for (struct window* kiddo = win->first_child; kiddo != NULL; kiddo = kiddo->next_sibling) {
+        if (WmApplyExposureToSubtree(kiddo, &remaining, actually_cover)) {
+            break;
+        }
+    }
+
+    /* Whatever the children didn't want belongs to us. */
+    if (!CdIsRegionEmpty(remaining)) {
+        if (actually_cover) {
+            CdSubtractRegionInPlace(&win->vis_rgn, remaining);
+        } else {
+            CdUnionRegionInPlace(&win->vis_rgn, remaining);
+        }
+        CdUnionRegionInPlace(&win->dirty_rgn, remaining);
+    }
+
+    CdFreeRegion(remaining);
+    CdFreeRegion(claimed);
+    return CdIsRegionEmpty(*exposed_rgn);
+}
+
 static void WmInvalidateExposedRegion(struct window* win, struct region* exposed_rgn, bool actually_cover) {
     if (!actually_cover) {
         /* Anything still covered by a sibling in front of win stays hidden no matter
@@ -143,7 +177,7 @@ static void WmInvalidateExposedRegion(struct window* win, struct region* exposed
 
     struct window* bro = win->next_sibling;
     while (bro) {
-        bool now_empty = WmInvalidateExposedRegionOnWindow(bro, exposed_rgn, actually_cover);
+        bool now_empty = WmApplyExposureToSubtree(bro, exposed_rgn, actually_cover);
         if (now_empty) {
             return;
         }
@@ -177,7 +211,11 @@ static void SetInternalWindowBounds(struct window* win, struct rect local_r) {
     );
 }
 
-static void ClipVisibilityAgainstEarlierSiblings(struct window* win) {
+static void ClipOurVisibility(struct window* win) {
+    /* 
+     * Clip against earlier siblings. 
+     * Do this if `win` is a toplevel, or WS_CLIPSIBLINGS set.
+     */
     struct window* big_bro = win->parent == NULL ? NULL : win->parent->first_child;
     while (big_bro != NULL && big_bro != win) {
         CdSubtractRegionInPlace(&win->vis_rgn, big_bro->win_rgn);
@@ -185,6 +223,19 @@ static void ClipVisibilityAgainstEarlierSiblings(struct window* win) {
             break;
         }
         big_bro = big_bro->next_sibling;
+    }
+
+    /* 
+     * Clip against children.
+     * Do this if WS_CLIPCHILDREN is set.
+     */
+    struct window* kiddo = win->first_child;
+    while (kiddo != NULL) {
+        CdSubtractRegionInPlace(&win->vis_rgn, kiddo->win_rgn);
+        if (CdIsRegionEmpty(win->vis_rgn)) {
+            break;
+        }
+        kiddo = kiddo->next_sibling;
     }
 }
 
@@ -215,10 +266,20 @@ export void WmChangePosition(struct window* win, struct rect local_r, bool lock)
     CdFreeRegion(win->dirty_rgn);
     win->dirty_rgn = CdCopyRegion(win->win_rgn);
 
+    /* 
+     * Tell all the children that their parents moved and to update their
+     * regions also.
+     */
+    struct window* kiddo = win->first_child;
+    while (kiddo) {
+        WmChangePosition(kiddo, kiddo->local_win_bound, false);
+        kiddo = kiddo->next_sibling;
+    }
+
     /* Figure out our own visible region. */
     CdFreeRegion(win->vis_rgn);
     win->vis_rgn = CdCopyRegion(win->win_rgn);
-    ClipVisibilityAgainstEarlierSiblings(win);
+    ClipOurVisibility(win);
 
     if (lock) WmUnlock();
 }
@@ -260,7 +321,7 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
     CdFreeRegion(covered_rgn);
     win->dirty_rgn = CdCopyRegion(win->win_rgn);
     win->vis_rgn = CdCopyRegion(win->win_rgn);
-    ClipVisibilityAgainstEarlierSiblings(win);
+    ClipOurVisibility(win);
 
     if (lock) WmUnlock();
 

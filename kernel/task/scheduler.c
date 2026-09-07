@@ -73,8 +73,6 @@ export void ProcessIrqPostMessage(void) {
     if (has_defer_msg) {
         has_defer_msg = false;
         extern struct msgbox* WmGetSystemMessageBox(void);
-        LogPrintf("Handling deferred message...\n");
-
         sched_prevent_count++;
         KePostMessage(WmGetSystemMessageBox(), &defer_msg, -1);
         sched_prevent_count--;
@@ -123,7 +121,6 @@ static void SetupInitialThread(void) {
 }
 
 void BeginNewThread(void) {
-    LogPrintf("lalala\n");
     bool zero = sched_prevent_count == 0;
     ReleaseSpinlock(&sched_lock);
     if (zero) {
@@ -132,18 +129,15 @@ void BeginNewThread(void) {
 }
 
 void SwitchToThread(struct thread* thr) {
-    LogPrintf("Switching to thread! (0x%X)\n", thr);
     if (!sched_init) {
         return;
     }
-    LogPrintf("Current thread is 0x%X\n", current_thread);
     if (current_thread->state == THREAD_STATE_RUNNING) {
         if (ready_list_head == NULL) {
             LogPrintf("There's nothing else to run!\n");
             /* Nothing else is available to run, so keep running. */
             return;
         }
-        LogPrintf("About to add the current thread to the back of the ready queue?\n");
         AddToBackOfReadyQueue(current_thread);
     }
     LogPrintf("Current thread is in state: 0x%X -> %d\n", current_thread, current_thread->state);

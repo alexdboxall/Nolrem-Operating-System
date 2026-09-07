@@ -52,13 +52,7 @@ export int AcquireSem(struct sem* sem, int64_t timeout) {
         return 0;
     }
 
-    LogPrintf("(");
     AcquireScheduler();
-    LogPrintf(")");
-
-    if (sem->max != 1) {
-        LogPrintf("AcquireSem: %d, %d\n", sem->count, sem->max);
-    }
 
     struct thread* curr_thr = GetCurrentThread();
     if (sem->count < sem->max) {
@@ -84,7 +78,6 @@ export int AcquireSem(struct sem* sem, int64_t timeout) {
 
         // TODO: add to sleep queue if needed
         
-        LogPrintf("BlockThread() due to sem acquire fail...\n");
         BlockThread();
     }
 
@@ -103,10 +96,6 @@ export int ReleaseSem(struct sem* sem) {
     }
 
     AcquireScheduler();
-
-    if (sem->max != 1) {
-        LogPrintf("ReleaseSem: %d, %d\n", sem->count, sem->max);
-    }
 
     if (sem->count == sem->max) {
         if (sem->waiting_list_start == NULL) {

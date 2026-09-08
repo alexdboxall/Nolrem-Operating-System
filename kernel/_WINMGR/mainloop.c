@@ -6,6 +6,8 @@
 #include <msgbox.h>
 #include <spinlock.h>
 #include <arch.h>
+#include <vmm.h>
+#include <thread.h>
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
@@ -118,7 +120,43 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     return retv;
 }
 
+struct window* win;
+struct window* win2;
+struct window* win3;
+
+static void ProcessMessage(struct msg msg) {
+    switch (msg.type) {
+    case SYSMSG_LOWMEMORY:
+        LogPrintf("Low memory...\n");
+        DiscardPage();
+        LogPrintf("Discarded a page...?\n");
+        break;
+
+    case SYSMSG_MOUSEEVENT:
+        bool up = HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
+        LogPrintf("Handling mouse event...\n");
+        LogPrintf("Alloc gave 0x%X", AllocHeap(4096));
+        if (up) {
+            WmCallWinProc(WmGetDesktop(), (struct msg) {
+                .type = WM_PAINT
+            });
+            WmCallWinProc(win, (struct msg) {
+                .type = WM_PAINT
+            });
+            WmCallWinProc(win2, (struct msg) {
+                .type = WM_PAINT
+            });
+            WmCallWinProc(win3, (struct msg) {
+                .type = WM_PAINT
+            });
+        }
+        break;
+    }
+}
+
 _Noreturn void WmMainloop(void) {
+    SetThreadPriority(GetCurrentThread(), PRIORITY_MAX);
+
     struct msg msg;
     wm_mainloop_started = true;
 
@@ -132,9 +170,9 @@ _Noreturn void WmMainloop(void) {
         .x = 50, .y = 50, .w = 50, .h = 50
     };
 
-    struct window* win = WmCreateWindow(WmGetDesktop(), NULL, w1pos, true);
-    struct window* win2 = WmCreateWindow(WmGetDesktop(), NULL, w2pos, true);
-    struct window* win3 = WmCreateWindow(win2, NULL, w3pos, true);
+    win = WmCreateWindow(WmGetDesktop(), NULL, w1pos, true);
+    win2 = WmCreateWindow(WmGetDesktop(), NULL, w2pos, true);
+    win3 = WmCreateWindow(win2, NULL, w3pos, true);
     
     WmCallWinProc(WmGetDesktop(), (struct msg) {
         .type = WM_PAINT
@@ -152,25 +190,6 @@ _Noreturn void WmMainloop(void) {
            
     while (true) {
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
-        switch (msg.type) {
-        case WM_MOUSEEVENT:
-            bool up = HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
-            if (up) {
-                WmCallWinProc(WmGetDesktop(), (struct msg) {
-                    .type = WM_PAINT
-                });
-                WmCallWinProc(win, (struct msg) {
-                    .type = WM_PAINT
-                });
-                WmCallWinProc(win2, (struct msg) {
-                    .type = WM_PAINT
-                });
-                WmCallWinProc(win3, (struct msg) {
-                    .type = WM_PAINT
-                });
-            }
-            
-            break;
-        }
+        ProcessMessage(msg);
     }
 }

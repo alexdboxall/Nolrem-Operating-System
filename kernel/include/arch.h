@@ -51,6 +51,7 @@ void ArchReadVirtDirtyAndAccessed(struct virt_page* vp);
 
 size_t ArchLockToCpu(void);
 void ArchUnlockFromCpu(size_t rv);
+void ArchMapKernelPageDirectly(size_t phys, size_t virt);
 size_t ArchGetTemporaryPage(size_t phys);
 void ArchReleaseTemporaryPage(size_t virt);
 int ArchGetCpuNum(void);

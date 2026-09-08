@@ -151,7 +151,7 @@ static userexec struct block* RequestBlock(struct heap* heap, size_t total_size)
     total_size += MIN_REQ_SIZE * 2;
 
     total_size = (total_size + 1023) & ~1023;
-    struct block* block = (struct block*) heap->get_memory(total_size);
+    struct block* block = (struct block*) heap->get_memory(&total_size);
     if (block == NULL) {
         return NULL;
     }
@@ -436,7 +436,7 @@ export userexec size_t GetAllocationSizeEx(struct heap* heap, void* ptr) {
     return GetSize(SubVoidPtr(ptr, METADATA_LEADING)) - METADATA_TOTAL;
 }
 
-export userexec void InitHeapEx(struct heap* heap, void*(*get_memory)(size_t)) {
+export userexec void InitHeapEx(struct heap* heap, void*(*get_memory)(size_t*)) {
     InitSpinlock(&heap->lock);
     heap->get_memory = get_memory;
     memset(heap->_head_block, 0, sizeof(heap->_head_block));

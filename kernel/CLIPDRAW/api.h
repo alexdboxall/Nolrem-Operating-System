@@ -16,23 +16,6 @@ struct uregion;
 
 typedef struct uregion* region_t;
 
-struct point {
-    int x;
-    int y;
-};
-
-struct size {
-    int width;
-    int height;
-};
-
-struct rect {
-    int x;
-    int y;
-    int w;
-    int h;
-};
-
 struct dc;
 struct pen;
 struct brush;
@@ -357,23 +340,10 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_MOUSEMOVE    3
 #define WM_MOUSEDOWN    4
 #define WM_MOUSEUP      5
-#define WM_MOUSEEVENT   6
+
 
 #define CS_ALLCLIENT    1
 
 struct window;
-
-struct msg {
-    uint16_t type;
-    int i_arg;
-    union {
-        void* p_arg;
-        struct rect rect_arg;
-        struct {
-            struct point point_arg1;
-            struct point point_arg2;
-        };
-    };
-};
 
 typedef int (*winproc_t)(struct window* self, struct msg msg);

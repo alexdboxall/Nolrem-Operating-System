@@ -7,7 +7,10 @@ struct boot_memory_entry;
 
 void InitPhys(struct boot_memory_entry* table, size_t count);
 
+struct phys_page;
+
 size_t AllocPhys(bool pin);
+void FreeDiscardedPhys(struct phys_page* pp);
 
 struct phys_page* GetPhysPage(size_t addr);
 size_t GetPhysAddr(struct phys_page* pp);

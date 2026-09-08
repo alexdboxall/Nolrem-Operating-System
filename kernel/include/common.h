@@ -53,3 +53,36 @@ void* KeReallocHeap(void* ptr, size_t new_size);
 #define ReallocHeap(ptr, new_size) KeReallocHeap(ptr, new_size)
 
 #endif
+
+struct point {
+    int x;
+    int y;
+};
+
+struct size {
+    int width;
+    int height;
+};
+
+struct rect {
+    int x;
+    int y;
+    int w;
+    int h;
+};
+
+#define SYSMSG_MOUSEEVENT  0
+#define SYSMSG_LOWMEMORY   1
+
+struct msg {
+    uint16_t type;
+    int i_arg;
+    union {
+        void* p_arg;
+        struct rect rect_arg;
+        struct {
+            struct point point_arg1;
+            struct point point_arg2;
+        };
+    };
+};

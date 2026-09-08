@@ -11,6 +11,7 @@
 #include <panic.h>
 #include <assert.h>
 #include <log.h>
+#include <heapex.h>
 
 /*
  * A fault should converge in a couple of trips at most. Anything beyond this
@@ -30,6 +31,54 @@ void LockVas(struct vas* vas) {
 void UnlockVas(struct vas* vas) {
     LogPrintf("unlocking vas 0x%X\n", vas);
     ReleaseMutex(vas->lock);
+}
+
+/* 
+ * Use the VMM heap for anything that needs to be done at 'AllocHeap' time.
+ * i.e. everything EXCEPT for allocating new VAS, and allocating new VA.
+ * (Which are done at process allocation, not memory request time).
+ * 
+ * So use VMM heap for: virt_page, page_origin, links/chains, mappings
+ */
+struct heap vmm_special_heap;
+static uint8_t vmm_heap_bootstrap_page[PAGE_SIZE];
+static bool used_vmm_bootstrap_page = false;
+
+void* VmmSpecialHeapGetMemory(size_t* bytes) {
+    LogPrintf("VmmSpecialHeapGetMemory: %d\n", *bytes);
+    if (!used_vmm_bootstrap_page) {
+        if (*bytes > PAGE_SIZE) {
+            Panic(PANIC_VMM_SPECIAL_HEAP_BOOTSTRAPPED_WRONGLY);
+        }
+        used_vmm_bootstrap_page = true;
+        LogPrintf("Bootstrap: 0x%X\n", vmm_heap_bootstrap_page);
+        *bytes = PAGE_SIZE;
+        return vmm_heap_bootstrap_page;
+    } else {
+        size_t virt = AllocVirt(*bytes);
+        size_t pages = (*bytes + PAGE_SIZE - 1) / PAGE_SIZE;
+        LogPrintf("Real deal: virt = 0x%X, pages = %d\n", virt, pages);
+        for (size_t i = 0; i < pages; ++i) {
+            ArchMapKernelPageDirectly(AllocPhys(true), virt + i * PAGE_SIZE); 
+        }
+        *bytes = pages * PAGE_SIZE;
+        return (void*) virt;
+    }
+}
+
+struct spinlock vmm_heap_lock;
+void* AllocVmmHeap(size_t bytes) {
+    LogPrintf("AllocVmmHeap(%d)\n", bytes);
+    AcquireSpinlock(&vmm_heap_lock);
+    void* retv = AllocHeapEx(&vmm_special_heap, bytes);
+    ReleaseSpinlock(&vmm_heap_lock);
+    return retv;
+}
+
+void FreeVmmHeap(void* ptr) {
+    AcquireSpinlock(&vmm_heap_lock);
+    FreeHeapEx(&vmm_special_heap, ptr);
+    ReleaseSpinlock(&vmm_heap_lock);
 }
 
 /*
@@ -62,7 +111,7 @@ static struct virt_page** GetVirtualPageSlot(struct vas* vas, size_t virt, bool 
         if (!create) {
             return NULL;
         }
-        table = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page**));
+        table = AllocVmmHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page**));
         if (table == NULL) {
             return NULL;
         }
@@ -75,7 +124,7 @@ static struct virt_page** GetVirtualPageSlot(struct vas* vas, size_t virt, bool 
         if (!create) {
             return NULL;
         }
-        table2 = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
+        table2 = AllocVmmHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page*));
         if (table2 == NULL) {
             return NULL;
         }
@@ -117,9 +166,9 @@ export struct vas* CreateVas(void) {
 
     vas->lock = CreateMutex();
     vas->va = AllocHeap(sizeof(struct virt_arena));
-    vas->mappings = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page***));
+    vas->mappings = AllocVmmHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page***));
     if (vas->lock == NULL || vas->va == NULL || vas->mappings == NULL) {
-        if (vas->mappings != NULL) FreeHeap(vas->mappings);
+        if (vas->mappings != NULL) FreeVmmHeap(vas->mappings);
         if (vas->va != NULL)       FreeHeap(vas->va);
         if (vas->lock != NULL)     DerefObject(vas->lock);
         FreeHeap(vas);
@@ -140,7 +189,7 @@ void CreateInitialVas(void) {
 
     vas->va = GetKernelVirtArena();
     vas->lock = CreateMutex();
-    vas->mappings = AllocHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page***));
+    vas->mappings = AllocVmmHeap(MAPPINGS_PER_LEVEL * sizeof(struct virt_page***));
     assert(vas->lock != NULL && vas->mappings != NULL);
     memset(vas->mappings, 0, MAPPINGS_PER_LEVEL * sizeof(struct virt_page***));
 
@@ -153,15 +202,19 @@ void CreateInitialVas(void) {
 
 static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
                                             size_t base, size_t phys, bool fixed) {
-    struct page_origin* po = AllocHeap(sizeof(struct page_origin));
+                                                    LogPrintf("a");
+
+    struct page_origin* po = AllocVmmHeap(sizeof(struct page_origin));
+        LogPrintf("b");
+
     if (po == NULL) {
         return NULL;
     }
-    po->mtx = CreateMutex();
-    if (po->mtx == NULL) {
-        FreeHeap(po);
-        return NULL;
-    }
+    LogPrintf("c");
+    LogPrintf("You're creating a mutex... but it's not going to be on the special VMM heap!\n");
+    
+    InitStaticMutex(&po->mtx);
+    LogPrintf("d");
 
     InitObject(po, OBJTYPE_PAGE_ORIGIN);
     po->rebase_page = base;
@@ -185,7 +238,7 @@ static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offse
 export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
                                         struct file* file, size_t file_offset,
                                         size_t base, size_t phys, bool fixed) {
-    struct virt_page* vp = AllocHeap(sizeof(struct virt_page));
+    struct virt_page* vp = AllocVmmHeap(sizeof(struct virt_page));
     if (vp == NULL) {
         return NULL;
     }
@@ -193,10 +246,12 @@ export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
     LogPrintf("@");
 
     struct page_origin* po = CreatePageOrigin(file, file_offset, base, phys, fixed);
+    LogPrintf("1");
     if (po == NULL) {
-        FreeHeap(vp);
+        FreeVmmHeap(vp);
         return NULL;
     }
+    LogPrintf("2");
 
     InitObject(vp, OBJTYPE_PAGE_VIRT);
 
@@ -289,6 +344,7 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
             phys != 0 ? phys + i * PAGE_SIZE : 0,
             fixed
         );
+        LogPrintf("$ vp = 0x%X\n", vp);
         if (vp == NULL) {
             UnwindVirtPages(vas, base, i);
             FreeVirt(base, pages * PAGE_SIZE);
@@ -296,6 +352,7 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
         }
     }
 
+    LogPrintf("Allocated anon memory at 0x%X\n", base);
     return (void*) base;
 }
 
@@ -321,8 +378,8 @@ static void CleanupPageOrigin(void* _po) {
     if (po->file != NULL) {
         DerefObject(po->file);
     }
-    DerefObject(po->mtx);
-    FreeHeap(po);
+    DestroyStaticMutex(&po->mtx);
+    FreeVmmHeap(po);
 }
 
 static void CleanupVas(void* _vas) {
@@ -356,13 +413,15 @@ static void CleanupVirtPage(void* _vp) {
     if (!vp->present) {
         DerefObject(vp->origin);
     }
-    FreeHeap(vp);
+    FreeVmmHeap(vp);
 }
 
 void InitVmm(void) {
     RegisterObjectType(OBJTYPE_PAGE_ORIGIN, CleanupPageOrigin);
     RegisterObjectType(OBJTYPE_VAS, CleanupVas);
     RegisterObjectType(OBJTYPE_PAGE_VIRT, CleanupVirtPage);
+    InitSpinlock(&vmm_heap_lock);
+    InitHeapEx(&vmm_special_heap, VmmSpecialHeapGetMemory);
 }
 
 /* Caller must hold pp->lock. */
@@ -619,11 +678,11 @@ retry:
     size_t phys = origin->phys;             /* unlocked peek, rechecked below */
 
     if (phys == 0) {
-        AcquireMutex(origin->mtx, TIMEOUT_INFINITE);
+        AcquireMutex(&origin->mtx, TIMEOUT_INFINITE);
         if (origin->phys == 0) {
             size_t frame = AllocPhys(true);
             if (frame == 0) {
-                ReleaseMutex(origin->mtx);
+                ReleaseMutex(&origin->mtx);
                 DerefObject(origin);
                 /* TODO: kill the offending process instead of the machine. */
                 Panic(PANIC_OUT_OF_MEMORY);
@@ -663,13 +722,13 @@ retry:
 
             origin->phys = frame;           /* publish last */
         }
-        ReleaseMutex(origin->mtx);
+        ReleaseMutex(&origin->mtx);
         DerefObject(origin);
         goto retry;                         /* uniform re-entry through the dedup path */
     }
 
     /* Allocate while faulting is still permitted. */
-    struct vas_chain* link = AllocHeap(sizeof(struct vas_chain));
+    struct vas_chain* link = AllocVmmHeap(sizeof(struct vas_chain));
     if (link == NULL) {
         DerefObject(origin);
         Panic(PANIC_OUT_OF_MEMORY);
@@ -679,7 +738,7 @@ retry:
     EnterPhysPageCriticalSection(pp);       /* phys outer - matches discard's order */
     if (pp->origin != origin) {
         LeavePhysPageCriticalSection(pp);
-        FreeHeap(link);
+        FreeVmmHeap(link);
         DerefObject(origin);
         goto retry;
     }
@@ -689,7 +748,7 @@ retry:
     if (vp == NULL || vp->present || vp->origin != origin) {
         UnlockVas(vas);
         LeavePhysPageCriticalSection(pp);
-        FreeHeap(link);
+        FreeVmmHeap(link);
         DerefObject(origin);
         goto retry;
     }
@@ -712,7 +771,7 @@ retry:
 
     DerefObject(origin);
     if (link != NULL) {
-        FreeHeap(link);
+        FreeVmmHeap(link);
     }
 }
 
@@ -749,24 +808,11 @@ export struct phys_page* DiscardPage(void) {
         DerefObject(curr->vas);
         DerefObject(curr->vp);
         struct vas_chain* next = curr->next;
-        FreeHeap(curr);
+        FreeVmmHeap(curr);
         curr = next;
     }
-    pp->chain = NULL;
-
     DerefObject(pp->origin);
-    pp->origin = NULL;
-
-    /*
-     * Reset ALL the state, not just 'allocated'. A frame that had been dirtied
-     * once came back from the allocator still marked dirty, and since
-     * FindDiscardPage() requires !dirty it was permanently unreclaimable.
-     */
-    pp->allocated = 0;
-    pp->dirty = 0;
-    pp->wired = 0;
-    pp->lru = 0;
-
+    FreeDiscardedPhys(pp);    
     ReleaseSpinlock(&pp->lock);
     return pp;
 }
@@ -776,7 +822,7 @@ export void CopyToPhysPage(size_t phys, void* data) {
     size_t virt = ArchGetTemporaryPage(phys);
     memcpy((void*) virt, data, PAGE_SIZE);
     ArchReleaseTemporaryPage(virt);
-    ArchUnlockFromCpu(r );
+    ArchUnlockFromCpu(r);
 }
 
 export void ZeroPhysPage(size_t phys) {

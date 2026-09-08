@@ -6,22 +6,15 @@
 #include <thread.h>
 #include <scheduler.h>
 #include <log.h>
-
-struct sem {
-    struct obj_header hdr;
-    int count;
-    int max;
-    struct thread* waiting_list_start;
-    struct thread* waiting_list_end;
-};
-
-struct mutex {
-    struct sem sem;
-};
+#include <mutex.h>
 
 static void CleanupSem(void* _sem) {
     struct sem* sem = _sem;
     FreeHeap(sem);
+}
+
+void DestroyStaticSem(struct sem* sem) {
+    (void) sem;
 }
 
 void InitSem(void) {
@@ -32,13 +25,17 @@ export void PrintSemCount(struct sem* sem) {
     LogPrintf("%d", sem->count);
 }
 
-export struct sem* CreateSem(int max, int inital) {
-    struct sem* sem = AllocHeap(sizeof(struct sem));
-    InitObject(sem, OBJTYPE_SEM);
-    sem->count = inital;
+export void InitStaticSem(struct sem* sem, int max, int initial) {
+    sem->count = initial;
     sem->max = max;
     sem->waiting_list_start = NULL;
     sem->waiting_list_end = NULL;
+}
+
+export struct sem* CreateSem(int max, int initial) {
+    struct sem* sem = AllocHeap(sizeof(struct sem));
+    InitObject(sem, OBJTYPE_SEM);
+    InitStaticSem(sem, max, initial);
     return sem;
 }
 
@@ -112,6 +109,16 @@ export int ReleaseSem(struct sem* sem) {
     ReleaseScheduler();
     return 0;
 }
+
+
+export void InitStaticMutex(struct mutex* mtx) {
+    InitStaticSem(&mtx->sem, 1, 0);
+}
+
+export void DestroyStaticMutex(struct mutex* mtx) {
+    DestroyStaticSem(&mtx->sem);
+}
+
 
 export int AcquireMutex(struct mutex* mtx, int64_t timeout) {
     return AcquireSem((struct sem*) mtx, timeout);

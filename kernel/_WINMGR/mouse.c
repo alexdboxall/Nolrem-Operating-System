@@ -37,7 +37,7 @@ void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, in
 
     if (wm_mainloop_started) {
         struct msg new_mouse_message = {
-            .type = WM_MOUSEEVENT,
+            .type = SYSMSG_MOUSEEVENT,
             .i_arg = click_bits,
             .rect_arg.x = mouse_x,
             .rect_arg.y = mouse_y

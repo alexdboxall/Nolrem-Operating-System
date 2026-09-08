@@ -11,7 +11,8 @@ char* panic_msgs[] = {
     "Out of memory",
     "Invalid arch operation",
     "Idle thread has blocked",
-    "Fuck me"
+    "Fuck me",
+    "Assertion failure bootstrapping VMM special heap"
 };
 
 _Noreturn void Panic(int panic_reason) {

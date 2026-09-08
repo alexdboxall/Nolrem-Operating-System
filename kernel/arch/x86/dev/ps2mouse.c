@@ -2,7 +2,6 @@
 #include <interrupt.h>
 #include <log.h>
 #include <errno.h>
-#include <../CLIPDRAW/api.h>
 #include <machine/x86.h>
 #include "ps2controller.h"
 

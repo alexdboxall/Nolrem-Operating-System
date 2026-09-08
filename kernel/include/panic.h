@@ -9,7 +9,8 @@ enum panic_codes {
         PANIC_OUT_OF_MEMORY,
         PANIC_INVALID_ARCH_OPERATION,
         PANIC_IDLE_TASK_HAS_BLOCKED,
-        PANIC_FUCK_ME
+        PANIC_FUCK_ME,
+        PANIC_VMM_SPECIAL_HEAP_BOOTSTRAPPED_WRONGLY
 };
 
 _Noreturn void Panic(int panic_reason);

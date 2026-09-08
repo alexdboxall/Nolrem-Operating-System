@@ -156,6 +156,10 @@ void ArchReleaseTemporaryPage(size_t virt) {
     SetPte(GetCurrentVas(), virt, 0);
 }
 
+void ArchMapKernelPageDirectly(size_t phys, size_t virt) {
+    SetPte(GetCurrentVas(), virt, (phys & ~0xFFF) | PAGE_PRESENT | PAGE_WRITE);
+}
+
 void ArchInitVas(struct vas* vas, bool first) {
     if (first) {
         kernel_page_tables_phys[0] = ((size_t) &boot_page_table1) - ARCH_KRNL_MAPPING_BASE;

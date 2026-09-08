@@ -6,6 +6,7 @@
 #include <obj.h>
 #include <spinlock.h>
 #include <allocvirt.h>
+#include <mutex.h>
 
 #define PF_PRESENT  1   /* protection violation, rather than a missing page */
 #define PF_WRITE    2   /* the access was a write */
@@ -20,7 +21,7 @@ struct page_origin {
     struct file* file;
     size_t rebase_page;   
     size_t file_offset;
-    struct mutex* mtx;
+    struct mutex mtx;
     size_t phys;
     bool fixed;
 };
@@ -100,3 +101,5 @@ struct vas* GetCurrentVas(void);
 
 void CopyToPhysPage(size_t phys, void* data);
 void ZeroPhysPage(size_t phys);
+
+struct phys_page* DiscardPage(void);

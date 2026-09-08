@@ -4,6 +4,7 @@
 #include <string.h>
 #include <heapex.h>
 #include <spinlock.h>
+#include <arch.h>
 #include <vmm.h>
 
 #define ALIGN       (sizeof(size_t))    // must be power of 2
@@ -75,13 +76,15 @@ export void KeFreeHeap(void* ptr) {
     ReleaseSpinlock(&heap_lock);
 }
 
-void* KernelHeapRequestMemory(size_t size) {
-    void* retv = AllocBootstrapHeap(size);
+void* KernelHeapRequestMemory(size_t* size) {
+    void* retv = AllocBootstrapHeap(*size);
     if (retv != NULL) {
         return retv;
     }
     LogPrintf("No more bootstrap heap available! AllocAnonMemory...\n");
-    return AllocAnonMemory(size, VP_WRITE);
+    retv = AllocAnonMemory(*size, VP_WRITE);
+    *size = (*size + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1));
+    return retv;
 }
 
 void InitBootstrapHeap(void) {

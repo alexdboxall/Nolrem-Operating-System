@@ -4,12 +4,15 @@
 #include <log.h>
 #include <string.h>
 #include <vmm.h>
-
+#include <scheduler.h>
 #include <arch.h>
 
+/* At or below this number of physical pages, we start discarding. */
+#define LOW_MEM_THRESHOLD   16
+
 static struct phys_page* sys_pp_table;
-static size_t sys_total_pp;
-static size_t sys_free_pp;
+static _Atomic size_t sys_total_pp;
+static _Atomic size_t sys_free_pp;
 static size_t sys_pp_table_max_index;
 
 struct phys_page* GetPhysPage(size_t addr) {
@@ -41,6 +44,21 @@ export size_t GetFreeMemory(void) {
     return sys_free_pp * PAGE_SIZE;
 }
 
+void FreeDiscardedPhys(struct phys_page* pp) {
+    /*
+     * Reset ALL the state, not just 'allocated'. A frame that had been dirtied
+     * once came back from the allocator still marked dirty, and since
+     * FindDiscardPage() requires !dirty it was permanently unreclaimable.
+     */
+    pp->chain = NULL;
+    pp->origin = NULL;
+    pp->allocated = 0;
+    pp->dirty = 0;
+    pp->wired = 0;
+    pp->lru = 0;
+    ++sys_free_pp;
+}
+
 export size_t AllocPhys(bool pin) {
     struct phys_page* curr = GetFirstPhysPage();
     while (curr != NULL) {
@@ -52,6 +70,12 @@ export size_t AllocPhys(bool pin) {
         if (curr->exists && !curr->allocated) {
             curr->allocated = 1;
             curr->wired = pin;
+            if (sys_free_pp <= LOW_MEM_THRESHOLD) {
+                PostMessageIrq((struct msg) {
+                    .i_arg = SYSMSG_LOWMEMORY
+                });
+            }
+            --sys_free_pp;
             ReleaseSpinlock(&curr->lock);
             return GetPhysAddr(curr);
         }

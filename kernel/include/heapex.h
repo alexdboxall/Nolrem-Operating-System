@@ -16,12 +16,12 @@ struct heap {
      */
     struct block* _head_block[TOTAL_NUM_FREE_LISTS];
 
-    void*(*get_memory)(size_t);
+    void*(*get_memory)(size_t*);
     struct spinlock lock;
 };
 
 
-void InitHeapEx(struct heap*, void*(*get_memory)(size_t));
+void InitHeapEx(struct heap*, void*(*get_memory)(size_t*));
 
 void* AllocHeapEx(struct heap* heap, size_t bytes);
 void FreeHeapEx(struct heap* heap, void* ptr);

@@ -135,7 +135,7 @@ static void ProcessMessage(struct msg msg) {
     case SYSMSG_MOUSEEVENT:
         bool up = HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
         LogPrintf("Handling mouse event...\n");
-        LogPrintf("Alloc gave 0x%X", AllocHeap(4096));
+        LogPrintf("Alloc gave 0x%X", AllocHeap(1));
         if (up) {
             WmCallWinProc(WmGetDesktop(), (struct msg) {
                 .type = WM_PAINT

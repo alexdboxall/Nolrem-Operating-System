@@ -1053,10 +1053,10 @@ export struct rect CdGetRegionBounds(struct region rgn) {
 
     // We treat `w` as x2 and `h` as y2.
     struct rect r;
-    r.x = INT_MAX;
-    r.y = INT_MAX;
-    r.w = INT_MIN;
-    r.h = INT_MIN;
+    r.x = INT16_MAX;
+    r.y = INT16_MAX;
+    r.w = INT16_MIN;
+    r.h = INT16_MIN;
     IterateRegion(rgn, GetRegionBoundsCallback, &r, 0);
 
     // Correct the w/h from x2/y2

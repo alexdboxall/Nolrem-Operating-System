@@ -55,20 +55,20 @@ void* KeReallocHeap(void* ptr, size_t new_size);
 #endif
 
 struct point {
-    int x;
-    int y;
+    int16_t x;
+    int16_t y;
 };
 
 struct size {
-    int width;
-    int height;
+    int16_t width;
+    int16_t height;
 };
 
 struct rect {
-    int x;
-    int y;
-    int w;
-    int h;
+    int16_t x;
+    int16_t y;
+    int16_t w;
+    int16_t h;
 };
 
 #define SYSMSG_MOUSEEVENT  0

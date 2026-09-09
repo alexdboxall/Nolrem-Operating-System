@@ -11,7 +11,7 @@
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
-#define SYSTEM_MSGBOX_SIZE      128
+#define SYSTEM_MSGBOX_SIZE      16
 
 static struct msgbox* sys_mbox = NULL;
 
@@ -182,6 +182,7 @@ _Noreturn void WmMainloop(void) {
         .type = WM_PAINT
     });
     (void) win3;
+
     /*WmCallWinProc(win3, (struct msg) {
         .type = WM_PAINT
     });*/

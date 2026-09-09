@@ -7,8 +7,13 @@ void VGADrawMouse(struct graphics_driver*, int x, int y, const uint32_t* black, 
     /* We requested MOUSE_BUFFER_UINT8 to save memory. */
     uint8_t* restore_buffer = (uint8_t*) _restore_buffer;
 
+    int eff_width = width;
+    if (x + eff_width >= 640) {
+        eff_width = 640 - x;
+    }
+
     int start_byte = x >> 3;
-    int end_byte   = (x + width - 1) >> 3;
+    int end_byte   = (x + eff_width - 1) >> 3;
 
     // Write mode 2 (bits 0-1 = 2) and read mode 0 (bit 3 = 0) live in the
     // same GC mode register and don't conflict, so we can set this once
@@ -55,6 +60,8 @@ void VGADrawMouse(struct graphics_driver*, int x, int y, const uint32_t* black, 
                 }
                 restore_buffer[row * width + col] = vga_index;
 
+                if (col >= eff_width) continue;
+
                 uint32_t cursor_bit = 1u << (31 - col);
                 if (black_row & cursor_bit)      black_mask |= bitmask;
                 else if (white_row & cursor_bit) white_mask |= bitmask;
@@ -94,9 +101,14 @@ void VGARemoveMouse(struct graphics_driver*, int x, int y, void* _restore_buffer
 
     /* We requested MOUSE_BUFFER_UINT8 to save memory. */
     uint8_t* restore_buffer = (uint8_t*) _restore_buffer;
+    
+    int eff_width = width;
+    if (x + eff_width >= 640) {
+        eff_width = 640 - x;
+    }
 
     int start_byte = x >> 3;
-    int end_byte   = (x + width - 1) >> 3;
+    int end_byte   = (x + eff_width - 1) >> 3;
 
     // Write mode 2, same convention as VGADrawMouse/VgaSimpleRect.
     outb(VGA_GC_INDEX, 0x05);
@@ -139,7 +151,7 @@ void VGARemoveMouse(struct graphics_driver*, int x, int y, void* _restore_buffer
                     uint8_t bitmask2 = 0x80 >> k2;
                     if (done_mask & bitmask2) continue;
                     int col2 = (b * 8 + k2) - x;
-                    if (col2 < 0 || col2 >= width) continue;
+                    if (col2 < 0 || col2 >= eff_width) continue;
                     if (row_buf[col2] == value) group_mask |= bitmask2;
                 }
 

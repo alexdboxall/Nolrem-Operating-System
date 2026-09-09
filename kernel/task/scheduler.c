@@ -17,7 +17,7 @@ static struct thread* ready_list_tail = NULL;
 static struct thread* current_thread = NULL;
 static bool sched_init = false;
 static struct msg defer_msg;
-static bool has_defer_msg = false;
+static bool has_defer_msg = 0;
 
 export bool IsSchedulingInitialised(void) {
     return sched_init;
@@ -45,7 +45,6 @@ static inline bool are_interrupts_enabled()
     return flags & (1 << 9);
 }
 
-
 export void ReleaseScheduler(void) {
     if (are_interrupts_enabled()) {
         Panic(PANIC_FUCK_ME);
@@ -69,28 +68,17 @@ export void PostMessageIrq(struct msg msg) {
     has_defer_msg = true;
 }
 
-export void ProcessIrqPostMessage(void) {
+void ProcessIrqPostMessage(void) {
+    extern struct msgbox* WmGetSystemMessageBox(void);
     if (has_defer_msg) {
         has_defer_msg = false;
-        extern struct msgbox* WmGetSystemMessageBox(void);
-        sched_prevent_count++;
+        AcquireScheduler();
         KePostMessage(WmGetSystemMessageBox(), &defer_msg, -1);
-        sched_prevent_count--;
-        if (sched_prevent_count == 0 && sched_postponed) {
-            sched_postponed = false;
-            struct thread* thr = sched_postponed_thr;
-            sched_postponed_thr = NULL;
-            SwitchToThread(thr);
-        }
+        ReleaseScheduler();
     }
 }
 
 static struct thread* FindNextThread(void) {
-    /*while (ready_list_head == NULL) {
-        ReleaseScheduler();
-        ArchIdle();
-        AcquireScheduler();
-    }*/
     if (ready_list_head == NULL) {
         Panic(PANIC_IDLE_TASK_HAS_BLOCKED);
     }
@@ -104,6 +92,7 @@ static struct thread* FindNextThread(void) {
 
 static void AddToBackOfReadyQueue(struct thread* thr) {
     thr->state = THREAD_STATE_READY;
+    thr->next_ready = NULL;
     if (ready_list_tail != NULL) {
         ready_list_tail->next_ready = thr;
     }
@@ -125,22 +114,32 @@ void BeginNewThread(void) {
     ReleaseSpinlock(&sched_lock);
     if (zero) {
         asm ("sti");
+    } else {
+        Panic(PANIC_FUCK_ME);
     }
 }
 
+/* 
+ * If `thr` is NULL, it will REMOVE the first element from the ready list and
+ * run that.
+ * 
+ * If `thr` is NON-NULL, then it ought to already NOT BE on the list, and it
+ * will switch to it.
+ */
 void SwitchToThread(struct thread* thr) {
     if (!sched_init) {
         return;
     }
+    if (are_interrupts_enabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
+        Panic(PANIC_FUCK_ME);
+    }
     if (current_thread->state == THREAD_STATE_RUNNING) {
-        if (ready_list_head == NULL) {
-            LogPrintf("There's nothing else to run!\n");
+        if (ready_list_head == NULL && thr == NULL) {
             /* Nothing else is available to run, so keep running. */
             return;
         }
         AddToBackOfReadyQueue(current_thread);
     }
-    LogPrintf("Current thread is in state: 0x%X -> %d\n", current_thread, current_thread->state);
     if (thr == NULL) {
         thr = FindNextThread();
     }
@@ -148,9 +147,8 @@ void SwitchToThread(struct thread* thr) {
     current_thread = thr;
     current_thread->state = THREAD_STATE_RUNNING;
     current_thread->next_ready = NULL;
-        /* TODO: set the VAS */
+    /* TODO: set the VAS */
 
-    LogPrintf("Switching: 0x%X -> 0x%X\n", old_thr, current_thread);
     ArchSwitchThread(old_thr, current_thread);
 
     /* NOTHING GOES HERE! We need the tail of the call chain to be as
@@ -160,10 +158,8 @@ void SwitchToThread(struct thread* thr) {
 
 void BlockThread(void) {
     // Scheduler lock must already be held!
-    LogPrintf("Blocking 0x%X\n", GetCurrentThread());
     GetCurrentThread()->state = THREAD_STATE_BLOCKED;
     GetCurrentThread()->block_return_val = 0;
-    LogPrintf("Scheduling due to block...\n");
     Schedule();
 }
 
@@ -173,7 +169,6 @@ static bool ShouldPreempt(struct thread* thr) {
 
 void UnblockThread(struct thread* thr, int retv) {
     // Scheduler lock must already be held!
-    // TODO: add back to the list
     // TODO: sort out semaphore cancellation, etc.
     thr->block_return_val = retv;
  
@@ -183,20 +178,13 @@ void UnblockThread(struct thread* thr, int retv) {
     thr->next_waiting_timer = NULL;
     thr->state = THREAD_STATE_READY;
 
-    if (false && ShouldPreempt(thr)) {
-        LogPrintf("Preempting?\n");
-        if (sched_prevent_count != 0) {
-            sched_postponed = true;
-            if (sched_postponed_thr == NULL || thr->priority < sched_postponed_thr->priority) {
-                sched_postponed_thr = thr;
-            }
-            
-        } else {
-            SwitchToThread(thr);
+    if (ShouldPreempt(thr)) {
+        sched_postponed = true;
+        if (sched_postponed_thr == NULL || thr->priority < sched_postponed_thr->priority) {
+            sched_postponed_thr = thr;
         }
 
     } else {
-        LogPrintf("Adding to the back of the queue...\n");
         AddToBackOfReadyQueue(thr);
     }
 }
@@ -210,12 +198,8 @@ export void Schedule(void) {
 void InitScheduler(void(*entry)(void*)) {
     sched_prevent_count = 0;
     InitSpinlock(&sched_lock);
-    LogPrintf("About to create kernel thread...\n");
-    struct thread* krnl_thr = CreateThread(GetKernelVas(), entry, NULL);
+    CreateThread(GetKernelVas(), entry, NULL);
     CreateThread(GetKernelVas(), IdleTask, NULL);
-    LogPrintf("About to create idle thread...\n");
-    (void) krnl_thr;
-    LogPrintf("About to switch to kernel thread...\n");
     sched_init = true;
     SetupInitialThread();
 }

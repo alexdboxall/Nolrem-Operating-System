@@ -13,5 +13,6 @@ export void IdleTask(void*) {
     while (true) {
         /* As we don't yet have a way to pre-empt, manually switch. */
         Schedule();
+        ArchIdle();
     }
 }

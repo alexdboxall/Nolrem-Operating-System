@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <log.h>
 #include <heapex.h>
+#include <heap.h>
 
 /*
  * A fault should converge in a couple of trips at most. Anything beyond this
@@ -205,17 +206,10 @@ static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offse
                                                     LogPrintf("a");
 
     struct page_origin* po = AllocVmmHeap(sizeof(struct page_origin));
-        LogPrintf("b");
-
     if (po == NULL) {
         return NULL;
     }
-    LogPrintf("c");
-    LogPrintf("You're creating a mutex... but it's not going to be on the special VMM heap!\n");
-    
     InitStaticMutex(&po->mtx);
-    LogPrintf("d");
-
     InitObject(po, OBJTYPE_PAGE_ORIGIN);
     po->rebase_page = base;
     po->file = file;
@@ -227,6 +221,69 @@ static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offse
         RefObject(file);
     }
     return po;
+}
+
+static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys, bool allow_user, struct file* file, size_t file_offset) {
+    struct virt_page* vp = AllocVmmHeap(sizeof(struct virt_page));
+    struct vas* vas = GetKernelVas();
+    InitObject(vp, OBJTYPE_PAGE_VIRT);
+    vp->vas = vas;
+    vp->virt = existing_virt;
+    vp->executable = 1;
+    vp->write = false;
+    vp->user = allow_user;
+    vp->accessed = 0;
+    vp->busy = 0;
+    vp->dirty = 0;
+    vp->present = 1;
+    vp->phys = existing_phys;
+
+    struct phys_page* pp = GetPhysPage(existing_phys);
+    pp->vp = vp;
+    pp->vas = vas;
+    pp->chain = NULL;
+
+    LogPrintf("Page VIRT=0x%X, PHYS=0x%X is now discardable", existing_virt, existing_phys);
+    RefObject(vp);
+    RefObject(vas);
+    pp->origin = CreatePageOrigin(file, file_offset, 0, existing_phys, false);
+    LockVas(vp->vas);
+    struct virt_page** slot = GetVirtualPageSlot(vas, existing_virt, true);
+    if (slot == NULL || *slot != NULL) {
+        Panic(PANIC_FUCK_ME);
+    }
+    *slot = vp;
+    UnlockVas(vp->vas);
+    LogPrintf(".\n");
+}
+
+void MarkPageableSegmentsDiscardable(void) {
+    (void) MarkKernelPageDiscardable;
+
+    extern char __start_pageable[];
+    extern char __end_pageable[];
+    extern char __start_pageablekuser[];
+    extern char __end_pageablekuser[];
+
+    size_t k_start_page = ((size_t) __start_pageable) / PAGE_SIZE;
+    size_t k_end_page   = (((size_t) __end_pageable) + PAGE_SIZE - 1) / PAGE_SIZE;
+    size_t u_start_page = ((size_t) __start_pageablekuser) / PAGE_SIZE;
+    size_t u_end_page   = (((size_t) __end_pageablekuser) + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    struct obj_header* dummy_file = AllocHeap(sizeof(struct obj_header));
+    InitObject(&dummy_file, OBJTYPE_FILE);
+    LogPrintf("The dummy file is at: 0x%X\n", dummy_file);
+    for (size_t i = k_start_page; i < k_end_page; ++i) {
+        // TODO: need a real file! And offset!
+        MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, false, (void*) dummy_file, 0xCAFEBABE);
+    }
+    for (size_t i = u_start_page; i < u_end_page; ++i) {
+        // TODO: need a real file! And offset!
+        MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, true, (void*) dummy_file, 0xCAFEBABE);
+    } 
+
+    LogPrintf("Going to discard a page...\n");
+    DiscardPage();
 }
 
 /*
@@ -243,15 +300,11 @@ export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
         return NULL;
     }
 
-    LogPrintf("@");
-
     struct page_origin* po = CreatePageOrigin(file, file_offset, base, phys, fixed);
-    LogPrintf("1");
     if (po == NULL) {
         FreeVmmHeap(vp);
         return NULL;
     }
-    LogPrintf("2");
 
     InitObject(vp, OBJTYPE_PAGE_VIRT);
 
@@ -268,28 +321,18 @@ export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
     vp->present = 0;
     vp->origin = po;            /* aliases vp->phys - set one or the other */
 
-    LogPrintf("#");
-
     LockVas(vas);
-    LogPrintf("%%");
 
     struct virt_page** slot = GetVirtualPageSlot(vas, virt, true);
-    LogPrintf("^");
 
     if (slot == NULL || *slot != NULL) {
         /* Unmappable address, out of heap, or something is already here. */
-        LogPrintf("*");
-
         UnlockVas(vas);
         DerefObject(vp);        /* CleanupVirtPage drops the origin for us */
         return NULL;
     }
-        LogPrintf("(");
-
     *slot = vp;
     UnlockVas(vas);
-    LogPrintf(")");
-
     return vp;
 }
 
@@ -433,6 +476,7 @@ void CallOnVirtualUsers(struct phys_page* pp, void(*func)(struct phys_page*, str
     }
     struct vas_chain* chain = pp->chain;
     while (chain != NULL) {
+        LogPrintf("Has a chain... 0x%X\n", chain);
         LockVas(chain->vas);
         func(pp, chain->vp);
         UnlockVas(chain->vas);
@@ -447,6 +491,7 @@ void CallOnVirtualUsers(struct phys_page* pp, void(*func)(struct phys_page*, str
  * sampling bits that had already been destroyed - the LRU was reading noise.
  */
 static void EnterCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
+    LogPrintf("EnterCriticalVirt\n");
     if (vp->busy++ == 0) {
         ArchReadVirtDirtyAndAccessed(vp);
         pp->dirty |= vp->dirty;
@@ -454,7 +499,13 @@ static void EnterCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
             pp->lru |= 0x8000;
         }
         vp->accessed = 0;
+        LogPrintf("SynchroniseVirt\n");
+        LogPrintf("vp->vas = 0x%X\n", vp->vas);
+        LogPrintf("vp->virt = 0x%X\n", vp->virt);
+        LogPrintf("vp->phys = 0x%X\n", vp->phys);
+        LogPrintf("pp->phys = 0x%X\n", GetPhysAddr(pp));
         SynchroniseVirt(vp);
+        LogPrintf("Done SynchroniseVirt\n");
     }
     assert(vp->busy != 0);      /* overflow */
 }
@@ -506,6 +557,7 @@ static struct phys_page* FindDiscardPage(void) {
      * concurrent reclaimers a textbook ABBA deadlock.
      */
     for (struct phys_page* curr = GetFirstPhysPage(); curr != NULL; curr = GetNextPhysPage(curr)) {
+        LogPrintf("Checking 0x%X for discard...\n", curr);
         /* Cheap pre-filter. State can change before we take the critical
          * section, but we're only ruling pages out, so it can't hurt. */
         AcquireSpinlock(&curr->lock);
@@ -521,7 +573,9 @@ static struct phys_page* FindDiscardPage(void) {
             continue;
         }
 
+        LogPrintf("Is a candidate...\n");
         EnterPhysPageCriticalSection(curr);
+        LogPrintf("Entered critical section...\n");
         bool usable = curr->wired == 0
                    && !curr->dirty
                    && curr->origin != NULL
@@ -529,15 +583,21 @@ static struct phys_page* FindDiscardPage(void) {
         uint16_t lru = curr->lru;
         LeavePhysPageCriticalSection(curr);
 
+        LogPrintf("With LRU = 0x%X\n", lru);
+
         if (usable && lru < min_lru) {
             min_lru = lru;
             best = curr;
         }
     }
 
+    LogPrintf("Phys loop done.\n");
+
     if (best == NULL) {
         return NULL;
     }
+
+    LogPrintf("Starting pass 2\n");
 
     /* Pass 2: re-acquire and revalidate; the world moved while we scanned. */
     EnterPhysPageCriticalSection(best);
@@ -777,6 +837,9 @@ retry:
 
 export struct phys_page* DiscardPage(void) {
     struct phys_page* pp = FindDiscardPage();
+    LogPrintf("Found a page to discard! 0x%X\n", pp);
+    LogPrintf("PHYS = 0x%X\n", GetPhysAddr(pp));
+
     if (pp == NULL) {
         return NULL;
     }

@@ -7,4 +7,7 @@ export void CdInit(void) {
     CdInitPenSubsystem();
     CdInitUserRegionSubsystem();
     CdInitDcSubsystem();
+
+    extern void InitVga();
+    InitVga();
 }

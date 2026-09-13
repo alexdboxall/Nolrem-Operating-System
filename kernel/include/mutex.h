@@ -3,6 +3,7 @@
 #include <sem.h>
 
 struct mutex {
+    // Must go first, as we require sem/mutex cast to work
     struct sem sem;
 };
 

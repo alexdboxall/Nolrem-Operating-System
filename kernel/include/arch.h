@@ -56,6 +56,10 @@ size_t ArchGetTemporaryPage(size_t phys);
 void ArchReleaseTemporaryPage(size_t virt);
 int ArchGetCpuNum(void);
 
+bool ArchAreInterruptsEnabled(void);
+void ArchEnableInterrupts(void);
+void ArchDisableInterrupts(void);
+
 struct cpu_data;
 
 void ArchInitPlatformSpecificData(struct cpu_data* cpu);

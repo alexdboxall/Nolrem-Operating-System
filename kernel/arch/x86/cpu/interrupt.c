@@ -13,6 +13,22 @@
 #define ISR_INVALID_OP  6
 #define ISR_DIV_ERR     0
 
+bool ArchAreInterruptsEnabled(void) {
+    unsigned long flags;
+    asm volatile ( "pushf\n\t"
+                   "pop %0"
+                   : "=g"(flags) );
+    return flags & (1 << 9);
+}
+
+void ArchEnableInterrupts(void) {
+    asm volatile ("sti");
+}
+
+void ArchDisableInterrupts(void) {
+    asm volatile ("cli");
+}
+
 static size_t GetCr2(void) {
     size_t val;
     __asm__ __volatile__("mov %%cr2, %0" : "=r" (val) :: );

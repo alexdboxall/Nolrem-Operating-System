@@ -44,6 +44,8 @@ SECTIONS
 		*(.pageablekuser)
 		*(.pageablekuserrodata)
 		__end_pageablekuser = .;
+
+		. = ALIGN(4096);
 	}
 	
 	.bss ALIGN(4096) : AT (ADDR (.bss) - 0xC0000000)

@@ -4,7 +4,7 @@
  * IMPLEMENTS STANDARD 
  */
 
-#define static_assert CdStatic_assert
+#define static_assert _Static_assert
 
 #ifdef COMPILE_KERNEL
 

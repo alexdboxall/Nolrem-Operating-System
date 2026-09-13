@@ -6,6 +6,7 @@
 #include <arch.h>
 #include <panic.h>
 #include <log.h>
+#include <arch.h>
 #include <msgbox.h>
 
 static struct spinlock sched_lock;
@@ -28,7 +29,7 @@ export struct thread* GetCurrentThread(void) {
 }
 
 export void AcquireScheduler(void) {
-    asm ("cli");
+    ArchDisableInterrupts();
     AcquireSpinlock(&sched_lock);
     sched_prevent_count++;
     ReleaseSpinlock(&sched_lock);
@@ -36,17 +37,8 @@ export void AcquireScheduler(void) {
 
 void SwitchToThread(struct thread* thr);
 
-static inline bool are_interrupts_enabled()
-{
-    unsigned long flags;
-    asm volatile ( "pushf\n\t"
-                   "pop %0"
-                   : "=g"(flags) );
-    return flags & (1 << 9);
-}
-
 export void ReleaseScheduler(void) {
-    if (are_interrupts_enabled()) {
+    if (ArchAreInterruptsEnabled()) {
         Panic(PANIC_FUCK_ME);
     }
     AcquireSpinlock(&sched_lock);
@@ -59,7 +51,7 @@ export void ReleaseScheduler(void) {
     }
     ReleaseSpinlock(&sched_lock);
     if (zero) {
-        asm ("sti");
+        ArchEnableInterrupts();
     }
 }
 
@@ -113,7 +105,7 @@ void BeginNewThread(void) {
     bool zero = sched_prevent_count == 0;
     ReleaseSpinlock(&sched_lock);
     if (zero) {
-        asm ("sti");
+        ArchEnableInterrupts();
     } else {
         Panic(PANIC_FUCK_ME);
     }
@@ -130,9 +122,10 @@ void SwitchToThread(struct thread* thr) {
     if (!sched_init) {
         return;
     }
-    if (are_interrupts_enabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
+    if (ArchAreInterruptsEnabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
         Panic(PANIC_FUCK_ME);
     }
+    LogPrintf("Switch to thread: 0x%X\n", thr);
     if (current_thread->state == THREAD_STATE_RUNNING) {
         if (ready_list_head == NULL && thr == NULL) {
             /* Nothing else is available to run, so keep running. */
@@ -142,6 +135,10 @@ void SwitchToThread(struct thread* thr) {
     }
     if (thr == NULL) {
         thr = FindNextThread();
+        if (thr == current_thread) {
+            LogPrintf("current thread was also on the queue...\n");
+            Panic(PANIC_FUCK_ME);
+        }
     }
     struct thread* old_thr = current_thread;
     current_thread = thr;
@@ -149,6 +146,7 @@ void SwitchToThread(struct thread* thr) {
     current_thread->next_ready = NULL;
     /* TODO: set the VAS */
 
+    LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);
     ArchSwitchThread(old_thr, current_thread);
 
     /* NOTHING GOES HERE! We need the tail of the call chain to be as
@@ -167,20 +165,25 @@ static bool ShouldPreempt(struct thread* thr) {
     return sched_init && (ready_list_head == NULL || thr->priority < GetCurrentThread()->priority);
 }
 
+/*
+ * The RETV values here... 
+ * 1 or more means an ERRNO code
+ * 0 or negative means that it is semaphore number -N that returned. 
+ */
 void UnblockThread(struct thread* thr, int retv) {
     // Scheduler lock must already be held!
-    // TODO: sort out semaphore cancellation, etc.
+    LogPrintf("Unblock thread 0x%x... (retv %d)\n", thr, retv);
+    if (thr->waiting_sem_or_clot != NULL) {
+        CancelSems(thr);
+    }
     thr->block_return_val = retv;
- 
-    // This has to happen after all sem / timer cancellations done
-
     thr->next_ready = NULL;
-    thr->next_waiting_timer = NULL;
     thr->state = THREAD_STATE_READY;
 
     if (ShouldPreempt(thr)) {
         sched_postponed = true;
         if (sched_postponed_thr == NULL || thr->priority < sched_postponed_thr->priority) {
+            LogPrintf("Postpone...\n");
             sched_postponed_thr = thr;
         }
 
@@ -195,10 +198,10 @@ export void Schedule(void) {
     ReleaseScheduler();
 }
 
-void InitScheduler(void(*entry)(void*)) {
+void InitScheduler(void) {
     sched_prevent_count = 0;
     InitSpinlock(&sched_lock);
-    CreateThread(GetKernelVas(), entry, NULL);
+    CreateThread(GetKernelVas(), NULL, NULL);
     CreateThread(GetKernelVas(), IdleTask, NULL);
     sched_init = true;
     SetupInitialThread();

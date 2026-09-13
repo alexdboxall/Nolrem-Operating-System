@@ -29,12 +29,10 @@ struct thread {
     uint8_t priority;
     int block_return_val;
 
-    union {
-        struct thread* next_ready;
-        struct thread* next_waiting_sem;
-    };
+    struct thread* next_ready;
+    struct thread* next_waiting_sem;
     struct thread* next_waiting_timer;
-    struct sem* waiting_sem;
+    void* waiting_sem_or_clot;
 };
 
 struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context);
@@ -42,7 +40,6 @@ uint8_t GetThreadPriority(struct thread* thr);
 void SetThreadPriority(struct thread* thr, uint8_t priority);
 
 struct thread* GetCurrentThread(void);
-void SetThreadWaitingSem(struct thread* thr, struct sem* sem);
 void BlockThread(void);
 void UnblockThread(struct thread* thr, int retv);
 

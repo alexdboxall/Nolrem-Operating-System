@@ -71,22 +71,30 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
     return 0;
 }
 
-static int GetMessageCommon(struct msgbox* mbox, void* msg, int64_t timeout, bool remove) {
-    if (mbox == NULL || msg == NULL) {
+export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, int64_t timeout, bool remove, int* box_out) {
+    if (msg == NULL || mboxes == NULL) {
         return EINVAL;
     }
 
-    int res = AcquireSem(mbox->filled_sem, timeout);
+    struct sem** sems = AllocHeap(count * sizeof(struct sem*));
+    for (int i = 0; i < count; ++i) {
+        sems[i] = mboxes[i]->filled_sem;
+    }
+    int selected_index;
+    int res = AcquireSemFromMany(sems, count, timeout, &selected_index);
     if (res != 0) {
         return res;
     }
-
+    if (box_out != NULL) {
+        *box_out = selected_index;
+    }
+    LogPrintf("KeGetMessageFromMany: %d\n", selected_index);
+    struct msgbox* mbox = mboxes[selected_index];
     res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
     if (res != 0) {
         ReleaseSem(mbox->filled_sem);
         return res;
     }
-
     memcpy(msg, mbox->data + mbox->start_idx * mbox->message_size, mbox->message_size);
     if (remove) {
         mbox->start_idx = (mbox->start_idx + 1) % mbox->max_count;
@@ -98,14 +106,13 @@ static int GetMessageCommon(struct msgbox* mbox, void* msg, int64_t timeout, boo
     } else {
         ReleaseSem(mbox->filled_sem);
     }
-
     return 0;
 }
 
 export int KeGetMessage(struct msgbox* mbox, void* msg, int64_t timeout) {
-    return GetMessageCommon(mbox, msg, timeout, true);
+    return KeGetMessageFromMany(&mbox, 1, msg, timeout, true, NULL);
 }
 
 export int KePeekMessage(struct msgbox* mbox, void* msg, int64_t timeout) {
-    return GetMessageCommon(mbox, msg, timeout, false);
+    return KeGetMessageFromMany(&mbox, 1, msg, timeout, false, NULL);
 }

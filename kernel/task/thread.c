@@ -10,17 +10,6 @@
 #define KSTACK_SIZE     (1024 * 8)
 #define USTACK_SIZE     (1024 * 16)
 
-void SetThreadWaitingSem(struct thread* thr, struct sem* sem) {
-    if (sem == NULL) {
-        if (thr->waiting_sem != NULL) {
-            DerefObject(thr->waiting_sem);
-        }
-    } else {
-        RefObject(sem);
-    }
-    thr->waiting_sem = sem;
-}
-
 export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context) {
     LogString("A\n");
     struct thread* thr = AllocHeap(sizeof(struct thread));
@@ -35,9 +24,11 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
     thr->next_ready = NULL;
     thr->next_waiting_timer = NULL;
+    thr->next_waiting_sem = NULL;
+    thr->waiting_sem_or_clot = NULL;
     thr->priority = PRIORITY_NORMAL;
-    thr->waiting_sem = NULL;
-    LogString("D\n");
+    thr->block_return_val = 0;
+    LogPrintf("D 0x%X\n", thr->kernel_stack_top);
 
     if (vas == GetKernelVas()) {
         thr->stack_pointer = thr->kernel_stack_top;

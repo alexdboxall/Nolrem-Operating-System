@@ -6,7 +6,7 @@ void AcquireScheduler(void);
 void ReleaseScheduler(void);
 void Schedule(void);
 
-void InitScheduler(void(*entry)(void*));
+void InitScheduler(void);
 void IdleTask(void*);
 bool IsSchedulingInitialised(void);
 

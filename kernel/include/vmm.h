@@ -103,3 +103,5 @@ void CopyToPhysPage(size_t phys, void* data);
 void ZeroPhysPage(size_t phys);
 
 struct phys_page* DiscardPage(void);
+
+void MarkPageableSegmentsDiscardable(void);

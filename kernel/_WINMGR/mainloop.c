@@ -132,8 +132,8 @@ static void ProcessMessage(struct msg msg) {
         break;
 
     case SYSMSG_MOUSEEVENT:
+        LogPrintf("Handling mouse...\n");
         bool up = HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
-        LogPrintf("Handling mouse event...\n");
         if (up) {
             WmCallWinProc(WmGetDesktop(), (struct msg) {
                 .type = WM_PAINT
@@ -150,6 +150,10 @@ static void ProcessMessage(struct msg msg) {
         }
         break;
     }
+}
+
+static void PostSize_t(struct msgbox* box, size_t v) {
+    KePostMessage(box, &v, TIMEOUT_INFINITE);
 }
 
 _Noreturn void WmMainloop(void) {
@@ -186,9 +190,37 @@ _Noreturn void WmMainloop(void) {
     /*WmCallWinProc(win3, (struct msg) {
         .type = WM_PAINT
     });*/
-           
+
+
+    struct msgbox* box1 = CreateMessageBox(sizeof(size_t), 10);
+    struct msgbox* box2 = CreateMessageBox(sizeof(size_t), 10);
+    struct msgbox* box3 = CreateMessageBox(sizeof(size_t), 10);
+    
+    PostSize_t(box2, 22);
+    PostSize_t(box3, 3);
+    PostSize_t(box1, 111);
+    PostSize_t(box2, 2);
+    PostSize_t(box2, 222);
+    PostSize_t(box3, 33);
+    PostSize_t(box1, 1);
+    PostSize_t(box1, 11);
+    PostSize_t(box3, 333);
+     
+    while (false) {
+        struct msgbox* boxes[] = {
+            box1, box2, box3
+        };
+        size_t m;
+        int box_num;
+        int retv = KeGetMessageFromMany(boxes, 3, &m, TIMEOUT_INFINITE, true, &box_num);
+        LogPrintf("[retv %d] Got a message with content %d from box %d\n", retv, m, box_num + 1);
+    }
+
     while (true) {
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
         ProcessMessage(msg);
     }
+
+    (void) ProcessMessage;
+    (void) msg;
 }

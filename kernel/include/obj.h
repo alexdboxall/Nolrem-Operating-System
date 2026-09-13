@@ -15,10 +15,11 @@
 #define OBJTYPE_MODULE          7
 #define OBJTYPE_USEROBJ         8
 #define OBJTYPE_MSGBOX          9
+#define OBJTYPE_WAITCLOT        10
 
 struct obj_header {
-    _Atomic uint8_t objtype;
-    _Atomic uint16_t ref_count;
+    uint8_t objtype;
+    _Atomic uint32_t ref_count;
 };
 
 struct user_obj_header {

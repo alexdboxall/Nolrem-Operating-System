@@ -6,17 +6,10 @@
 #include <kgfx.h>
 #include "winmgr_internal.h"
 
-#define BORDER_WIDTH    3
-#define SHADOW_CUT_IN   2
-#define TITLEBAR_HEIGHT 20
-
-#define TITLEBAR_COL_1              0xFF000080
-#define TITLEBAR_COL_2              0xFF00CAFF
-#define TITLEBAR_INACTIVE_COL_1     0xFF404040
-#define TITLEBAR_INACTIVE_COL_2     0xFF808080
-
 static struct spinlock winmgr_lock;
 static struct window* foreground_window = NULL;
+
+bool anything_happened = false;
 
 export struct window* WmGetForegroundWindow() {
     return foreground_window;
@@ -24,13 +17,16 @@ export struct window* WmGetForegroundWindow() {
 
 export void WmSetForegroundWindow(struct window* win, bool lock) {
     if (lock) WmLock();
-    if (foreground_window != NULL) {
-        WmInvalidateWindow(foreground_window, false);
-        DerefObject(foreground_window);
-    }
-    foreground_window = win;
-    if (win != NULL) {
-        RefObject(win);
+    if (win != foreground_window) {
+        if (foreground_window != NULL) {
+            WmInvalidateWindow(foreground_window, false);
+            DerefObject(foreground_window);
+        }
+        foreground_window = win;
+        if (win != NULL) {
+            RefObject(win);
+            WmInvalidateWindow(win, false);
+        }
     }
     if (lock) WmUnlock();
 }
@@ -85,14 +81,19 @@ struct rect WmGetGlobalPosition(struct window* win, bool lock) {
 
 export void WmInvalidateRegion(struct window* win, struct region rgn, bool lock) {
     if (lock) WmLock();
+    anything_happened = true;
     CdUnionRegionInPlace(&win->dirty_rgn, rgn);
+    struct window* kiddo = win->first_child;
+    while (kiddo) {
+        WmInvalidateRegion(kiddo, rgn, false);
+        kiddo = kiddo->next_sibling;
+    }
     if (lock) WmUnlock();
 }
 
 export void WmInvalidateWindow(struct window* win, bool lock) {
     if (lock) WmLock();
-    CdFreeRegion(win->dirty_rgn);
-    win->dirty_rgn = CdEverythingRegion();
+    WmInvalidateRegion(win, win->win_rgn, false);
     if (lock) WmUnlock();
 }
 
@@ -242,6 +243,8 @@ static void ClipOurVisibility(struct window* win) {
 export void WmChangePosition(struct window* win, struct rect local_r, bool lock) {
     if (lock) WmLock();
 
+    anything_happened = true;
+
     /* The easy bit. */
     struct region old_win_bounds = win->win_rgn;
     CdFreeRegion(win->client_rgn);
@@ -293,11 +296,13 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
     if (wc == NULL) {
         return NULL;
     }
-
+    
     struct window* win = AllocHeap(sizeof(struct window));
     InitUserObject(win, UOBJ_WINDOW);
 
     if (lock) WmLock();
+
+    anything_happened = true;
 
     win->winclass = wc;
     win->first_child = NULL;
@@ -305,10 +310,6 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
     win->next_sibling = parent ? parent->first_child : NULL;
     if (parent) {
         parent->first_child = win;
-    }
-
-    if (parent == WmGetDesktop()) {
-        WmSetForegroundWindow(win, false);
     }
 
     SetInternalWindowBounds(win, local_r);
@@ -323,14 +324,42 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
     win->vis_rgn = CdCopyRegion(win->win_rgn);
     ClipOurVisibility(win);
 
+    if (parent == WmGetDesktop()) {
+        WmSetForegroundWindow(win, false);
+    }
+    
     if (lock) WmUnlock();
 
     return win;
 }
 
+/* Recomputes vis_rgn for win and its whole subtree from scratch (copy of win_rgn,
+   clipped against own earlier siblings and own children), and marks whatever
+   newly became visible as dirty. Only valid to call on a window (and its
+   descendants) that currently has nothing external occluding it - e.g. right
+   after it's been made topmost among its own siblings. */
+static void WmRecomputeVisibilityRecursive(struct window* win) {
+    struct region old_vis = win->vis_rgn;
+    win->vis_rgn = CdCopyRegion(win->win_rgn);
+    ClipOurVisibility(win);
+
+    struct region newly_visible = CdSubtractRegion(win->vis_rgn, old_vis);
+    if (!CdIsRegionEmpty(newly_visible)) {
+        CdUnionRegionInPlace(&win->dirty_rgn, newly_visible);
+    }
+    CdFreeRegion(newly_visible);
+    CdFreeRegion(old_vis);
+
+    for (struct window* kiddo = win->first_child; kiddo != NULL; kiddo = kiddo->next_sibling) {
+        WmRecomputeVisibilityRecursive(kiddo);
+    }
+}
+
 export void WmRaiseToTop(struct window* win, bool lock) {
     if (lock) WmLock();
 
+    anything_happened = true;
+    
     if (win->parent != NULL && win->parent->first_child != win) {
         /* Unlink win, then relink it at the front of its parent's child list. */
         struct window* prev = win->parent->first_child;
@@ -341,111 +370,24 @@ export void WmRaiseToTop(struct window* win, bool lock) {
         win->next_sibling = win->parent->first_child;
         win->parent->first_child = win;
 
-        /* win is now topmost among its siblings, so its own vis_rgn can only grow -
-           anything previously hidden behind a former big_bro is revealed. */
-        struct region old_vis = win->vis_rgn;
-        win->vis_rgn = CdCopyRegion(win->win_rgn);
-        struct region newly_visible = CdSubtractRegion(win->vis_rgn, old_vis);
-        if (!CdIsRegionEmpty(newly_visible)) {
-            CdUnionRegionInPlace(&win->dirty_rgn, newly_visible);
-        }
-        CdFreeRegion(newly_visible);
-        CdFreeRegion(old_vis);
+        /* win, and everything in its subtree, is now topmost among its top-level
+           siblings - nothing outside the subtree can occlude any of it any more.
+           Recompute vis_rgn for win AND its descendants, so children like B get
+           back whatever area was stolen while something else (e.g. C) covered
+           them. */
+        WmRecomputeVisibilityRecursive(win);
 
-        /* Whatever win now sits in front of needs win's shape punched out of its vis_rgn.
-           Reuses the same pass WmChangePosition/WmCreateWindow use for "covered". For
-           siblings that were already behind win, this is a no-op - their vis_rgn already
-           excludes win's shape from when win was first created/positioned there. */
+        /* Whatever win now sits in front of needs win's shape punched out of its
+           vis_rgn. Reuses the same pass WmChangePosition/WmCreateWindow use for
+           "covered". For siblings that were already behind win, this is a no-op -
+           their vis_rgn already excludes win's shape from when win was first
+           created/positioned there. */
         struct region covered_rgn = CdCopyRegion(win->win_rgn);
         WmInvalidateExposedRegion(win, &covered_rgn, true);
         CdFreeRegion(covered_rgn);
     }
 
     if (lock) WmUnlock();
-}
-
-static bool UseGradientTitlebar(struct dc* dc) {
-    struct graphics_driver* drv = GetOutputDriver(dc);
-    struct graphics_capabilities caps = drv->get_capabilities(drv);
-    return caps.bits_per_pixel >= 15;
-}
-
-export void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
-    int width = win->local_client_bound.w;
-
-    bool foreground = WmGetForegroundWindow() == win;
-
-    uint32_t col1 = foreground ? TITLEBAR_COL_1 : TITLEBAR_INACTIVE_COL_1;
-    uint32_t col2 = foreground ? TITLEBAR_COL_2 : TITLEBAR_INACTIVE_COL_2;
-
-    struct brush* blue = CdCreateSolidBrush(col1);
-
-    if (UseGradientTitlebar(dc)) {
-        int initial_part = width / 3;
-        int remaining_part = width - initial_part;
-        int gradient_part = remaining_part / 4 * 3;
-        int end_part = remaining_part - gradient_part;
-        CdPaintRectWithBrush(
-            dc, BORDER_WIDTH, BORDER_WIDTH, initial_part, TITLEBAR_HEIGHT, blue
-        );
-        CdPaintGradientRectHz(
-            dc, BORDER_WIDTH + initial_part, BORDER_WIDTH, gradient_part, TITLEBAR_HEIGHT,
-            col1, col2
-        );
-        CdSetBrushColour(blue, col2);
-        CdPaintRectWithBrush(
-            dc, BORDER_WIDTH + initial_part + gradient_part, BORDER_WIDTH, end_part, TITLEBAR_HEIGHT, blue
-        );
-    } else {
-        CdPaintRectWithBrush(
-            dc, BORDER_WIDTH, BORDER_WIDTH, width, TITLEBAR_HEIGHT, blue
-        );
-    }
-    
-    DerefObject(blue);
-
-    CdPaintRectWithBrush(dc, 
-        0,
-        0,
-        win->local_win_bound.w - SHADOW_CUT_IN,
-        BORDER_WIDTH,
-        CdGetStockBrush(STOCK_BRUSH_SYSTEM)
-    );
-    CdPaintRectWithBrush(dc, 
-        0,
-        win->local_win_bound.h - BORDER_WIDTH - SHADOW_CUT_IN,
-        win->local_win_bound.w - SHADOW_CUT_IN,
-        BORDER_WIDTH,
-        CdGetStockBrush(STOCK_BRUSH_SYSTEM)
-    );
-    CdPaintRectWithBrush(dc, 
-        0,
-        win->local_win_bound.h - SHADOW_CUT_IN,
-        win->local_win_bound.w,
-        BORDER_WIDTH,
-        CdGetStockBrush(STOCK_BRUSH_BLACK)
-    );
-    CdPaintRectWithBrush(dc, 
-        0,
-        0,
-        BORDER_WIDTH,
-        win->local_win_bound.h - SHADOW_CUT_IN - BORDER_WIDTH,
-        CdGetStockBrush(STOCK_BRUSH_SYSTEM)
-    );    
-    CdPaintRectWithBrush(dc, 
-        win->local_win_bound.w - SHADOW_CUT_IN - BORDER_WIDTH,
-        0,
-        BORDER_WIDTH,
-        win->local_win_bound.h - SHADOW_CUT_IN,
-        CdGetStockBrush(STOCK_BRUSH_SYSTEM)
-    );
-    CdPaintRectWithBrush(dc, 
-        win->local_win_bound.w - SHADOW_CUT_IN,
-        0,
-        BORDER_WIDTH,
-        win->local_win_bound.h,
-        CdGetStockBrush(STOCK_BRUSH_BLACK)
-    );
 }
 
 export bool WmCheckIfPaintRequired(struct window* win) {
@@ -492,7 +434,11 @@ export struct dc* WmBeginPaint(struct window* win) {
     CdSetTranslation(dc, win->global_offset_cached.x, win->global_offset_cached.y);
 
     if (!(win->winclass->flags & CS_ALLCLIENT)) {
-        WmDefaultNonClientPaint(dc, win);
+        WmCallWinProc(win, (struct msg) {
+            .type = WM_NCPAINT,
+            .p_arg = dc,
+            .win = win,
+        });
         CdSetTranslation(dc, 0, 0);
         CdRestrictClipRegion(dc, win->client_rgn);
         int cx = win->global_offset_cached.x + (win->local_client_bound.x - win->local_win_bound.x);

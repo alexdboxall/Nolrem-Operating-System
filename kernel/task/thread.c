@@ -11,15 +11,11 @@
 #define USTACK_SIZE     (1024 * 16)
 
 export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context) {
-    LogString("A\n");
     struct thread* thr = AllocHeap(sizeof(struct thread));
-        LogString("B\n");
-
     InitObject(thr, OBJTYPE_THREAD);
-    LogString("C\n");
 
     thr->vas = vas;
-    thr->kernel_stack_size = KSTACK_SIZE;
+    thr->kernel_stack_size = entry == IdleTask ? PAGE_SIZE : KSTACK_SIZE;
     size_t kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
     thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
     thr->next_ready = NULL;
@@ -28,7 +24,6 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     thr->waiting_sem_or_clot = NULL;
     thr->priority = PRIORITY_NORMAL;
     thr->block_return_val = 0;
-    LogPrintf("D 0x%X\n", thr->kernel_stack_top);
 
     if (vas == GetKernelVas()) {
         thr->stack_pointer = thr->kernel_stack_top;
@@ -43,11 +38,8 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
         thr->stack_pointer = thr->user_stack_base + USTACK_SIZE;
     }
 
-    LogPrintf("About to ArchSetupNewThreadEntry...\n thr is at 0x%X", thr);
     ArchSetupNewThreadEntry(thr, entry, context);
-    LogPrintf(".\n");
     AcquireScheduler();
-    LogPrintf("About to unblock thread... 0x%X\n", thr);
     UnblockThread(thr, 0);
     ReleaseScheduler();
 

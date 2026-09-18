@@ -19,7 +19,7 @@
  * means a retry path exists that can never make progress, which used to hang
  * the machine in silence. Fail loudly instead.
  */
-#define VMM_MAX_FAULT_RETRIES   1000
+#define VMM_MAX_FAULT_RETRIES   100
 
 static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
                                             size_t base, size_t phys, bool fixed);
@@ -42,23 +42,18 @@ void UnlockVas(struct vas* vas) {
  * So use VMM heap for: virt_page, page_origin, links/chains, mappings
  */
 struct heap vmm_special_heap;
-static uint8_t vmm_heap_bootstrap_page[PAGE_SIZE];
+static uint8_t vmm_heap_bootstrap_page[1024];
 static bool used_vmm_bootstrap_page = false;
 
 void* VmmSpecialHeapGetMemory(size_t* bytes) {
-    LogPrintf("VmmSpecialHeapGetMemory: %d\n", *bytes);
     if (!used_vmm_bootstrap_page) {
-        if (*bytes > PAGE_SIZE) {
-            Panic(PANIC_VMM_SPECIAL_HEAP_BOOTSTRAPPED_WRONGLY);
-        }
+        assert(*bytes <= sizeof(vmm_heap_bootstrap_page));
         used_vmm_bootstrap_page = true;
-        LogPrintf("Bootstrap: 0x%X\n", vmm_heap_bootstrap_page);
-        *bytes = PAGE_SIZE;
+        *bytes = sizeof(vmm_heap_bootstrap_page);
         return vmm_heap_bootstrap_page;
     } else {
         size_t virt = AllocVirt(*bytes);
         size_t pages = (*bytes + PAGE_SIZE - 1) / PAGE_SIZE;
-        LogPrintf("Real deal: virt = 0x%X, pages = %d\n", virt, pages);
         for (size_t i = 0; i < pages; ++i) {
             ArchMapKernelPageDirectly(AllocPhys(true), virt + i * PAGE_SIZE); 
         }
@@ -281,9 +276,6 @@ void MarkPageableSegmentsDiscardable(void) {
         // TODO: need a real file! And offset!
         MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, true, (void*) dummy_file, 0xCAFEBABE);
     } 
-
-    LogPrintf("Going to discard a page...\n");
-    DiscardPage();
 }
 
 /*

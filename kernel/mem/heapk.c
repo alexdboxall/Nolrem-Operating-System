@@ -77,6 +77,7 @@ export void KeFreeHeap(void* ptr) {
 }
 
 void* KernelHeapRequestMemory(size_t* size) {
+    *size = (*size + 1023) & ~1023;
     void* retv = AllocBootstrapHeap(*size);
     if (retv != NULL) {
         return retv;

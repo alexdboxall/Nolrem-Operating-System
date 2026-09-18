@@ -15,7 +15,8 @@ char* panic_msgs[] = {
     "Idle thread has blocked",
     "Fuck me",
     "Assertion failure bootstrapping VMM special heap",
-    "Assertion failure"
+    "Assertion failure",
+    "System message box full"
 };
 
 static _Noreturn void PanicEx(int panic_reason, const char* msg1, const char* msg2) {

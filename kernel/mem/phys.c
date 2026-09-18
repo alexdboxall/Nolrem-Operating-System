@@ -86,6 +86,24 @@ export size_t AllocPhys(bool pin) {
     return 0;
 }
 
+void ReclaimBootstrapStackPhys(void) {
+    extern size_t stack_bottom;
+    extern size_t stack_top;
+
+    size_t start_page = (((size_t) &stack_bottom) + PAGE_SIZE - 1) / PAGE_SIZE;
+    size_t end_page = ((size_t) &stack_top) / PAGE_SIZE;
+
+    for (size_t i = start_page; i < end_page; ++i) {
+        LogPrintf("Reclaiming 0x%X...\n", i * PAGE_SIZE);
+        ++sys_total_pp;
+        ++sys_free_pp;
+        sys_pp_table[i - ARCH_KRNL_MAPPING_BASE / PAGE_SIZE].exists = true;
+    }
+
+    LogPrintf("Total RAM: %dKB\n", sys_total_pp * PAGE_SIZE / 1024);
+    LogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);
+}
+
 void InitPhys(struct boot_memory_entry* table, size_t count) {
     LogString("\nInit physical memory... ");
     size_t total_phys_pages = 0;
@@ -123,7 +141,9 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
         size_t page_start = (entry.address + PAGE_SIZE - 1) / PAGE_SIZE;
         size_t page_end = (entry.address + entry.length) / PAGE_SIZE;
     
-        if (BOOTRAM_GET_TYPE(entry.info) == BOOTRAM_TYPE_AVAILABLE) {         
+        if (BOOTRAM_GET_TYPE(entry.info) == BOOTRAM_TYPE_AVAILABLE) {     
+            sys_total_pp += page_end - page_start;
+    
             for (size_t j = page_start; j < page_end; ++j) {
                 if (j * PAGE_SIZE >= 0x10000 && j * PAGE_SIZE < max_addr_used_now) {
                     continue;
@@ -137,7 +157,6 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
                     continue;
                 }
                 if (j < sys_pp_table_max_index) {
-                    ++sys_total_pp;
                     ++sys_free_pp;
                     sys_pp_table[j].exists = true;
                 }
@@ -145,6 +164,7 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
         }
     }
 
-    LogPrintf("%dKB\n", sys_total_pp * PAGE_SIZE / 1024);
+    LogPrintf("Total RAM: %dKB\n", sys_total_pp * PAGE_SIZE / 1024);
+    LogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);
 }
 

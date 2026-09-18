@@ -149,8 +149,6 @@ static userexec struct block* RequestBlock(struct heap* heap, size_t total_size)
      * it wouldn't be aligned anymore).
      */
     total_size += MIN_REQ_SIZE * 2;
-
-    total_size = (total_size + 1023) & ~1023;
     struct block* block = (struct block*) heap->get_memory(&total_size);
     if (block == NULL) {
         return NULL;

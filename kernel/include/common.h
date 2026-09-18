@@ -74,9 +74,12 @@ struct rect {
 #define SYSMSG_MOUSEEVENT  0
 #define SYSMSG_LOWMEMORY   1
 
+struct window;
+
 struct msg {
     uint16_t type;
     int i_arg;
+    struct window* win;
     union {
         void* p_arg;
         struct rect rect_arg;

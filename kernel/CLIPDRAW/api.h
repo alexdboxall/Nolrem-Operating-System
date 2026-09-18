@@ -335,12 +335,22 @@ struct point GetPenOrigin(pen_t pen);
 
 /* Window Functions */
 
-#define WM_PAINT        1
-#define WM_NCPAINT      2
-#define WM_MOUSEMOVE    3
-#define WM_MOUSEDOWN    4
-#define WM_MOUSEUP      5
+#define WM_PAINT                1
+#define WM_NCPAINT              2   
+#define WM_MOUSEMOVE            3
+#define WM_MOUSEDOWN            4
+#define WM_MOUSEUP              5
+#define WM_HITTEST              6  
+#define WM_TOPLEVEL_MOUSEDOWN   7
 
+#define HIT_TOP_BORDER      (1 << 0)
+#define HIT_LEFT_BORDER     (1 << 1)
+#define HIT_BOTTOM_BORDER   (1 << 2)
+#define HIT_RIGHT_BORDER    (1 << 3)
+#define HIT_CLOSE           (1 << 4)
+#define HIT_TITLEBAR        (1 << 5)
+#define HIT_CLIENT          (1 << 6)
+#define HIT_NONCLIENT       (1 << 7)
 
 #define CS_ALLCLIENT    1
 

@@ -104,9 +104,3 @@ export pageable bool CdIsPointInRegion(struct region rgn, int x, int y) {
     struct point target = { x, y };
     return IterateRegion(rgn, PointInRectCallback, &target, false);
 }
-
-export pageable void CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b) {
-    struct region c = CdGetRegionCombination(mode, *a, b);
-    CdFreeRegion(*a);
-    *a = c;
-}

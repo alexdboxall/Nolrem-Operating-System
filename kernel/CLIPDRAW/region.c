@@ -1135,3 +1135,9 @@ export struct region CdCreateRectRegion(int x, int y, int width, int height) {
 export struct region CdEverythingRegion(void) {
     return CdCreateRectRegion(INT16_MIN, INT16_MIN, 65535, 65535);
 }
+
+export void CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b) {
+    struct region c = CdGetRegionCombination(mode, *a, b);
+    CdFreeRegion(*a);
+    *a = c;
+}

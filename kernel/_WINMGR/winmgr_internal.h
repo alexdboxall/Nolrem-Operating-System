@@ -3,6 +3,12 @@
 #include "../CLIPDRAW/api.h"
 #include "../CLIPDRAW/clipdraw_internal.h"
 
+#define BORDER_WIDTH    3
+#define CORNER_WIDTH    15
+
+#define SHADOW_CUT_IN   2
+#define TITLEBAR_HEIGHT 20
+
 struct window_class {
     struct user_obj_header hdr;
 
@@ -60,4 +66,7 @@ void WmRaiseToTop(struct window* win, bool lock);
 _Noreturn void WmMainloop(void);
 struct msgbox* WmGetSystemMessageBox(void);
 void WmInitSystemMessageBox(void);
+void WmStartDraggingWindow(struct window* win);
+void WmStartResizingWindow(struct window* win, int hit_test_results);
 extern bool wm_mainloop_started;
+bool WmCheckIfPaintRequired(struct window* win);

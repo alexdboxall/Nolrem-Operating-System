@@ -36,6 +36,10 @@ export _Noreturn void InitKernelResidentPortion(void) {
     extern _Noreturn void WmMainloop();
 
     MarkPageableSegmentsDiscardable();
+    while (DiscardPage() != NULL) {
+        ;
+    }
+    ReclaimBootstrapStackPhys();
     CdInit();
     WmInit();
     WmMainloop();

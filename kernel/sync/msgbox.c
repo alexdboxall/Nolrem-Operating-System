@@ -7,6 +7,7 @@
 #include <scheduler.h>
 #include <string.h>
 #include <log.h>
+#include <panic.h>
 #include <msgbox.h>
 
 struct msgbox {
@@ -52,10 +53,22 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
         return EINVAL;
     }
 
-    int res = AcquireSem(mbox->empty_sem, timeout);
-    if (res != 0) {
-        return res;
+    int res;
+
+    extern struct msgbox* WmGetSystemMessageBox(void);
+    if (mbox == WmGetSystemMessageBox()) {
+        res = AcquireSem(mbox->empty_sem, TIMEOUT_INSTANT);
+        if (res != 0) {
+            Panic(PANIC_SYSTEM_MESSAGES_FULL);
+        }
+    } else {
+        res = AcquireSem(mbox->empty_sem, timeout);
+        if (res != 0) {
+            return res;
+        }
     }
+
+    
 
     res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
     if (res != 0) {

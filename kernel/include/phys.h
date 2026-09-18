@@ -9,6 +9,8 @@ void InitPhys(struct boot_memory_entry* table, size_t count);
 
 struct phys_page;
 
+void ReclaimBootstrapStackPhys(void);
+
 size_t AllocPhys(bool pin);
 void FreeDiscardedPhys(struct phys_page* pp);
 

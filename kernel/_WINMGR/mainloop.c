@@ -11,7 +11,7 @@
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
-#define SYSTEM_MSGBOX_SIZE      16
+#define SYSTEM_MSGBOX_SIZE      32
 
 static struct msgbox* sys_mbox = NULL;
 
@@ -32,11 +32,14 @@ int prev_mouse_buttons = 0;
 int mouse_buttons = 0;
 
 static struct window* dragging_win = NULL;
+static struct window* resizing_win = NULL;
+static int resize_hit_test_results = 0;
 static int drag_mouse_start_x = 0;
 static int drag_mouse_start_y = 0;
 static struct rect drag_win_og_bounds;
 
 #define MOUSE_BUTTON_LEFT           1
+
 
 static void DrawInvFrame(struct rect pos) {
     const int BORDER = 3;
@@ -48,15 +51,79 @@ static void DrawInvFrame(struct rect pos) {
     WmReturnDC(dc);
 }
 
-// Needs ref count already added from WmGetToplevelAtPoint.
-static void WmStartDraggingWindow(struct window* win) {
+
+/* Reasonable floor so a border can't be dragged past its opposite edge. Mirrors
+   the client-size clamp in SetInternalWindowBounds. */
+#define MIN_WINDOW_W (BORDER_WIDTH * 2 + SHADOW_CUT_IN + 20)
+#define MIN_WINDOW_H (BORDER_WIDTH * 2 + TITLEBAR_HEIGHT + SHADOW_CUT_IN + 20)
+
+/* Applies a resize identified by hit_test_results (see HIT_*_BORDER) to `base`,
+   given how far the mouse has moved (dx, dy) since the resize started. If the
+   drag would shrink a dimension past the minimum, that dimension is clamped
+   without letting the fixed (non-dragged) edge move. */
+static struct rect WmApplyResizeDelta(struct rect base, int dx, int dy, int hit_test_results) {
+    struct rect r = base;
+
+    if (hit_test_results & HIT_LEFT_BORDER) {
+        r.x += dx;
+        r.w -= dx;
+    }
+    if (hit_test_results & HIT_RIGHT_BORDER) {
+        r.w += dx;
+    }
+    if (hit_test_results & HIT_TOP_BORDER) {
+        r.y += dy;
+        r.h -= dy;
+    }
+    if (hit_test_results & HIT_BOTTOM_BORDER) {
+        r.h += dy;
+    }
+
+    if (r.w < MIN_WINDOW_W) {
+        if (hit_test_results & HIT_LEFT_BORDER) {
+            r.x -= (MIN_WINDOW_W - r.w);
+        }
+        r.w = MIN_WINDOW_W;
+    }
+    if (r.h < MIN_WINDOW_H) {
+        if (hit_test_results & HIT_TOP_BORDER) {
+            r.y -= (MIN_WINDOW_H - r.h);
+        }
+        r.h = MIN_WINDOW_H;
+    }
+
+    return r;
+}
+
+void WmStartDraggingWindow(struct window* win) {
+    RefObject(win);
     drag_mouse_start_x = mouse_x;
     drag_mouse_start_y = mouse_y;
     drag_win_og_bounds = win->local_client_bound;
     dragging_win = win;
+}
 
-    WmSetForegroundWindow(win, true);
-    WmRaiseToTop(win, true);
+void WmStartResizingWindow(struct window* win, int hit_test_results) {
+    RefObject(win);
+    drag_mouse_start_x = mouse_x;
+    drag_mouse_start_y = mouse_y;
+    drag_win_og_bounds = win->local_client_bound;
+    resizing_win = win;   
+
+    resize_hit_test_results = hit_test_results; 
+}
+
+static void WmStopResizingWindow(void) {
+    if (resizing_win != NULL) {
+        struct rect r = resizing_win->local_win_bound;
+        
+        r = WmApplyResizeDelta(r, mouse_x - drag_mouse_start_x, mouse_y - drag_mouse_start_y,
+                                resize_hit_test_results);
+        
+        WmChangePosition(resizing_win, r, true); 
+        DerefObject(resizing_win);
+        resizing_win = NULL;
+    }
 }
 
 static void WmStopDraggingWindow(void) {
@@ -90,6 +157,17 @@ static bool HandleMouse(int mx, int my, int click_bits) {
             r.y += mouse_y - drag_mouse_start_y;
             DrawInvFrame(r);
         }
+        if (resizing_win) {
+            struct rect r = WmApplyResizeDelta(resizing_win->local_win_bound,
+                prev_mouse_pt.x - drag_mouse_start_x, prev_mouse_pt.y - drag_mouse_start_y,
+                resize_hit_test_results);
+            DrawInvFrame(r);
+
+            r = WmApplyResizeDelta(resizing_win->local_win_bound,
+                mouse_x - drag_mouse_start_x, mouse_y - drag_mouse_start_y,
+                resize_hit_test_results);
+            DrawInvFrame(r);
+        }
         CdDrawMouse(mouse_x, mouse_y);
     }
 
@@ -99,10 +177,19 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     // Mouse down
     if ((mouse_buttons & MOUSE_BUTTON_LEFT) && !(prev_mouse_buttons & MOUSE_BUTTON_LEFT)) {
         struct window* win = WmGetToplevelAtPoint(mouse_x, mouse_y, true);
+        
         if (win != NULL) {
-            // TODO: make this something that involves sending a message to the window
-            //       so that it can properly paint itself at toplevel before being dragged
-            WmStartDraggingWindow(win);
+            WmCallWinProc(win, (struct msg) {
+                .win = win,
+                .type = WM_TOPLEVEL_MOUSEDOWN,
+                .point_arg1 = (struct point) {
+                    .x = mouse_x,
+                    .y = mouse_y,
+                }
+            });
+            DerefObject(win);
+        } else {
+            WmSetForegroundWindow(NULL, true);
         }
     }
     
@@ -112,6 +199,10 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     if (!(mouse_buttons & MOUSE_BUTTON_LEFT) && (prev_mouse_buttons & MOUSE_BUTTON_LEFT)) {
         if (dragging_win != NULL) {
             WmStopDraggingWindow();
+            retv = true;
+        }
+        if (resizing_win != NULL) {
+            WmStopResizingWindow();
             retv = true;
         }
     }
@@ -132,28 +223,22 @@ static void ProcessMessage(struct msg msg) {
         break;
 
     case SYSMSG_MOUSEEVENT:
-        LogPrintf("Handling mouse...\n");
-        bool up = HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
-        if (up) {
-            WmCallWinProc(WmGetDesktop(), (struct msg) {
-                .type = WM_PAINT
-            });
-            WmCallWinProc(win, (struct msg) {
-                .type = WM_PAINT
-            });
-            WmCallWinProc(win2, (struct msg) {
-                .type = WM_PAINT
-            });
-            WmCallWinProc(win3, (struct msg) {
-                .type = WM_PAINT
-            });
-        }
+        HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
         break;
     }
 }
 
 static void PostSize_t(struct msgbox* box, size_t v) {
     KePostMessage(box, &v, TIMEOUT_INFINITE);
+}
+
+static void RepaintIfNeeded(struct window* win) {
+    if (WmCheckIfPaintRequired(win)) {
+        WmCallWinProc(win, (struct msg) {
+            .type = WM_PAINT,
+            .win = win
+        });
+    }
 }
 
 _Noreturn void WmMainloop(void) {
@@ -185,12 +270,9 @@ _Noreturn void WmMainloop(void) {
     WmCallWinProc(win2, (struct msg) {
         .type = WM_PAINT
     });
-    (void) win3;
-
-    /*WmCallWinProc(win3, (struct msg) {
+    WmCallWinProc(win3, (struct msg) {
         .type = WM_PAINT
-    });*/
-
+    });
 
     struct msgbox* box1 = CreateMessageBox(sizeof(size_t), 10);
     struct msgbox* box2 = CreateMessageBox(sizeof(size_t), 10);
@@ -217,8 +299,17 @@ _Noreturn void WmMainloop(void) {
     }
 
     while (true) {
+        extern bool anything_happened;
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
         ProcessMessage(msg);
+
+        if (anything_happened) {
+            anything_happened = false;            
+            RepaintIfNeeded(WmGetDesktop());
+            RepaintIfNeeded(win);
+            RepaintIfNeeded(win2);
+            RepaintIfNeeded(win3);
+        }
     }
 
     (void) ProcessMessage;

@@ -18,8 +18,10 @@ global boot_page_directory
 global boot_page_table1
 boot_page_directory: resb 4096
 boot_page_table1: resb 4096
+global stack_bottom
+global stack_top
 stack_bottom:
-resb 16 * 1024
+resb 8 * 1024
 stack_top:
 
 ; The start of the kernel itself - this will be called by the bootloader.
@@ -46,7 +48,11 @@ _start:
 
 .mapNextPage:
 	mov edx, esi
-	or edx, 3			; make the page present and writable
+	or edx, 0x103			; make the page present and writable
+							; we set 'global' too, later we can set a bit in CR4
+							; for this to take effect. note the i486 doesn't
+							; support the global flag, but it ignores this bit
+							; anyway so it's fine to set here.
 .keep:
 	mov [edi], edx
 

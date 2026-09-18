@@ -83,6 +83,12 @@ static size_t TranslateToEntry(struct virt_page* vp) {
     flags |= (vp->present && !vp->busy) ? PAGE_PRESENT : 0;
     flags |= vp->write ? PAGE_WRITE : 0;
     flags |= vp->user ? PAGE_USER : 0;
+
+    /* 
+     * The global flag only exists on Pentium and later. But the i486 ignores
+     * this bit, even though it's meant to be reserved as zero. So it's fine to
+     * set.
+     */
     flags |= InKernelRange(vp->virt) ? PAGE_GLOBAL : 0;
     
     return phys | flags;

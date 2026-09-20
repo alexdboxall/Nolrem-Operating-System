@@ -189,13 +189,21 @@ static void WmInvalidateExposedRegion(struct window* win, struct region* exposed
     }
 }
 
+bool DoesWindowShowBorder(struct window* win) {
+    return !(win->style & WS_MAXIMISED);
+}
+
 static void SetInternalWindowBounds(struct window* win, struct rect local_r) {
+    bool has_border = DoesWindowShowBorder(win);
+    int border_width = has_border ? BORDER_WIDTH : 0;
+    int shadow = has_border ? SHADOW_CUT_IN : 0;
+
     win->local_win_bound = local_r;
     win->local_client_bound = local_r;
-    win->local_client_bound.x += BORDER_WIDTH;
-    win->local_client_bound.y += BORDER_WIDTH + TITLEBAR_HEIGHT;
-    win->local_client_bound.w = MAX(0, win->local_win_bound.w - BORDER_WIDTH * 2 - SHADOW_CUT_IN);
-    win->local_client_bound.h = MAX(0, win->local_win_bound.h - BORDER_WIDTH * 2 - TITLEBAR_HEIGHT - SHADOW_CUT_IN);
+    win->local_client_bound.x += border_width;
+    win->local_client_bound.y += border_width + TITLEBAR_HEIGHT;
+    win->local_client_bound.w = MAX(0, win->local_win_bound.w - border_width * 2 - shadow);
+    win->local_client_bound.h = MAX(0, win->local_win_bound.h - border_width * 2 - TITLEBAR_HEIGHT - shadow);
     win->global_offset_cached = WmAccumulateScreenOrigin(win, false);
 
     win->win_rgn = CdCreateRectRegion(
@@ -304,6 +312,8 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
 
     anything_happened = true;
 
+    win->restore_pos = local_r;
+    win->style = 0;
     win->winclass = wc;
     win->first_child = NULL;
     win->parent = parent;
@@ -359,7 +369,7 @@ export void WmRaiseToTop(struct window* win, bool lock) {
     if (lock) WmLock();
 
     anything_happened = true;
-    
+
     if (win->parent != NULL && win->parent->first_child != win) {
         /* Unlink win, then relink it at the front of its parent's child list. */
         struct window* prev = win->parent->first_child;

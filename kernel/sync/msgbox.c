@@ -48,6 +48,43 @@ export struct msgbox* CreateMessageBox(size_t message_size, size_t max_count) {
     return mbox;
 }
 
+export int KeTryReplaceOrAdd(struct msgbox* mbox, const void* compare_to,
+                             const void* replace_with, int64_t timeout) {
+    if (mbox == NULL || compare_to == NULL || replace_with == NULL) {
+        return EINVAL;
+    }
+
+    int res = AcquireSem(mbox->empty_sem, timeout);
+    if (res != 0) {
+        return res;
+    }
+
+    res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
+    if (res != 0) {
+        ReleaseSem(mbox->empty_sem);
+        return res;
+    }
+
+    if (mbox->count != 0) {
+        size_t tail = (mbox->end_idx + mbox->max_count - 1) % mbox->max_count;
+        uint8_t* tail_ptr = mbox->data + tail * mbox->message_size;
+        if (memcmp(tail_ptr, compare_to, mbox->message_size) == 0) {
+            memcpy(tail_ptr, replace_with, mbox->message_size);
+            ReleaseMutex(mbox->lock);
+            ReleaseSem(mbox->empty_sem);
+            return 0;
+        }
+    }
+
+    memcpy(mbox->data + mbox->end_idx * mbox->message_size,
+           replace_with, mbox->message_size);
+    mbox->end_idx = (mbox->end_idx + 1) % mbox->max_count;
+    mbox->count++;
+    ReleaseMutex(mbox->lock);
+    ReleaseSem(mbox->filled_sem);
+    return 0;
+}
+
 export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) {
     if (mbox == NULL || msg == NULL) {
         return EINVAL;
@@ -67,8 +104,6 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
             return res;
         }
     }
-
-    
 
     res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
     if (res != 0) {

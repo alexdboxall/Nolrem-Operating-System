@@ -15,9 +15,25 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     InitObject(thr, OBJTYPE_THREAD);
 
     thr->vas = vas;
-    thr->kernel_stack_size = entry == IdleTask ? PAGE_SIZE : KSTACK_SIZE;
-    size_t kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
-    thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
+
+    if (entry == NULL) {
+        /*
+         * The first kernel task continues to use its own special stack.
+         * Luckily, it won't ever be terminated, so we don't need to worry about
+         * cleanup of the not-through-the-VMM stack. 
+         * 
+         * Set to dummy values so if one day we get a crash related to this, we
+         * can tell the reason.
+         */
+        thr->kernel_stack_top = 0xBEEFBEAD;
+        thr->kernel_stack_size = 0xDEADBEEF;
+
+    } else {
+        thr->kernel_stack_size = entry == IdleTask ? PAGE_SIZE : KSTACK_SIZE;
+        size_t kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
+        thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
+    }
+    
     thr->next_ready = NULL;
     thr->next_waiting_timer = NULL;
     thr->next_waiting_sem = NULL;
@@ -38,7 +54,10 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
         thr->stack_pointer = thr->user_stack_base + USTACK_SIZE;
     }
 
-    ArchSetupNewThreadEntry(thr, entry, context);
+    if (entry != NULL) {
+        /* Skip for initial kernel thread, we're not really entering it. */
+        ArchSetupNewThreadEntry(thr, entry, context);
+    }
     AcquireScheduler();
     UnblockThread(thr, 0);
     ReleaseScheduler();

@@ -61,11 +61,28 @@ export void PostMessageIrq(struct msg msg) {
 }
 
 void ProcessIrqPostMessage(void) {
+    static struct msg prev_mouse_msg;
+    static bool has_prev_mouse_msg = true;
     extern struct msgbox* WmGetSystemMessageBox(void);
+    struct msgbox* sysbox = WmGetSystemMessageBox();
     if (has_defer_msg) {
-        has_defer_msg = false;
         AcquireScheduler();
-        KePostMessage(WmGetSystemMessageBox(), &defer_msg, -1);
+        has_defer_msg = false;
+        if (defer_msg.type == SYSMSG_MOUSEEVENT && has_prev_mouse_msg) {
+            KeTryReplaceOrAdd(
+                sysbox, 
+                (const void*) &prev_mouse_msg,
+                (const void*) &defer_msg, 
+                TIMEOUT_INFINITE
+            );
+            
+        } else {
+            KePostMessage(sysbox, &defer_msg, TIMEOUT_INFINITE);
+        }
+        if (defer_msg.type == SYSMSG_MOUSEEVENT) {
+            prev_mouse_msg = defer_msg;
+            has_prev_mouse_msg = true;
+        }
         ReleaseScheduler();
     }
 }

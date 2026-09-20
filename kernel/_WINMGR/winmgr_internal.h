@@ -3,8 +3,10 @@
 #include "../CLIPDRAW/api.h"
 #include "../CLIPDRAW/clipdraw_internal.h"
 
+#define DOUBLE_CLICK_MS 400
+
 #define BORDER_WIDTH    3
-#define CORNER_WIDTH    15
+#define CORNER_WIDTH    12
 
 #define SHADOW_CUT_IN   2
 #define TITLEBAR_HEIGHT 20
@@ -17,6 +19,8 @@ struct window_class {
     struct window_class* next;
     int flags;
 };
+
+#define WS_MAXIMISED        1
 
 struct window {
     struct user_obj_header hdr;
@@ -37,6 +41,9 @@ struct window {
     struct window* parent;
 
     struct window_class* winclass;
+
+    struct rect restore_pos;
+    int style;
 };
 
 
@@ -70,3 +77,4 @@ void WmStartDraggingWindow(struct window* win);
 void WmStartResizingWindow(struct window* win, int hit_test_results);
 extern bool wm_mainloop_started;
 bool WmCheckIfPaintRequired(struct window* win);
+bool DoesWindowShowBorder(struct window* win);

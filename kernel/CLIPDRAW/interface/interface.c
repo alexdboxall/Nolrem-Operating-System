@@ -44,3 +44,11 @@ int ActualPaintRectWithBrush(struct dc* dc, int x1, int y1, int x2, int y2,
     }
     return 0;
 }
+
+int ActualBitmapBlit(struct dc* dc, struct compat_bitmap* bitmap, struct rect src, struct point dest) {
+    struct graphics_driver* drv = GetOutputDriver(dc);
+    CdStartVideoUpdate(dest.x, dest.y, dest.x + src.w, dest.y + src.h);
+    drv->blit_compatible_bitmap(drv, bitmap, src, dest);
+    CdEndVideoUpdate(dest.x, dest.y, dest.x + src.w, dest.y + src.h);
+    return 0; 
+}  

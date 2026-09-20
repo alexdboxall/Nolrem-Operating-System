@@ -86,8 +86,9 @@ export size_t AllocPhys(bool pin) {
     return 0;
 }
 
+/* Not needed, as the kernel task continues to use the bootstrap one anyway?*/
 void ReclaimBootstrapStackPhys(void) {
-    extern size_t stack_bottom;
+    /*extern size_t stack_bottom;
     extern size_t stack_top;
 
     size_t start_page = (((size_t) &stack_bottom) + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -99,6 +100,12 @@ void ReclaimBootstrapStackPhys(void) {
         ++sys_free_pp;
         sys_pp_table[i - ARCH_KRNL_MAPPING_BASE / PAGE_SIZE].exists = true;
     }
+
+
+    while (true) {
+        ;
+    }
+*/
 
     LogPrintf("Total RAM: %dKB\n", sys_total_pp * PAGE_SIZE / 1024);
     LogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);

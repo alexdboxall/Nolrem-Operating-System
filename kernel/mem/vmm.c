@@ -882,8 +882,12 @@ export void CopyToPhysPage(size_t phys, void* data) {
 
 export void ZeroPhysPage(size_t phys) {
     size_t r = ArchLockToCpu();
+    LogPrintf("ZeroPhysPage... phys 0x%X\n", phys);
     size_t virt = ArchGetTemporaryPage(phys);
     memset((void*) virt, 0, PAGE_SIZE);
+    LogPrintf("Memset it!\n");
     ArchReleaseTemporaryPage(virt);
+    LogPrintf("Released...\n");
     ArchUnlockFromCpu(r);
+    LogPrintf("Done.\n");
 }

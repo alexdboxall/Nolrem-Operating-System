@@ -33,6 +33,7 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define ABS(a)    ((a) < 0 ? (-a) : (a))
 #define CLAMP(val, min, max) MAX(MIN(val, max), min)
 #define COMPARE_SIGN(a, b) ((a) > (b) ? 1 : ((a) < (b) ? -1 : 0))
 

@@ -153,11 +153,13 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
 }
 
 void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
+    LogPrintf("ArchSyncVirt: 0x%X\n", vp->virt);
     SetPte(vas, vp->virt, TranslateToEntry(vp));
 }
 
 size_t ArchGetTemporaryPage(size_t phys) {
     size_t cpu_num = ArchGetCpuNum();
+    LogPrintf("ArchGetTemporaryPage: 0x%X\n", scratch_virt_region + cpu_num * PAGE_SIZE);
     SetPte(GetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
     return scratch_virt_region + cpu_num * PAGE_SIZE;
 }
@@ -207,6 +209,7 @@ void ArchInitVas(struct vas* vas, bool first) {
         }
 
         scratch_virt_region = AllocVirt(PAGE_SIZE * ARCH_MAX_CPUS);
+        LogPrintf("Scratch virt region is at: 0x%X\n", scratch_virt_region);
         for (size_t i = 0; i < (size_t) ARCH_MAX_CPUS; ++i) {
             SetPte(vas, scratch_virt_region + i * PAGE_SIZE, 0);
         }

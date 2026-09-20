@@ -183,21 +183,6 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
         for (size_t i = 0; i < file_size; ++i) {
             hash ^= ((uint8_t*) 0x40000)[i];
             hash = (hash << 3) | (hash >> 29);
-            if (i >= 512 * 8 && i < 512 * 9 && (i & 3) == 0) {
-                DiagnosticPrintf(" %X %X %X %X\n  ", 
-                    ((uint8_t*) 0x40000)[i],
-                    ((uint8_t*) 0x40000)[i+1],
-                    ((uint8_t*) 0x40000)[i+2],
-                    ((uint8_t*) 0x40000)[i+3]
-                );
-
-                while (true) {
-                    if (WaitKey() == '1') break;
-                }
-                while (true) {
-                    if (WaitKey() == '2') break;
-                }
-            }
         }
         DiagnosticPrintf("\n  FINAL KERNEL IMAGE HASH: 0x%X\n  ", hash);
     }
@@ -217,7 +202,10 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
     kboot_info.ram_table = fw->ram_table;
 
     if (show_boot_options) {
-        while (true);
+        DiagnosticPrintf("Press 9 key to continue...\n");
+        while (WaitKey() != '9') {
+            ;
+        }
         BootOptionsMenu();
     }
 

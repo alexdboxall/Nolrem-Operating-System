@@ -3,6 +3,7 @@
 #include <log.h>
 #include <mutex.h>
 #include <kgfx.h>
+#include <timer.h>
 #include "winmgr_internal.h"
 
 #define TITLEBAR_COL_1              0xFF000080
@@ -32,6 +33,10 @@ static bool UseGradientTitlebar(struct dc* dc) {
 }
 
 static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
+    bool has_border = DoesWindowShowBorder(win);
+    int border_width = has_border ? BORDER_WIDTH : 0;
+    int shadow = has_border ? SHADOW_CUT_IN : 0;
+
     int width = win->local_client_bound.w;
 
     bool foreground = WmGetForegroundWindow() == win;
@@ -47,19 +52,19 @@ static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
         int gradient_part = remaining_part / 4 * 3;
         int end_part = remaining_part - gradient_part;
         CdPaintRectWithBrush(
-            dc, BORDER_WIDTH, BORDER_WIDTH, initial_part, TITLEBAR_HEIGHT, blue
+            dc, border_width, border_width, initial_part, TITLEBAR_HEIGHT, blue
         );
         CdPaintGradientRectHz(
-            dc, BORDER_WIDTH + initial_part, BORDER_WIDTH, gradient_part, TITLEBAR_HEIGHT,
+            dc, border_width + initial_part, border_width, gradient_part, TITLEBAR_HEIGHT,
             col1, col2
         );
         CdSetBrushColour(blue, col2);
         CdPaintRectWithBrush(
-            dc, BORDER_WIDTH + initial_part + gradient_part, BORDER_WIDTH, end_part, TITLEBAR_HEIGHT, blue
+            dc, border_width + initial_part + gradient_part, border_width, end_part, TITLEBAR_HEIGHT, blue
         );
     } else {
         CdPaintRectWithBrush(
-            dc, BORDER_WIDTH, BORDER_WIDTH, width, TITLEBAR_HEIGHT, blue
+            dc, border_width, border_width, width, TITLEBAR_HEIGHT, blue
         );
     }
     
@@ -68,42 +73,42 @@ static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
     CdPaintRectWithBrush(dc, 
         0,
         0,
-        win->local_win_bound.w - SHADOW_CUT_IN,
-        BORDER_WIDTH,
+        win->local_win_bound.w - shadow,
+        border_width,
         CdGetStockBrush(STOCK_BRUSH_SYSTEM)
     );
     CdPaintRectWithBrush(dc, 
         0,
-        win->local_win_bound.h - BORDER_WIDTH - SHADOW_CUT_IN,
-        win->local_win_bound.w - SHADOW_CUT_IN,
-        BORDER_WIDTH,
+        win->local_win_bound.h - border_width - shadow,
+        win->local_win_bound.w - shadow,
+        border_width,
         CdGetStockBrush(STOCK_BRUSH_SYSTEM)
     );
     CdPaintRectWithBrush(dc, 
         0,
-        win->local_win_bound.h - SHADOW_CUT_IN,
+        win->local_win_bound.h - shadow,
         win->local_win_bound.w,
-        BORDER_WIDTH,
+        border_width,
         CdGetStockBrush(STOCK_BRUSH_BLACK)
     );
     CdPaintRectWithBrush(dc, 
         0,
         0,
-        BORDER_WIDTH,
-        win->local_win_bound.h - SHADOW_CUT_IN - BORDER_WIDTH,
+        border_width,
+        win->local_win_bound.h - shadow - border_width,
         CdGetStockBrush(STOCK_BRUSH_SYSTEM)
     );    
     CdPaintRectWithBrush(dc, 
-        win->local_win_bound.w - SHADOW_CUT_IN - BORDER_WIDTH,
+        win->local_win_bound.w - shadow - border_width,
         0,
-        BORDER_WIDTH,
-        win->local_win_bound.h - SHADOW_CUT_IN,
+        border_width,
+        win->local_win_bound.h - shadow,
         CdGetStockBrush(STOCK_BRUSH_SYSTEM)
     );
     CdPaintRectWithBrush(dc, 
-        win->local_win_bound.w - SHADOW_CUT_IN,
+        win->local_win_bound.w - shadow,
         0,
-        BORDER_WIDTH,
+        border_width,
         win->local_win_bound.h,
         CdGetStockBrush(STOCK_BRUSH_BLACK)
     );
@@ -112,32 +117,46 @@ static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
 
 /* Point relative to the top-left of the window. */
 static int HandleHitTest(struct window* win, struct point p) {
+    bool has_border = DoesWindowShowBorder(win);
+    int shadow = has_border ? SHADOW_CUT_IN : 0;
+
     int retv = 0;
-    if (p.x < BORDER_WIDTH) retv |= HIT_LEFT_BORDER;
-    if (p.y < BORDER_WIDTH) retv |= HIT_TOP_BORDER;
-    if (p.x >= win->local_win_bound.w - BORDER_WIDTH) retv |= HIT_RIGHT_BORDER;
-    if (p.y >= win->local_win_bound.h - BORDER_WIDTH) retv |= HIT_BOTTOM_BORDER;
-    if (p.y >= SHADOW_CUT_IN && p.y < TITLEBAR_HEIGHT + SHADOW_CUT_IN) retv |= HIT_TITLEBAR;
+    if (p.y >= shadow && p.y < TITLEBAR_HEIGHT + shadow) retv |= HIT_TITLEBAR;
     if (WmIsPointInRect(p.x, p.y, win->local_client_bound)) {
         retv |= HIT_CLIENT;
     } else {
         retv |= HIT_NONCLIENT;
     }
 
+    if (!has_border) {
+        return retv;
+    }
+
+    if (p.x < BORDER_WIDTH) retv |= HIT_LEFT_BORDER;
+    if (p.y < BORDER_WIDTH) retv |= HIT_TOP_BORDER;
+    if (p.x >= win->local_win_bound.w - BORDER_WIDTH) retv |= HIT_RIGHT_BORDER;
+    if (p.y >= win->local_win_bound.h - BORDER_WIDTH) retv |= HIT_BOTTOM_BORDER;
+
     /* Make the corner(s) bigger. */
     if (p.x >= win->local_win_bound.w - CORNER_WIDTH) {
-        //if (p.y < CORNER_WIDTH)                          retv |= HIT_RIGHT_BORDER | HIT_TOP_BORDER;
+        if (p.y < CORNER_WIDTH)                          retv |= HIT_RIGHT_BORDER | HIT_TOP_BORDER;
         if (p.y > win->local_win_bound.h - CORNER_WIDTH) retv |= HIT_RIGHT_BORDER | HIT_BOTTOM_BORDER;
 
     } else if (p.x < CORNER_WIDTH) {
-        //if (p.y < CORNER_WIDTH)                          retv |= HIT_LEFT_BORDER | HIT_TOP_BORDER;
-        //if (p.y > win->local_win_bound.h - CORNER_WIDTH) retv |= HIT_LEFT_BORDER | HIT_BOTTOM_BORDER;
+        if (p.y < CORNER_WIDTH)                          retv |= HIT_LEFT_BORDER | HIT_TOP_BORDER;
+        if (p.y > win->local_win_bound.h - CORNER_WIDTH) retv |= HIT_LEFT_BORDER | HIT_BOTTOM_BORDER;
     }
 
     return retv;
 }
 
 static int HandleToplevelMousedown(struct window* win, struct msg msg) {
+    static uint64_t prev_time = 0;
+    static struct point prev_pt;
+    uint64_t time = GetTimeSinceBoot();
+    uint64_t time_delta = time - prev_time;
+    prev_time = time;
+
     struct point p = msg.point_arg1;
     WmLock();
     p.x -= win->global_offset_cached.x;
@@ -150,11 +169,34 @@ static int HandleToplevelMousedown(struct window* win, struct msg msg) {
         .type = WM_HITTEST,
         .point_arg1 = p
     });
+    WmLock();
     if (retv & (HIT_BOTTOM_BORDER | HIT_LEFT_BORDER | HIT_RIGHT_BORDER | HIT_TOP_BORDER)) {
         WmStartResizingWindow(win, retv); 
+
     } else if (retv & HIT_TITLEBAR) {
-        WmStartDraggingWindow(win);
+        bool maxed = win->style & WS_MAXIMISED;
+        bool double_click = time_delta < DOUBLE_CLICK_MS * 1000 * 1000
+                            && ABS(p.x - prev_pt.x) < 3
+                            && ABS(p.y - prev_pt.y) < 3;
+
+        if (maxed) {
+            if (double_click) {
+                win->style &= ~WS_MAXIMISED;
+                WmChangePosition(win, win->restore_pos, false);
+            }
+
+        } else {
+            if (double_click) {
+                win->restore_pos = win->local_win_bound;
+                win->style |= WS_MAXIMISED;
+                WmChangePosition(win, WmGetDesktop()->local_win_bound, false);
+            } else {
+                WmStartDraggingWindow(win);
+            }
+        }
     }
+    prev_pt = p;
+    WmUnlock();
     return retv;
 }
 

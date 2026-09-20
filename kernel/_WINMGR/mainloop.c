@@ -11,7 +11,7 @@
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
-#define SYSTEM_MSGBOX_SIZE      32
+#define SYSTEM_MSGBOX_SIZE      8
 
 static struct msgbox* sys_mbox = NULL;
 

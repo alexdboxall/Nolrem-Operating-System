@@ -12,6 +12,13 @@ struct region {
     size_t allocated_length;
 };
 
+struct compat_bitmap {
+    int width;
+    int height;
+    size_t len;
+    uint8_t* data;
+};
+
 struct uregion;
 
 typedef struct uregion* region_t;
@@ -357,3 +364,8 @@ struct point GetPenOrigin(pen_t pen);
 struct window;
 
 typedef int (*winproc_t)(struct window* self, struct msg msg);
+
+/* Bitmap functions. */
+struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, uint8_t* bmp);
+struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, uint8_t* bmp, int w, int h);
+int CdPaintBitmap(struct dc* dc, struct compat_bitmap* bitmap, struct point dest);

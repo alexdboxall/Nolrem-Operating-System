@@ -39,7 +39,6 @@ export _Noreturn void InitKernelResidentPortion(void) {
     while (DiscardPage() != NULL) {
         ;
     }
-    ReclaimBootstrapStackPhys();
     CdInit();
     WmInit();
     WmMainloop();

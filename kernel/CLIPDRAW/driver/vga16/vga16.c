@@ -366,6 +366,8 @@ void InitVga() {
     drv.read_pixel = VGAReadPixel;
     drv.draw_mouse = VGADrawMouse;
     drv.remove_mouse = VGARemoveMouse;
+    drv.create_compatible_bitmap = VGACreateCompatibleBitmap;
+    drv.blit_compatible_bitmap = VGABitmapBlit;
 
     RegisterPrimaryGraphicsDriver(drv);
     

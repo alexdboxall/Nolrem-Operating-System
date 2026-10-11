@@ -5,9 +5,20 @@
 #include <timer.h>
 
 static uint64_t pit_nanos = 0;
+static bool pit_inhibit = false;
+
+void ArchDebugInhibitTimerAdvance(bool inhibit) {
+#ifdef NDEBUG
+	(void) inhibit;
+#else
+	pit_inhibit = inhibit;
+#endif
+}
 
 static void HandlePit(struct x86_regs*) {
-    AdvanceTimer(pit_nanos);
+	if (!pit_inhibit) {
+		AdvanceTimer(pit_nanos);
+	}
 }
 
 void x86InitPit(int hertz) { 

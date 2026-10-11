@@ -7,19 +7,56 @@
 #include <scheduler.h>
 #include <log.h>
 #include <string.h>
+#include <timer.h>
 #include <mutex.h>
+
+struct wait_clot {
+    struct obj_header hdr;
+    struct thread* thr;
+    int count;
+    struct sem** sems;
+    void** nexts;
+};
+
+static void AbandonSemLocked(struct sem* sem) {
+    while (sem->waiting_list_start != NULL) {
+        void* head = sem->waiting_list_start;
+        struct thread* thr;
+
+        if (((struct obj_header*) head)->objtype == OBJTYPE_WAITCLOT) {
+            thr = ((struct wait_clot*) head)->thr;
+        } else {
+            thr = head;
+        }
+
+        UnblockThread(thr, EABANDONED);
+        if (sem->waiting_list_start == head) {
+            CancelSems(thr);
+        }
+    }
+}
+
+void AbandonSem(struct sem* sem) {
+    AcquireScheduler();
+    AbandonSemLocked(sem);
+    ReleaseScheduler();
+}
 
 static void CleanupSem(void* _sem) {
     struct sem* sem = _sem;
+    AbandonSem(sem);
     FreeHeap(sem);
 }
 
 static void CleanupWaitClot(void* _clot) {
-    FreeHeap(_clot);
+    struct wait_clot* clot = _clot;
+    FreeHeap(clot->sems);
+    FreeHeap(clot->nexts);
+    FreeHeap(clot);
 }
 
 void DestroyStaticSem(struct sem* sem) {
-    (void) sem;
+    AbandonSem(sem);
 }
 
 void InitSem(void) {
@@ -32,6 +69,7 @@ export void PrintSemCount(struct sem* sem) {
 }
 
 export void InitStaticSem(struct sem* sem, int max, int initial) {
+    InitObject(sem, OBJTYPE_SEM);
     sem->count = initial;
     sem->max = max;
     sem->waiting_list_start = NULL;
@@ -40,7 +78,6 @@ export void InitStaticSem(struct sem* sem, int max, int initial) {
 
 export struct sem* CreateSem(int max, int initial) {
     struct sem* sem = AllocHeap(sizeof(struct sem));
-    InitObject(sem, OBJTYPE_SEM);
     InitStaticSem(sem, max, initial);
     return sem;
 }
@@ -48,14 +85,6 @@ export struct sem* CreateSem(int max, int initial) {
 export struct mutex* CreateMutex(void) {
     return (struct mutex*) CreateSem(1, 0);
 }
-
-struct wait_clot {
-    struct obj_header hdr;
-    struct thread* thr;
-    int count;
-    struct sem** sems;
-    void** nexts;
-};
 
 static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread* thr) {
     struct wait_clot* clot = AllocHeap(sizeof(struct wait_clot));
@@ -153,7 +182,7 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
 
                 if ((!curr_is_clot && curr_as_thr == thr) || (curr_is_clot && curr_as_clot->thr == thr)) {
                     void* rhs = curr_is_clot ? curr_as_clot->nexts[curr_clot_idx] : curr_as_thr->next_waiting_sem;
-                    void** lhs = curr_is_clot 
+                    void** lhs = prev_is_clot 
                         ? (void**) &(prev_as_clot->nexts[prev_clot_idx])
                         : (void**) &(prev_as_thr->next_waiting_sem)
                     ;
@@ -214,7 +243,12 @@ export int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int
 
     bool needs_timer_wait = timeout != TIMEOUT_INSTANT && timeout != TIMEOUT_INFINITE;
     if (needs_timer_wait) {
-        // TODO:! 
+        bool added = AddThreadToSleepQueue(true, timeout, false);
+        if (!added) {
+            /* i.e. already in the past */
+            ReleaseScheduler();
+            return EAGAIN;
+        }
     }
 
     struct thread* curr_thread = GetCurrentThread();
@@ -222,7 +256,6 @@ export int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int
     BlockThread();
     ReleaseScheduler();
     int retv = curr_thread->block_return_val;
-    LogPrintf("AcquireSemFromMany: block retv was %d\n", retv);
     if (retv > 0) {
         return retv;
     }
@@ -254,11 +287,9 @@ export int ReleaseSem(struct sem* sem) {
         } else {
             struct obj_header* hdr = sem->waiting_list_start;
             if (hdr->objtype == OBJTYPE_THREAD) {
-                LogPrintf(":: Calling unblock thread with retv = 0\n");
                 UnblockThread((struct thread*) sem->waiting_list_start, 0);
             } else {
                 struct wait_clot* clot = sem->waiting_list_start;
-                LogPrintf("Calling unblock thread with retv = %d\n", -LookupClotIndex(clot, sem));
                 UnblockThread(clot->thr, -LookupClotIndex(clot, sem));
             }
         }
@@ -270,7 +301,6 @@ export int ReleaseSem(struct sem* sem) {
     return 0;
 }
 
-
 export void InitStaticMutex(struct mutex* mtx) {
     InitStaticSem(&mtx->sem, 1, 0);
 }
@@ -278,7 +308,6 @@ export void InitStaticMutex(struct mutex* mtx) {
 export void DestroyStaticMutex(struct mutex* mtx) {
     DestroyStaticSem(&mtx->sem);
 }
-
 
 export int AcquireMutex(struct mutex* mtx, int64_t timeout) {
     return AcquireSem((struct sem*) mtx, timeout);

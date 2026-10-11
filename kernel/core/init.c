@@ -23,12 +23,13 @@
 #include <dev.h>
 #include <msgbox.h>
 #include <arch.h>
+#include <errno.h>
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdatomic.h>
 
-#define EINVAL 1
+#include <_test.h>
 
 export _Noreturn void InitKernelResidentPortion(void) {
     extern void CdInit();
@@ -39,7 +40,11 @@ export _Noreturn void InitKernelResidentPortion(void) {
     while (DiscardPage() != NULL) {
         ;
     }
+
     CdInit();
+#ifndef NDEBUG
+    RunTestSuite();
+#endif
     WmInit();
     WmMainloop();
 }

@@ -40,6 +40,7 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     thr->waiting_sem_or_clot = NULL;
     thr->priority = PRIORITY_NORMAL;
     thr->block_return_val = 0;
+    thr->wakeup_time_ns = 0;
 
     if (vas == GetKernelVas()) {
         thr->stack_pointer = thr->kernel_stack_top;

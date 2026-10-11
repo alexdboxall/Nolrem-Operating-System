@@ -26,6 +26,9 @@ struct msgbox {
 static void CleanupMsgbox(void* _mbox) {
     struct msgbox* mbox = _mbox;
     FreeHeap(mbox->data);
+    DerefObject(mbox->empty_sem);
+    DerefObject(mbox->filled_sem);
+    DerefObject(mbox->lock);
     FreeHeap(mbox);
 }
 
@@ -136,7 +139,6 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     if (box_out != NULL) {
         *box_out = selected_index;
     }
-    LogPrintf("KeGetMessageFromMany: %d\n", selected_index);
     struct msgbox* mbox = mboxes[selected_index];
     res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
     if (res != 0) {

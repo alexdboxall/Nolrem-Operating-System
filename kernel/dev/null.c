@@ -25,8 +25,7 @@ static const struct vnode_operations dev_ops = {
     .write          = ReadWrite,
 };
 
-void InitNullDevice(void)
-{
+void InitNullDevice(void) {
     struct vnode* node = CreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,

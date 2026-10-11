@@ -13,6 +13,7 @@
 #include <log.h>
 #include <heapex.h>
 #include <heap.h>
+#include <scheduler.h>
 
 /*
  * A fault should converge in a couple of trips at most. Anything beyond this
@@ -27,6 +28,7 @@ static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offse
 void LockVas(struct vas* vas) {
     LogPrintf("locking vas 0x%X\n", vas);
     AcquireMutex(vas->lock, TIMEOUT_INFINITE);
+    LogPrintf("locked vas 0x%X\n", vas);
 }
 
 void UnlockVas(struct vas* vas) {
@@ -684,6 +686,8 @@ retry:
     struct virt_page* vp = GetVirtualPageFromVirt(vas, virt);
     if (vp == NULL) {
         UnlockVas(vas);
+        /* TODO: depending on the cause/type, this could instead send SIGSEGV*/
+        Panic(PANIC_PAGE_FAULT_IN_NON_PAGED_AREA);
         //DeliverSegvOrPanic(virt, fault_flags);
         return;
     }
@@ -693,7 +697,7 @@ retry:
             /* Temporarily unmapped by someone's critical section. Back off and
              * let the instruction re-fault once they're done. */
             UnlockVas(vas);
-            //YieldCpu();
+            Schedule();
             return;
         }
         /*
@@ -709,6 +713,8 @@ retry:
                       || ((fault_flags & PF_FETCH) && !vp->executable);
         UnlockVas(vas);
         if (violation) {
+            /* TODO: depending on the cause/type, this could instead send SIGSEGV*/
+            Panic(PANIC_PAGE_FAULT_IN_NON_PAGED_AREA);
             //DeliverSegvOrPanic(virt, fault_flags);
         }
         return;
@@ -882,12 +888,8 @@ export void CopyToPhysPage(size_t phys, void* data) {
 
 export void ZeroPhysPage(size_t phys) {
     size_t r = ArchLockToCpu();
-    LogPrintf("ZeroPhysPage... phys 0x%X\n", phys);
     size_t virt = ArchGetTemporaryPage(phys);
     memset((void*) virt, 0, PAGE_SIZE);
-    LogPrintf("Memset it!\n");
     ArchReleaseTemporaryPage(virt);
-    LogPrintf("Released...\n");
     ArchUnlockFromCpu(r);
-    LogPrintf("Done.\n");
 }

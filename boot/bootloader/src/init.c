@@ -174,20 +174,20 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
     size_t file_size = GetFileSize(fw->kernel_filename);
     DiagnosticPrintf("The kernel file exists, and has a size of %d KiB\n  ", file_size / 1024);
 
-    LoadFile(fw->kernel_filename, 0x40000);
+    LoadFile(fw->kernel_filename, 0x50000);
     DiagnosticPrintf("The kernel image has been loaded into RAM.\n  ");
 
     uint32_t hash = 0;
 
     if (show_boot_options) {
         for (size_t i = 0; i < file_size; ++i) {
-            hash ^= ((uint8_t*) 0x40000)[i];
+            hash ^= ((uint8_t*) 0x50000)[i];
             hash = (hash << 3) | (hash >> 29);
         }
         DiagnosticPrintf("\n  FINAL KERNEL IMAGE HASH: 0x%X\n  ", hash);
     }
 
-    size_t entry_point = LoadProgramHeaders(0x40000);
+    size_t entry_point = LoadProgramHeaders(0x50000);
     DiagnosticPrintf("The kernel entry point is at 0x%X\n  ", entry_point);
 
     hash = 0;

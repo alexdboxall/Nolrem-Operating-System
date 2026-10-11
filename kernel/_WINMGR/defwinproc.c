@@ -137,14 +137,9 @@ static int HandleHitTest(struct window* win, struct point p) {
     if (p.x >= win->local_win_bound.w - BORDER_WIDTH) retv |= HIT_RIGHT_BORDER;
     if (p.y >= win->local_win_bound.h - BORDER_WIDTH) retv |= HIT_BOTTOM_BORDER;
 
-    /* Make the corner(s) bigger. */
-    if (p.x >= win->local_win_bound.w - CORNER_WIDTH) {
-        if (p.y < CORNER_WIDTH)                          retv |= HIT_RIGHT_BORDER | HIT_TOP_BORDER;
-        if (p.y > win->local_win_bound.h - CORNER_WIDTH) retv |= HIT_RIGHT_BORDER | HIT_BOTTOM_BORDER;
-
-    } else if (p.x < CORNER_WIDTH) {
-        if (p.y < CORNER_WIDTH)                          retv |= HIT_LEFT_BORDER | HIT_TOP_BORDER;
-        if (p.y > win->local_win_bound.h - CORNER_WIDTH) retv |= HIT_LEFT_BORDER | HIT_BOTTOM_BORDER;
+    /* Make the bottom right corner bigger. */
+    if (p.x >= win->local_win_bound.w - CORNER_WIDTH && p.y > win->local_win_bound.h - CORNER_WIDTH) {
+        retv |= HIT_RIGHT_BORDER | HIT_BOTTOM_BORDER;
     }
 
     return retv;

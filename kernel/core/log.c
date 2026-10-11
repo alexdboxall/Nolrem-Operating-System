@@ -18,12 +18,20 @@ static inline unsigned char inb(unsigned short port) {
 }
 
 static void LogCharacter(char c) {
-    while ((inb(PORT + 5) & 0x20) == 0) {
-        ;
-    }
-    outb(PORT, c);
-    (void) c;
-    //KernelDisplayLog(c);
+    static bool disp_mode = false;
+    if (c == 0x01) {
+        disp_mode = true;
+    } else if ((uint8_t) c == 0x02) { 
+        disp_mode = false;
+    } else {
+        while ((inb(PORT + 5) & 0x20) == 0) {
+            ;
+        }
+        outb(PORT, c);
+        if (disp_mode) {
+            KernelDisplayLog(c);
+        }
+    }   
 }
 
 static void LogInt(int i) {

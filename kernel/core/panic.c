@@ -20,7 +20,7 @@ char* panic_msgs[] = {
 };
 
 static _Noreturn void PanicEx(int panic_reason, const char* msg1, const char* msg2) {
-    LogPrintf("PANIC - ");
+    LogPrintf("\x01PANIC - ");
     LogPrintf("%d\n", panic_reason);
     LogPrintf("%s", msg1);
     if (msg2 != NULL) {

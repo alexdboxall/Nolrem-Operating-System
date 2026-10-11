@@ -67,3 +67,6 @@ void ArchInitPlatformSpecificData(struct cpu_data* cpu);
 struct thread;
 void ArchSwitchThread(struct thread* old_thr, struct thread* new_thr);
 void ArchSetupNewThreadEntry(struct thread* thr, void(*entry)(void*), void*);
+
+/* If true, the hardware timer will not call AdvanceTimer */
+void ArchDebugInhibitTimerAdvance(bool inhibit);

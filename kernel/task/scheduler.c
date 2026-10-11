@@ -8,6 +8,7 @@
 #include <log.h>
 #include <arch.h>
 #include <msgbox.h>
+#include <timer.h>
 
 static struct spinlock sched_lock;
 static int sched_prevent_count = 0;
@@ -142,7 +143,7 @@ void SwitchToThread(struct thread* thr) {
     if (ArchAreInterruptsEnabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
         Panic(PANIC_FUCK_ME);
     }
-    LogPrintf("Switch to thread: 0x%X\n", thr);
+    //LogPrintf("Switch to thread: 0x%X\n", thr);
     if (current_thread->state == THREAD_STATE_RUNNING) {
         if (ready_list_head == NULL && thr == NULL) {
             /* Nothing else is available to run, so keep running. */
@@ -163,7 +164,7 @@ void SwitchToThread(struct thread* thr) {
     current_thread->next_ready = NULL;
     /* TODO: set the VAS */
 
-    LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);
+    //LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);
     ArchSwitchThread(old_thr, current_thread);
 
     /* NOTHING GOES HERE! We need the tail of the call chain to be as
@@ -189,9 +190,11 @@ static bool ShouldPreempt(struct thread* thr) {
  */
 void UnblockThread(struct thread* thr, int retv) {
     // Scheduler lock must already be held!
-    LogPrintf("Unblock thread 0x%x... (retv %d)\n", thr, retv);
     if (thr->waiting_sem_or_clot != NULL) {
         CancelSems(thr);
+    }
+    if (thr->wakeup_time_ns != 0) {
+        CancelTimer(thr);
     }
     thr->block_return_val = retv;
     thr->next_ready = NULL;

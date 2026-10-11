@@ -94,7 +94,7 @@ cstdlib:
 applications: #app_header app_all
 drivers: driver_header driver_all
 osrelease: common_header release_compile bootloader cstdlib drivers applications common_footer
-osdebug: common_header debug_compile bootloader cstdlib drivers applications common_footer
+osdebug:   common_header debug_compile   bootloader cstdlib drivers applications common_footer
 
 #osrelease: common_header release_compile cstdlib drivers applications common_footer
 #osdebug: common_header debug_compile cstdlib drivers applications common_footer

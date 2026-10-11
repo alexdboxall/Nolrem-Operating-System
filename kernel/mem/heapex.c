@@ -55,8 +55,10 @@ struct block {
 static const userrodata uint16_t free_list_block_sizes[TOTAL_NUM_FREE_LISTS] = {
     8,          16,         24,         32,
     40,         48,         56,         64,
-    80,         96,         128,        160,
-    192,        256,        384,        512
+    80,         96,         112,        128,
+    160,        192,        224,        256,
+    320,        384,        448,        512,
+    640,        768,        896,        1024
 };
 
 /**

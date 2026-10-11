@@ -16,6 +16,7 @@
 #define OBJTYPE_USEROBJ         8
 #define OBJTYPE_MSGBOX          9
 #define OBJTYPE_WAITCLOT        10
+#define OBJTYPE_AIO             11
 
 struct obj_header {
     uint8_t objtype;

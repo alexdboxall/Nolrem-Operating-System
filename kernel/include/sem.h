@@ -34,3 +34,7 @@ void CancelSems(struct thread* thr);
 
 void InitStaticSem(struct sem* sem, int max, int initial);
 void DestroyStaticSem(struct sem* sem);
+
+/* Should not generally be called on its own - is called as part of cleanup 
+ * or DestroyStaticSem. */
+void AbandonSem(struct sem* sem);

@@ -1,0 +1,17 @@
+
+static void check_existing_controller_processes(void) {
+	if (system("pgrep controller > /dev/null")) {
+		fprintf(stderr, "Warning: Process(es) named \"controller\" already running.\n\n");
+		fprintf(stderr, "Running the ATC benchmark will terminate all processes named \"controller\".\n");
+		fprintf(stderr, "It is likey that the running process is just a previous instance of your ATC controller,\n");
+		fprintf(stderr, "in which case it's fine for it to be terminated (but if you are running any other\n");
+		fprintf(stderr, "processes/programs coincidentally named \"controller\", they will be terminated).\n");
+		fprintf(stderr, "\nProceed with running the benchmark (terminating these processes)? [Y/N]: ");
+		if (tolower(getchar()) == 'y') {
+			// terminate those processes
+		} else {
+			fprintf(stderr, "Exiting benchmark without terminating existing controller processes.\n");
+			exit(1);
+		}
+	}
+}

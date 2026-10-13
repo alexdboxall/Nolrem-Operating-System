@@ -12,3 +12,7 @@ void ArchInit(void) {
     x86InitCmos();
     InitPs2();
 }
+
+void ArchInit2(void) {
+    InitFloppy();
+}

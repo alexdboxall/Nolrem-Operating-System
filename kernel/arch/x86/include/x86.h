@@ -11,6 +11,7 @@ void x86InitPic(void);
 void x86InitPit(int hertz);
 void x86InitTss(void);
 uint16_t x86AddTssToGdt(struct tss* tss);
+void InitFloppy(void);
 
 void x86InitCmos(void);
 uint8_t ReadCmos(uint8_t reg);

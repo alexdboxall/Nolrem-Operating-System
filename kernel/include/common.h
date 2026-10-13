@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #endif
 
+#define MS_TO_NS(ms) ((ms) * 1000ULL * 1000ULL)
+
 #define OS_VERSION_STRING   "Nolrem"
 #define OS_VERSION_MAJOR    0x00
 #define OS_VERSION_MINOR    0x01

@@ -17,12 +17,8 @@
  *     dequeue log. If preemption is ever turned on, those need revisiting.
  *   - Threads can't terminate yet, so a small pool of workers is created on
  *     demand and reused. Workers never return from their entry function.
- *
- * OPTIONAL BUILD FLAGS
- *   MSGTEST_YIELD()      how to give up the CPU (default Schedule()).
- *   MSGTEST_HEAP_USED()  an expression giving bytes of heap in use. Enables the
- *                        leak tests.
- *   MSGTEST_DANGEROUS    enables tests that crash today (NULL message box).
+ *   - CreateThread's context argument works (it didn't before the stack fix).
+ *     The worker checks its argument and asserts if it is wrong.
  */
 
 #include <common.h>
@@ -36,6 +32,7 @@
 #include <vmm.h>
 #include <msgbox.h>
 #include <_test.h>
+#include <heap.h>
 
 #ifndef MSGTEST_YIELD
 #define MSGTEST_YIELD() Schedule()
@@ -49,10 +46,10 @@
 #define SETTLE_YIELDS    3
 
 #define SZ        8      /* default message size */
-#define MSG_MAX   64
+#define MSG_MAX   32     /* largest message size used by any test */
 #define GUARD     8
 #define POOL_SIZE 12
-#define MAX_JOBS  160
+#define MAX_JOBS  16     /* jobs in use at once; the table is reused by every test */
 
 /* ------------------------------------------------------------------------ */
 /* Waiting                                                                   */
@@ -313,11 +310,15 @@ struct pc_log {
     int box_out;
 };
 
-#define MAX_LOG 256
+#define MAX_LOG 96       /* largest stress run delivers 75 messages */
 static struct pc_log g_log[MAX_LOG];
 static volatile int g_log_n;
 static volatile int g_tickets;
 
+/* Job slots are handed out by NewJob and all given back when a test starts (RUN
+ * below resets g_njobs), so MAX_JOBS only has to cover the busiest single test
+ * (the stress runs: 6). A job whose worker is still stuck from an earlier test
+ * never touches its slot again, so reusing the slot is safe. */
 static struct tjob g_jobs[MAX_JOBS];
 static int g_njobs;
 
@@ -557,9 +558,10 @@ static void TestPostGetSingle(void) {
 /* Exact bytes in and out, for sizes that aren't word-aligned, with the source
  * left alone and nothing written past the destination. */
 static void TestMessageSizes(void) {
-    static const size_t sizes[] = { 1, 2, 3, 4, 7, 8, 13, 16, 33, 64 };
+    static const size_t sizes[] = { 1, 2, 3, 4, 7, 8, 13, 16, 31, 32 };
     for (size_t k = 0; k < sizeof(sizes) / sizeof(sizes[0]); ++k) {
         size_t size = sizes[k];
+        CHECK(size <= MSG_MAX);
         struct msgbox* box = NewBox(size, 3);
 
         for (uint32_t seed = 1; seed <= 3; ++seed) {
@@ -1521,16 +1523,13 @@ static void TestReplaceOnFullBoxTailMatch(void) {
     DerefObject(box);
 }
 
-#ifdef MSGTEST_DANGEROUS
 /* These dereference NULL today, so they are opt-in. */
 static void TestNullBoxInGetAndPeek(void) {
     uint8_t out[SZ];
     SUSPECT(KeGetMessage(NULL, out, TIMEOUT_INSTANT) == EINVAL, "KeGetMessage(NULL box) is not rejected");
     SUSPECT(KePeekMessage(NULL, out, TIMEOUT_INSTANT) == EINVAL, "KePeekMessage(NULL box) is not rejected");
 }
-#endif
 
-#ifdef MSGTEST_HEAP_USED
 /*
  * Two leaks are suspected: CleanupMsgbox doesn't drop the mutex and semaphores,
  * and KeGetMessageFromMany allocates a semaphore array it never frees.
@@ -1539,12 +1538,12 @@ static void TestNoLeakOnDestroy(void) {
     struct msgbox* warm = NewBox(SZ, 4);
     DerefObject(warm);
 
-    size_t before = MSGTEST_HEAP_USED();
+    size_t before = GetHeapAllocatedAmount();
     for (int i = 0; i < 20; ++i) {
         struct msgbox* box = NewBox(SZ, 4);
         DerefObject(box);
     }
-    size_t after = MSGTEST_HEAP_USED();
+    size_t after = GetHeapAllocatedAmount();
     TRACE("  heap before %d, after %d\n", (int) before, (int) after);
     SUSPECT(after == before, "creating and destroying message boxes leaks heap");
 }
@@ -1554,91 +1553,88 @@ static void TestNoLeakOnGet(void) {
     ExpectPost(box, SZ, 1);
     ExpectPeek(box, SZ, 1);      /* warm up */
 
-    size_t before = MSGTEST_HEAP_USED();
+    size_t before = GetHeapAllocatedAmount();
     for (int i = 0; i < 50; ++i) {
         ExpectPeek(box, SZ, 1);
     }
-    size_t after = MSGTEST_HEAP_USED();
+    size_t after = GetHeapAllocatedAmount();
     TRACE("  heap before %d, after %d\n", (int) before, (int) after);
     SUSPECT(after == before, "KeGetMessageFromMany leaks the semaphore array it allocates");
     DerefObject(box);
 }
-#endif
 
 /* ------------------------------------------------------------------------ */
 /* Runner                                                                    */
 /* ------------------------------------------------------------------------ */
+
+#define RUN(fn) do { g_njobs = 0; RUN_TEST(fn); } while (0)
 
 void RunMsgboxTests(void) {
     TRACE("msgbox tests: starting\n");
     g_suspected = 0;
 
     /* Basics */
-    RUN_TEST(TestCreateDestroy);
-    RUN_TEST(TestPostGetSingle);
-    RUN_TEST(TestMessageSizes);
-    RUN_TEST(TestFifoOrder);
-    RUN_TEST(TestPeekDoesNotRemove);
-    RUN_TEST(TestCapacityLimit);
-    RUN_TEST(TestCapacityOne);
-    RUN_TEST(TestInvalidArguments);
-    RUN_TEST(TestModelRandomised);
+    RUN(TestCreateDestroy);
+    RUN(TestPostGetSingle);
+    RUN(TestMessageSizes);
+    RUN(TestFifoOrder);
+    RUN(TestPeekDoesNotRemove);
+    RUN(TestCapacityLimit);
+    RUN(TestCapacityOne);
+    RUN(TestInvalidArguments);
+    RUN(TestModelRandomised);
 
     /* KeTryReplaceOrAdd */
-    RUN_TEST(TestReplaceOnEmptyAdds);
-    RUN_TEST(TestReplaceTail);
-    RUN_TEST(TestReplaceMismatchAppends);
-    RUN_TEST(TestReplaceOnlyComparesTail);
-    RUN_TEST(TestReplaceKeepsCapacity);
-    RUN_TEST(TestReplaceAfterWrap);
-    RUN_TEST(TestReplaceFullBoxMismatch);
-    RUN_TEST(TestReplaceWakesReader);
-    RUN_TEST(TestReplaceBlocksUntilSpace);
+    RUN(TestReplaceOnEmptyAdds);
+    RUN(TestReplaceTail);
+    RUN(TestReplaceMismatchAppends);
+    RUN(TestReplaceOnlyComparesTail);
+    RUN(TestReplaceKeepsCapacity);
+    RUN(TestReplaceAfterWrap);
+    RUN(TestReplaceFullBoxMismatch);
+    RUN(TestReplaceWakesReader);
+    RUN(TestReplaceBlocksUntilSpace);
 
     /* Blocking, one box */
-    RUN_TEST(TestBlockedReaderWokenByPost);
-    RUN_TEST(TestBlockedWriterWokenByGet);
-    RUN_TEST(TestBlockedPeekerWokenByPost);
-    RUN_TEST(TestTwoPeekersOnePost);
-    RUN_TEST(TestPeekerThenGetter);
-    RUN_TEST(TestGetterThenPeeker);
-    RUN_TEST(TestManyReadersManyPosts);
-    RUN_TEST(TestManyWritersBlocked);
-    RUN_TEST(TestProducerThreadOrder);
-    RUN_TEST(TestConsumerThreadOrder);
+    RUN(TestBlockedReaderWokenByPost);
+    RUN(TestBlockedWriterWokenByGet);
+    RUN(TestBlockedPeekerWokenByPost);
+    RUN(TestTwoPeekersOnePost);
+    RUN(TestPeekerThenGetter);
+    RUN(TestGetterThenPeeker);
+    RUN(TestManyReadersManyPosts);
+    RUN(TestManyWritersBlocked);
+    RUN(TestProducerThreadOrder);
+    RUN(TestConsumerThreadOrder);
 
     /* Several boxes */
-    RUN_TEST(TestGetManyLowestIndexWins);
-    RUN_TEST(TestGetManyNullBoxOut);
-    RUN_TEST(TestGetManyLeavesOtherBoxes);
-    RUN_TEST(TestPeekManyKeepsMessage);
-    RUN_TEST(TestGetManyBlockedThenWoken);
-    RUN_TEST(TestTwoMultiGetters);
-    RUN_TEST(TestPeekManyBlockedThenWoken);
+    RUN(TestGetManyLowestIndexWins);
+    RUN(TestGetManyNullBoxOut);
+    RUN(TestGetManyLeavesOtherBoxes);
+    RUN(TestPeekManyKeepsMessage);
+    RUN(TestGetManyBlockedThenWoken);
+    RUN(TestTwoMultiGetters);
+    RUN(TestPeekManyBlockedThenWoken);
 
     /* Stress */
-    RUN_TEST(TestStressOneBox);
-    RUN_TEST(TestStressCapacityOne);
-    RUN_TEST(TestStressThreeBoxes);
-    RUN_TEST(TestStressManyConsumers);
+    RUN(TestStressOneBox);
+    RUN(TestStressCapacityOne);
+    RUN(TestStressThreeBoxes);
+    RUN(TestStressManyConsumers);
 
     /* Destruction that must at least not crash */
-    RUN_TEST(TestDestroyWithMessages);
-    RUN_TEST(TestDestroyFullBox);
+    RUN(TestDestroyWithMessages);
+    RUN(TestDestroyFullBox);
 
     /* Suspected bugs: soft checks, reported at the end */
-    RUN_TEST(TestDestroyWakesBlockedReader);
-    RUN_TEST(TestDestroyWakesBlockedWriter);
-    RUN_TEST(TestDestroyOneBoxOfMany);
-    RUN_TEST(TestGetManyCountZero);
-    RUN_TEST(TestReplaceOnFullBoxTailMatch);
-#ifdef MSGTEST_DANGEROUS
-    RUN_TEST(TestNullBoxInGetAndPeek);
-#endif
-#ifdef MSGTEST_HEAP_USED
-    RUN_TEST(TestNoLeakOnDestroy);
-    RUN_TEST(TestNoLeakOnGet);
-#endif
+    RUN(TestDestroyWakesBlockedReader);
+    RUN(TestDestroyWakesBlockedWriter);
+    RUN(TestDestroyOneBoxOfMany);
+    RUN(TestGetManyCountZero);
+    RUN(TestReplaceOnFullBoxTailMatch);
+    RUN(TestNullBoxInGetAndPeek);
+    RUN(TestNoLeakOnDestroy);
+    RUN(TestNoLeakOnGet);
 
     if (g_suspected == 0) {
         TRACE("msgbox tests: ALL PASSED\n");

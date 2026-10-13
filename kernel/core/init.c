@@ -81,5 +81,6 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitUserObjectType();
     InitVfs();
     InitNullDevice();
+    ArchInit2();
     InitKernelResidentPortion();
 }

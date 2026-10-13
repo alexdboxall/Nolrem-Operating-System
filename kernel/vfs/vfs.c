@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <obj.h>
 #include <vfs.h>
+#include <stdatomic.h>
 #include <file.h>
 #include <vnode.h>
 #include <mutex.h>
@@ -35,20 +36,10 @@ struct mounted_file {
 
 static struct mutex* mount_list_lock;
 static struct mounted_file* mounted_file_list;
+static _Atomic int next_dev_id = 1;	/* don't start at 0 in case that means 'invalid' */
 
 export int NextDevId(void) {
-	static bool init = false;
-	static struct spinlock devid_lock;
-	static int id = 1;
-
-	if (!init) {
-		InitSpinlock(&devid_lock);
-		init = true;
-	}	
-	AcquireSpinlock(&devid_lock);
-	int res = id++;
-	ReleaseSpinlock(&devid_lock);
-	return res;
+	return atomic_fetch_add(&next_dev_id, 1);
 }
 
 void InitVfs(void) {

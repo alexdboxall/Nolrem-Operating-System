@@ -177,25 +177,8 @@ void ENTRY_POINT InitBootloader(struct firmware_info* fw) {
     LoadFile(fw->kernel_filename, 0x50000);
     DiagnosticPrintf("The kernel image has been loaded into RAM.\n  ");
 
-    uint32_t hash = 0;
-
-    if (show_boot_options) {
-        for (size_t i = 0; i < file_size; ++i) {
-            hash ^= ((uint8_t*) 0x50000)[i];
-            hash = (hash << 3) | (hash >> 29);
-        }
-        DiagnosticPrintf("\n  FINAL KERNEL IMAGE HASH: 0x%X\n  ", hash);
-    }
-
     size_t entry_point = LoadProgramHeaders(0x50000);
     DiagnosticPrintf("The kernel entry point is at 0x%X\n  ", entry_point);
-
-    hash = 0;
-    for (size_t i = 0; i < 0x1A000; ++i) {
-        hash ^= ((uint8_t*) 0x10000)[i];
-        hash = (hash << 3) | (hash >> 29);
-    }
-    DiagnosticPrintf("KERNEL LOAD HASH: 0x%X\n  ", hash);
 
     kboot_info.enable_floppy = 1;
     kboot_info.num_ram_table_entries = fw->num_ram_table_entries;

@@ -129,6 +129,10 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
 
     struct sem** sems = AllocHeap(count * sizeof(struct sem*));
     for (int i = 0; i < count; ++i) {
+        if (mboxes[i] == NULL) {
+            FreeHeap(sems);
+            return EINVAL;
+        }
         sems[i] = mboxes[i]->filled_sem;
     }
     int selected_index;
@@ -143,6 +147,7 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
     if (res != 0) {
         ReleaseSem(mbox->filled_sem);
+        FreeHeap(sems);
         return res;
     }
     memcpy(msg, mbox->data + mbox->start_idx * mbox->message_size, mbox->message_size);
@@ -156,6 +161,7 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     } else {
         ReleaseSem(mbox->filled_sem);
     }
+    FreeHeap(sems);
     return 0;
 }
 

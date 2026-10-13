@@ -203,7 +203,6 @@ void UnblockThread(struct thread* thr, int retv) {
     if (ShouldPreempt(thr)) {
         sched_postponed = true;
         if (sched_postponed_thr == NULL || thr->priority < sched_postponed_thr->priority) {
-            LogPrintf("Postpone...\n");
             sched_postponed_thr = thr;
         }
 

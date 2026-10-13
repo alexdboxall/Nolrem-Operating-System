@@ -150,3 +150,42 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
     LogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);
 }
 
+#define ZEROED_PHYS_BUFFER_COUNT    2
+static size_t zeroed_phys_buffer[ZEROED_PHYS_BUFFER_COUNT];
+static _Atomic uint8_t please_provide_zeroed_phys = 0;
+
+size_t AllocZeroedPhys(void) {
+    for (int i = 0; i < ZEROED_PHYS_BUFFER_COUNT; ++i) {
+        size_t frame = atomic_load(&zeroed_phys_buffer[i]);
+        if (frame != 0) {
+            size_t expected = frame;
+            if (atomic_compare_exchange_strong(&zeroed_phys_buffer[i], &expected, 0)) {
+                atomic_fetch_add(&please_provide_zeroed_phys, 1);
+                return frame;
+            }
+        }
+    }
+
+    please_provide_zeroed_phys = ZEROED_PHYS_BUFFER_COUNT;
+    size_t frame = AllocPhys(true);
+    ZeroPhysPage(frame);
+    return frame;
+}
+
+bool ProvideZeroedPhys(size_t phys) {
+    if (phys == 0) {
+        return false;
+    }
+    if (please_provide_zeroed_phys == 0) {
+        return false;
+    }
+    for (int i = 0; i < ZEROED_PHYS_BUFFER_COUNT; ++i) {
+        size_t expected = 0;
+        if (atomic_compare_exchange_strong(&zeroed_phys_buffer[i], &expected, phys)) {
+            atomic_fetch_sub(&please_provide_zeroed_phys, 1);
+            return true;
+        }
+    }
+    please_provide_zeroed_phys = 0;
+    return false;
+}

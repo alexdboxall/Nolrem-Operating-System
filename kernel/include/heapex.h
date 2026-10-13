@@ -18,6 +18,8 @@ struct heap {
 
     void*(*get_memory)(size_t*);
     struct spinlock lock;
+
+    size_t outstanding_allocated_memory;
 };
 
 

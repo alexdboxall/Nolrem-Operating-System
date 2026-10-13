@@ -6,7 +6,8 @@
 void ArchIndicateSpinLoop(void);
 void ArchIdle(void);
 
-void ArchInit(void);
+void ArchInit(void);    // very early on
+void ArchInit2(void);   // after VFS, VMM, scheduler, etc. active
 
 // machine/config needs to do a typedef 'irqcontext_t' 
 

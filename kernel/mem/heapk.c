@@ -94,3 +94,10 @@ void InitBootstrapHeap(void) {
     InitHeapEx(&kernel_heap, KernelHeapRequestMemory);
     LogPrintf("Bootstrap heap is at 0x%X\n", bootstrap_heap);
 }
+
+size_t GetHeapAllocatedAmount(void) {
+    AcquireSpinlock(&heap_lock);
+    size_t retv = kernel_heap.outstanding_allocated_memory;
+    ReleaseSpinlock(&heap_lock);
+    return retv;
+}

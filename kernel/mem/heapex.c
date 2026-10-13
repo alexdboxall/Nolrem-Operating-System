@@ -395,6 +395,7 @@ export userexec void* AllocHeapEx(struct heap* heap, size_t size) {
     if (block == NULL) {
         return NULL;
     }
+    heap->outstanding_allocated_memory += GetSize(block);
     return AddVoidPtr(block, METADATA_LEADING);
 }
 
@@ -406,6 +407,8 @@ export userexec void FreeHeapEx(struct heap* heap, void* ptr) {
     struct block* block = SubVoidPtr(ptr, METADATA_LEADING);
     block->prev = NULL;
     block->next = NULL;
+
+    heap->outstanding_allocated_memory -= GetSize(block);
 
     AddBlock(heap, block);
 }

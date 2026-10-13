@@ -12,10 +12,10 @@ extern void RunSfnTests(void);
 export void RunTestSuite(void) {
 #ifndef NDEBUG
     /* Core kernel tests */
-    //RunTimerTests();
-    //RunSemTimeoutTests();
-    //RunSemAbandonTests();
-    //RunMsgboxTests();
+    RunTimerTests();
+    RunSemTimeoutTests();
+    RunSemAbandonTests();
+    RunMsgboxTests();
 
     /* FAT tests */
     RunSfnTests();

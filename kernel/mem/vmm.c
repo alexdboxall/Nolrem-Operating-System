@@ -738,7 +738,12 @@ retry:
     if (phys == 0) {
         AcquireMutex(&origin->mtx, TIMEOUT_INFINITE);
         if (origin->phys == 0) {
-            size_t frame = AllocPhys(true);
+            size_t frame;
+            if (origin->file == NULL) {
+                frame = AllocZeroedPhys();
+            } else {
+                frame = AllocPhys(true);
+            }
             if (frame == 0) {
                 ReleaseMutex(&origin->mtx);
                 DerefObject(origin);
@@ -763,9 +768,6 @@ retry:
                  * zero-filling any tail past EOF, and apply origin->rebase_page
                  * relocations. */
                 //ReadPageFromFile(origin, frame);
-            } else {
-                /* TODO: swap-in belongs here too, once there's a swapfile. */
-                ZeroPhysPage(frame);
             }
 
             struct phys_page* newpp = GetPhysPage(frame);

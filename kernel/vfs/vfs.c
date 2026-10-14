@@ -11,6 +11,7 @@
 #include <file.h>
 #include <vnode.h>
 #include <mutex.h>
+#include <aio.h>
 
 /*
 * Try not to have non-static functions that return in any way a struct vnode*, as it
@@ -448,7 +449,23 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
     return 0;
 }
 
-static int FileAccess(struct file* file, struct transfer* io, bool write) {
+static void FileAccessAsyncCallback(void* _aio) {
+	struct aio* aio = _aio;
+	struct aio* subaio = aio->sub;
+
+	aio->transfer = subaio->transfer;
+	SignalDoneIO(aio, subaio->result_code);
+
+	FreeHeap(subaio);
+}
+
+static int FileAccess(struct aio* aio, bool write) {
+	LogPrintf("FileAccess called...\n");
+	if (aio == NULL) {
+		return EINVAL;
+	}
+	struct transfer* io = &aio->transfer;
+	struct file* file = aio->file;
     if (io == NULL || io->address == NULL || file == NULL || file->node == NULL) {
 		return EINVAL;
 	}
@@ -457,15 +474,21 @@ static int FileAccess(struct file* file, struct transfer* io, bool write) {
     }
 	
 	io->blockable = !(file->node->flags & O_NONBLOCK);
-	return (write ? VnodeWrite : VnodeRead)(file->node, io);
+
+	struct aio* subaio = AllocHeap(sizeof(struct aio));
+	LogPrintf("Creating sub IO...\n");
+	CreateIO(subaio, file->node, *io, FileAccessAsyncCallback, (void*) aio);
+	aio->sub = subaio;
+	LogPrintf("Calling VnodeRead/Write...\n");
+	return (write ? VnodeWrite : VnodeRead)(subaio);
 }
 
-export int ReadFile(struct file* file, struct transfer* io) {
-	return FileAccess(file, io, false);
+export int ReadFile(struct aio* aio) {
+	return FileAccess(aio, false);
 }
 
-export int WriteFile(struct file* file, struct transfer* io) {
-	return FileAccess(file, io, true);
+export int WriteFile(struct aio* aio) {
+	return FileAccess(aio, true);
 }
 
 /*

@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <log.h>
 #include <dirent.h>
+#include <aio.h>
 #include <sys/ioctl.h>
 
 export struct vnode* CreateVnode(struct vnode_operations ops, struct stat st) {
@@ -44,20 +45,27 @@ int VnodeCheckOpen(struct vnode* node, int flags) {
     return node->ops.check_open(node, flags);
 }
 
-int VnodeRead(struct vnode* node, struct transfer* io) {
+int VnodeRead(struct aio* aio) {
+    struct vnode* node = aio->node;
+    struct transfer* io = &aio->transfer;
     CheckVnode(node);
+    LogPrintf("Calling Vnode read...\n");
     if (node->ops.read == NULL || io->direction != TRANSFER_READ) {
+        LogPrintf("Bad vnode...\n");
         return EINVAL;
     }
-    return node->ops.read(node, io);
+    LogPrintf("node->ops.read == 0x%X\n", (size_t) node->ops.read);
+    return node->ops.read(aio);
 }
 
-int VnodeWrite(struct vnode* node, struct transfer* io) {
+int VnodeWrite(struct aio* aio) {
+    struct vnode* node = aio->node;
+    struct transfer* io = &aio->transfer;
     CheckVnode(node);
     if (node->ops.write == NULL || io->direction != TRANSFER_WRITE) {
         return EINVAL;
     }
-    return node->ops.write(node, io);
+    return node->ops.write(aio);
 }
 
 int VnodeIoctl(struct vnode* node, int command, void* buffer) {

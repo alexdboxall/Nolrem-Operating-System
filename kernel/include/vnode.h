@@ -49,11 +49,12 @@ struct vnode;
 #define VNODE_WAIT_WRITE            (1 << 1)
 #define VNODE_WAIT_ERROR            (1 << 2)
 
+struct aio;
 
 struct vnode_operations {
     int (*check_open)(struct vnode* node, int flags);
-    int (*read)(struct vnode* node, struct transfer* io);
-    int (*write)(struct vnode* node, struct transfer* io);
+    int (*read)(struct aio* io);
+    int (*write)(struct aio* io);
 
     /*
      * a warning - that the `buffer` here needs to be copied across from 
@@ -109,8 +110,8 @@ void InitVnode(void);
 struct vnode* CreateVnode(struct vnode_operations ops, struct stat st);
 
 int VnodeCheckOpen(struct vnode* node, int flags);
-int VnodeRead(struct vnode* node, struct transfer* io);
-int VnodeWrite(struct vnode* node, struct transfer* io);
+int VnodeRead(struct aio* aio);
+int VnodeWrite(struct aio* aio);
 int VnodeIoctl(struct vnode* node, int command, void* buffer);
 int VnodeTruncate(struct vnode* node, off_t offset);
 uint8_t VnodeDirentType(struct vnode* node);

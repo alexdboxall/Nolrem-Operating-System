@@ -24,6 +24,7 @@
 #include <msgbox.h>
 #include <arch.h>
 #include <errno.h>
+#include <aio.h>
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -45,6 +46,26 @@ export _Noreturn void InitKernelResidentPortion(void) {
 #ifndef NDEBUG
     RunTestSuite();
 #endif
+
+    struct file* f;
+    int res = OpenFile("raw-fd0:", O_RDONLY, 0, &f);
+    LogPrintf("OpenFile: res = %d\n", res);
+
+    // int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt);
+
+    uint8_t buffer[512];
+    struct transfer tr = CreateKernelTransfer(buffer, 512, 0, TRANSFER_READ);
+    struct aio aio;
+    LogPrintf("Creating IO...\n");
+    CreateIO(&aio, f, tr, NULL, NULL);
+    LogPrintf("About to read file...\n");
+    res = ReadFile(&aio);
+    LogPrintf("ReadFile: res = %d\n", res);
+    res = WaitIO(&aio, TIMEOUT_INFINITE);
+    LogPrintf("WaitIO: res = %d\n", res);
+
+    LogPrintf("Check out the floppy bootsector (if it worked) at 0x%X\n", buffer);
+
     WmInit();
     WmMainloop();
 }

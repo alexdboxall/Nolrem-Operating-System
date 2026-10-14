@@ -14,6 +14,7 @@
 #include <transfer.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <aio.h>
 
 struct partition_data {
     struct file* fs;
@@ -26,7 +27,35 @@ struct partition_data {
     bool boot;
 };
 
-static int Access(struct vnode* node, struct transfer* tr, bool write) {
+struct partition_async_context {
+    struct aio* aio;
+    struct aio* subaio;
+};
+
+static void PartitionAccessAsyncCallback(void* _aio) {
+    struct aio* aio = _aio;
+    struct aio* subaio = aio->sub;
+
+    if (subaio->result_code == 0) {
+        struct transfer* tr = &aio->transfer;
+        struct transfer real_transfer = subaio->transfer;
+        uint64_t length = subaio->extra_data;
+
+        uint64_t bytes_transferred = length - real_transfer.length_remaining;
+
+        tr->offset += bytes_transferred;
+        tr->length_remaining -= bytes_transferred;
+        tr->address = ((uint8_t*) tr->address) + bytes_transferred;
+    }
+
+    SignalDoneIO(aio, subaio->result_code);
+    FreeHeap(subaio);
+}
+
+static int Access(struct aio* aio, bool write) {
+    LogPrintf("Partition.Access...\n");
+    struct vnode* node = aio->node;
+    struct transfer* tr = &aio->transfer;
     struct partition_data* partition = node->data;
    
     uint64_t start_addr = tr->offset + partition->start_byte;
@@ -39,23 +68,21 @@ static int Access(struct vnode* node, struct transfer* tr, bool write) {
     real_transfer.length_remaining = length;
     real_transfer.offset = start_addr;
 
-    int res = (write ? WriteFile : ReadFile)(partition->disk, &real_transfer);
-
-    uint64_t bytes_transferred = length - real_transfer.length_remaining;
-
-    tr->offset += bytes_transferred;
-    tr->length_remaining -= bytes_transferred;
-    tr->address = ((uint8_t*) tr->address) + bytes_transferred;
-
-    return res;
+    struct aio* subaio = AllocHeap(sizeof(struct aio));
+    LogPrintf("Creating sub IO...\n");
+    CreateIO(subaio, partition->disk, real_transfer, PartitionAccessAsyncCallback, (void*) aio);
+    aio->sub = subaio;
+    subaio->extra_data = length;
+    LogPrintf("Read/WriteFile on partition underlying...\n");
+    return (write ? WriteFile : ReadFile)(subaio);
 }
 
-static int Read(struct vnode* node, struct transfer* tr) {   
-    return Access(node, tr, false);
+static int Read(struct aio* aio) {   
+    return Access(aio, false);
 }
 
-static int Write(struct vnode* node, struct transfer* tr) {
-    return Access(node, tr, true);
+static int Write(struct aio* aio) {
+    return Access(aio, true);
 }
 
 static int Create(struct vnode* node, struct vnode** fs, const char*, int flags, mode_t mode) {
@@ -116,6 +143,7 @@ pageable struct file* CreatePartition(
     node->data = data;
 
     struct file* partition = CreateFile(node, 0, 0, true, true);
+    LogPrintf("Creating partition...\n");
     // TODO:
     //MountFilesystemForDisk(partition);
     return partition;

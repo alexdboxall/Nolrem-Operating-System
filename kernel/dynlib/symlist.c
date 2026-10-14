@@ -3,6 +3,13 @@
 #include <string.h>
 #include <heap.h>
 
+/* TODO: I think you make it so the kernel itself gets to hash, but other
+ * external drivers, etc. use strings. that way we don't get clashes.
+ * because if hash is used, we don't have a backup string to compare against, we
+ * just assume there can only be one.
+ * 
+ * TODO: trie structure?
+ */
 struct symbol_list {
     struct symbol_list* next;
     struct symbol* sym;

@@ -21,6 +21,7 @@
 #include <dirent.h>
 #include <timer.h>
 #include <diskutil.h>
+#include <aio.h>
 #include <machine/x86.h>
 
 
@@ -114,7 +115,7 @@ _Static_assert(FLOPPY_MAX_RUN >= 1 && FLOPPY_MAX_RUN <= SECTORS_PER_TRACK,
 #define FLOPPY_TRACE
 
 #ifdef FLOPPY_TRACE
-#define FloppyTrace(s) LogPrintf("%s", s)
+#define FloppyTrace(s) LogPrintf("FloppyTrace: %s", s)
 #else
 #define FloppyTrace(s) ((void) 0)
 #endif
@@ -143,6 +144,10 @@ struct floppy_data {
     volatile bool motor_on;
     struct msgbox* msgbox;
 };
+
+
+#define MAX_FLOPPY_DRIVES 1
+struct floppy_data* floppy_drives_installed[MAX_FLOPPY_DRIVES] = {0};
 
 /*
  * The IRQ handler releases the IRQ mutex, but only if a command armed it, and
@@ -570,6 +575,9 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
 
     uint64_t offset = io->offset;
     uint64_t length = io->length_remaining;
+    LogPrintf("Transfer offset: 0x%X\n", offset);
+    LogPrintf("Transfer length: 0x%X\n", length);
+    LogPrintf("Transfer buffer: 0x%X\n", io->address);
 
     if (offset % SECTOR_SIZE != 0 || length % SECTOR_SIZE != 0) {
         LogPrintf("[floppy]: bad offset / length\n");
@@ -587,6 +595,7 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
     int remaining = length / SECTOR_SIZE;
     int error = 0;
 
+    LogPrintf("About to get floppy lock...\n");
     AcquireMutex(floppy_lock, TIMEOUT_INFINITE);
 
     while (remaining > 0) {
@@ -618,6 +627,7 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
         }
 
         int done = 0;
+        LogPrintf("About to FloppyTransferSectors...\n");
         error = FloppyTransferSectors(flp, write, cylinder, head, sector, count, &done);
         if (error != 0) break;
 
@@ -635,8 +645,14 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
     return error;
 }
 
-static int ReadWrite(struct vnode* node, struct transfer* io) {
-    return FloppyIo(node->data, io);
+static int ReadWrite(struct aio* aio) {
+    LogPrintf("Floppy read/write...\n");
+    if (floppy_drives_installed[0] != NULL) {
+        LogPrintf("About to post message...\n");
+        LogPrintf("Msgbox at 0x%X, aio at 0x%X\n", floppy_drives_installed[0]->msgbox, (const void*) aio);
+        return KePostMessage(floppy_drives_installed[0]->msgbox, (const void*) &aio, TIMEOUT_INSTANT);
+    }
+    return ENODEV;
 }
 
 static int Create(struct vnode* node, struct vnode** partition, const char* name, int, mode_t) {
@@ -686,19 +702,26 @@ void FloppyDriverThread(void* _flp) {
     BeginNewThread();
 
     struct floppy_data* flp = _flp;
-    flp->msgbox = CreateMessageBox(sizeof(void* /* TODO: (struct aio*) */), 24);
 
     int64_t next_timeout = TIMEOUT_INFINITE;
 
     while (true) {
-        void* msg;
-        int retv = KeGetMessage(flp->msgbox, &msg, next_timeout);
+        struct aio* aio;
+        LogPrintf("FloppyDriverThread: waiting for message...\n");
+        int retv = KeGetMessage(flp->msgbox, &aio, next_timeout);
         bool have_request = retv == 0;
+        LogPrintf("FloppyDriverThread: got message? %d\n", have_request);
         FloppyMotor(flp, have_request);
 
         if (have_request) {
-            /* TODO: process the message */
             next_timeout = MS_TO_NS(MOTOR_IDLE_MS);
+            LogPrintf("getting ready to FloppyIo...\n");
+            LogPrintf("AIO = 0x%X\n", aio);
+            LogPrintf("AIO->NODE = 0x%X\n", aio->node);
+            LogPrintf("AIO->NODE->DATA = 0x%X\n", aio->node->data);
+            int res = FloppyIo((struct floppy_data*) aio->node->data, &aio->transfer);
+            SignalDoneIO(aio, res);
+            LogPrintf("Signalled floppy IO done... for AIO 0x%X\n", aio);
 
         } else {
             next_timeout = TIMEOUT_INFINITE;
@@ -754,6 +777,10 @@ void InitFloppy(void) {
     }
 
     floppy_lock = CreateMutex();
+    
+    flp->msgbox = CreateMessageBox(sizeof(struct aio*), 16);
+    floppy_drives_installed[0] = flp;
+
     CreateThread(GetKernelVas(), FloppyDriverThread, flp);
 
     struct vnode* node = CreateVnode(dev_ops, (struct stat) {

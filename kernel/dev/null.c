@@ -12,8 +12,10 @@
 #include <transfer.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <aio.h>
 
-static pageable int ReadWrite(struct vnode*, struct transfer* io) {
+static pageable int ReadWrite(struct aio* aio) {
+    struct transfer* io = &aio->transfer;
     io->offset = 0;
     io->address = ((uint8_t*) io->address) + io->length_remaining;
     io->length_remaining = 0;

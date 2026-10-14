@@ -111,6 +111,7 @@ export pageable char* GenerateNewRawDiskName(int type) {
     ReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
+    LogPrintf("GenerateNewRawDiskName: %s\n", name);
     return KeStrdup(name);
 }
 

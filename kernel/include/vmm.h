@@ -95,6 +95,8 @@ void CreateInitialVas(void);
 
 void* AllocAnonMemory(size_t bytes, int flags);
 void* AllocFixedMemory(size_t phys, size_t bytes, int flags);
+void* AllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
+                             int flags, size_t reloc_base);
 
 void HandlePageFault(size_t virt, int reason);
 struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base, size_t phys, bool fixed);

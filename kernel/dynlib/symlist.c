@@ -7,12 +7,10 @@
  * external drivers, etc. use strings. that way we don't get clashes.
  * because if hash is used, we don't have a backup string to compare against, we
  * just assume there can only be one.
- * 
- * TODO: trie structure?
  */
 struct symbol_list {
-    struct symbol_list* next;
-    struct symbol* sym;
+    int num;
+    struct symbol syms[];
 };
 
 #define IS_HASH(sv) (((sv) & 1) == 0)
@@ -38,44 +36,32 @@ static bool IsMatchingSymbol(const char* id, struct symbol* sym) {
     }
 }
 
-static struct symbol* CreateSymbol(const char* id, size_t addr) {
-    struct symbol* sym = AllocHeap(sizeof(struct symbol));
-    sym->hash_or_str = HashSymbol(id) << 1;
-    sym->addr = addr;
-    return sym;
+struct symbol_list* CreateSymbolList(int total_syms) {
+    struct symbol_list* sl = AllocHeap(sizeof(struct symbol_list) + total_syms * sizeof(struct symbol));
+    sl->num = total_syms;
+    memset(sl->syms, 0x77, total_syms * sizeof(struct symbol));
+    return sl;
 }
 
-static void DestroySymbol(struct symbol* sym) {
-    if (IS_PTR(sym->hash_or_str)) {
-        FreeHeap(GET_PTR(sym->hash_or_str));
+static size_t MakeSymbol(const char* id, bool use_hash) {
+    if (use_hash) {
+        return HashSymbol(id) << 1;
+    } else {
+        return (size_t) KeStrdup(id);
     }
-    FreeHeap(sym);
 }
 
-void DestroySymbolList(struct symbol_list* sl) {
-    while (sl) {
-        struct symbol_list* next = sl->next;
-        DestroySymbol(sl->sym);
-        FreeHeap(sl);
-        sl = next;
-    }
+void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr) {
+    sl->syms[index].addr = addr;
+    sl->syms[index].hash_or_str = MakeSymbol(id, use_hash);
 }
 
 // ASSUMES SOME LOCK IS ALREADY HELD!
 struct symbol* FindSymbol(struct symbol_list* sl, const char* id) {
-    while (sl) {
-        if (IsMatchingSymbol(id, sl->sym)) {
-            return sl->sym;
+    for (int i = 0; i < sl->num; ++i) {
+        if (IsMatchingSymbol(id, &sl->syms[i])) {
+            return &sl->syms[i];
         }
-        sl = sl->next;
     }
     return NULL;
-}
-
-// ASSUMES SOME LOCK IS ALREADY HELD
-struct symbol_list* AddSymbol(struct symbol_list* sl, const char* id, size_t addr) {
-    struct symbol_list* ent = AllocHeap(sizeof(struct symbol_list));
-    ent->next = sl;
-    ent->sym = CreateSymbol(id, addr);
-    return ent;
 }

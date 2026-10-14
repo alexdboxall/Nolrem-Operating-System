@@ -52,6 +52,18 @@ struct block {
  * An array which holds the minimum allocation sizes that each free list can 
  * hold.
  */
+
+ /*                                                 
+ * Check that common sizes are exact matches:       ROUNDED UP TO ALIGNMENT
+ sizeof(struct mutex      ):    0x00000018  = 24    24
+ sizeof(struct sem        ):    0x00000018  = 24    24
+ sizeof(struct aio        ):    0x0000005C  = 92    96
+ sizeof(struct page_origin):    0x00000034  = 52    56
+ sizeof(struct vas_chain  ):    0x0000000C  = 12    16
+ sizeof(struct virt_page  ):    0x00000018  = 24    24
+ sizeof(struct virt_arena ):    0x00000008  =  8    8
+ sizeof(struct virt_range ):    0x0000000C  = 12    12
+*/
 static const userrodata uint16_t free_list_block_sizes[TOTAL_NUM_FREE_LISTS] = {
     8,          16,         24,         32,
     40,         48,         56,         64,

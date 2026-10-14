@@ -117,7 +117,6 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     //       temporarily map it in?
     // or does this only ever get called on the current vas?
 
-    LogPrintf("Setting PTE: virt = 0x%X, entry = 0x%X", virt, entry);
     if (vas != GetCurrentVas()){ 
         LogString("SetPte called in non-current VAS!");
         Panic(PANIC_INVALID_ARCH_OPERATION);
@@ -130,7 +129,7 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     size_t* directory = GetRecursiveTable(1023);
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Time to map a new table. */
-        LogPrintf("Allocating new phys for it...\n");
+        LogPrintf("SetPte: Allocating new phys for it...\n");
         size_t phys = AllocPhys(true);
         directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
         size_t* table = GetRecursiveTable(level1_index);
@@ -143,23 +142,17 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     }
 
     size_t* table = GetRecursiveTable(level1_index);
-    LogPrintf("About to set the PTE...\n");
-    LogPrintf("Old entry was 0x%X, new is 0x%X\n", table[level2_index], entry);
     table[level2_index] = entry;
-    LogPrintf("Set!\n");
     // TODO: only needed if current VAS
     Invalidate(virt);
-    LogPrintf("Invalidated!\n");
 }
 
 void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
-    LogPrintf("ArchSyncVirt: 0x%X\n", vp->virt);
     SetPte(vas, vp->virt, TranslateToEntry(vp));
 }
 
 size_t ArchGetTemporaryPage(size_t phys) {
     size_t cpu_num = ArchGetCpuNum();
-    LogPrintf("ArchGetTemporaryPage: 0x%X\n", scratch_virt_region + cpu_num * PAGE_SIZE);
     SetPte(GetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
     return scratch_virt_region + cpu_num * PAGE_SIZE;
 }
@@ -209,7 +202,6 @@ void ArchInitVas(struct vas* vas, bool first) {
         }
 
         scratch_virt_region = AllocVirt(PAGE_SIZE * ARCH_MAX_CPUS);
-        LogPrintf("Scratch virt region is at: 0x%X\n", scratch_virt_region);
         for (size_t i = 0; i < (size_t) ARCH_MAX_CPUS; ++i) {
             SetPte(vas, scratch_virt_region + i * PAGE_SIZE, 0);
         }

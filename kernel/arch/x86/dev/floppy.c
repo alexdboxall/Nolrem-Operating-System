@@ -231,6 +231,7 @@ static void FloppyMotor(struct floppy_data* flp, bool on) {
     if (on) {
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_ON);
         if (!flp->motor_on) {
+            LogPrintf("[Floppy]: waiting %dms for motor to spin up...\n", MOTOR_SPINUP_MS);
             SleepMilli(MOTOR_SPINUP_MS);
         }
     } else {
@@ -255,8 +256,8 @@ static int FloppyWaitMsr(struct floppy_data* flp, bool want_read) {
         }
     }
 
-    for (int i = 0; i < MSR_TIMEOUT_MS; ++i) {
-        SleepMilli(1);
+    for (int i = 0; i < MSR_TIMEOUT_MS / 10; ++i) {
+        SleepMilli(10);
         if ((inb(flp->base + FLOPPY_MSR) & mask) == want) {
             return 0;
         }
@@ -575,9 +576,6 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
 
     uint64_t offset = io->offset;
     uint64_t length = io->length_remaining;
-    LogPrintf("Transfer offset: 0x%X\n", offset);
-    LogPrintf("Transfer length: 0x%X\n", length);
-    LogPrintf("Transfer buffer: 0x%X\n", io->address);
 
     if (offset % SECTOR_SIZE != 0 || length % SECTOR_SIZE != 0) {
         LogPrintf("[floppy]: bad offset / length\n");
@@ -595,7 +593,6 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
     int remaining = length / SECTOR_SIZE;
     int error = 0;
 
-    LogPrintf("About to get floppy lock...\n");
     AcquireMutex(floppy_lock, TIMEOUT_INFINITE);
 
     while (remaining > 0) {
@@ -627,7 +624,6 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
         }
 
         int done = 0;
-        LogPrintf("About to FloppyTransferSectors...\n");
         error = FloppyTransferSectors(flp, write, cylinder, head, sector, count, &done);
         if (error != 0) break;
 
@@ -646,10 +642,7 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
 }
 
 static int ReadWrite(struct aio* aio) {
-    LogPrintf("Floppy read/write...\n");
     if (floppy_drives_installed[0] != NULL) {
-        LogPrintf("About to post message...\n");
-        LogPrintf("Msgbox at 0x%X, aio at 0x%X\n", floppy_drives_installed[0]->msgbox, (const void*) aio);
         return KePostMessage(floppy_drives_installed[0]->msgbox, (const void*) &aio, TIMEOUT_INSTANT);
     }
     return ENODEV;
@@ -707,21 +700,14 @@ void FloppyDriverThread(void* _flp) {
 
     while (true) {
         struct aio* aio;
-        LogPrintf("FloppyDriverThread: waiting for message...\n");
         int retv = KeGetMessage(flp->msgbox, &aio, next_timeout);
         bool have_request = retv == 0;
-        LogPrintf("FloppyDriverThread: got message? %d\n", have_request);
         FloppyMotor(flp, have_request);
 
         if (have_request) {
             next_timeout = MS_TO_NS(MOTOR_IDLE_MS);
-            LogPrintf("getting ready to FloppyIo...\n");
-            LogPrintf("AIO = 0x%X\n", aio);
-            LogPrintf("AIO->NODE = 0x%X\n", aio->node);
-            LogPrintf("AIO->NODE->DATA = 0x%X\n", aio->node->data);
             int res = FloppyIo((struct floppy_data*) aio->node->data, &aio->transfer);
             SignalDoneIO(aio, res);
-            LogPrintf("Signalled floppy IO done... for AIO 0x%X\n", aio);
 
         } else {
             next_timeout = TIMEOUT_INFINITE;

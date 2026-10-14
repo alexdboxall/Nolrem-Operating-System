@@ -8,6 +8,9 @@
  * FreeVirtEx USES THE HEAP! (TO ALLOCATE!)
  * YOU CAN'T CALL FreeVirtEx IN THE 'REAL' VMM (THE ONE RESPONSIBLE FOR DOING
  * PAGE FAULT HANDLING!) IF YOU'RE ON THE 'FAULT PATH'!
+ * 
+ * Note that if you're in the 'file backed page fault' path, you're not on the
+ * critical path - it's the AllocHeap chain (anon pages) that can't use this.
  */
 struct virt_range {
     size_t start_addr;

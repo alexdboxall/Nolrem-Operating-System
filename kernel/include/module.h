@@ -14,7 +14,6 @@ struct module;
 void InitModule(void);
 
 struct module* CreateModule(const char* path);
-void AddModuleSymbol(struct module* mod, const char* symbol, size_t addr);
 
 uint16_t GetModuleMajorVersion(struct module* mod);
 uint16_t GetModuleMinorVersion(struct module* mod);
@@ -28,7 +27,6 @@ struct symbol {
     size_t addr;
 };
 
-// INTERNAL between module.c and symlist.c
-void DestroySymbolList(struct symbol_list* sl);
+struct symbol_list* CreateSymbolList(int total_syms);
+void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);
 struct symbol* FindSymbol(struct symbol_list* sl, const char* id);
-struct symbol_list* AddSymbol(struct symbol_list* sl, const char* id, size_t addr);

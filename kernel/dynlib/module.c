@@ -15,7 +15,6 @@ struct module {
     uint16_t minor_ver;
     struct module* next;
     struct symbol_list* sym_list;
-    struct spinlock sym_list_lock;
 };
 
 static struct module* module_list_head;
@@ -23,7 +22,7 @@ static struct spinlock modlock;
 
 static void CleanupModule(void* _mod) {
     struct module* mod = _mod;
-    DestroySymbolList(mod->sym_list);
+    FreeHeap(mod->sym_list);
     FreeHeap(mod->name);
     FreeHeap(mod->path);
     FreeHeap(mod);
@@ -41,6 +40,8 @@ export struct module* CreateModule(const char* path) {
     uint16_t maj_ver = 1;
     uint16_t min_ver = 0;
 
+    bool use_hash = !strcmp(name, "KERNEL");
+
     struct module* mod = AllocHeap(sizeof(struct module));
     InitObject(mod, OBJTYPE_MODULE);
 
@@ -48,21 +49,23 @@ export struct module* CreateModule(const char* path) {
     mod->major_ver = maj_ver;
     mod->minor_ver = min_ver;
     mod->path = KeStrdup(path);
-    mod->sym_list = NULL;
-    InitSpinlock(&mod->sym_list_lock);
     
+
+    /* TODO: load the module symbols */
+    int total_syms = 0;
+    mod->sym_list = CreateSymbolList(total_syms);
+    for (int i = 0; i < total_syms; ++i) {
+        const char* id = "NotASymbol";
+        size_t addr = 0xCCAAFFEE;
+        AddToSymbolList(mod->sym_list, i, id, use_hash, addr);
+    }
+
     AcquireSpinlock(&modlock);
     mod->next = module_list_head;
     module_list_head = mod;
     ReleaseSpinlock(&modlock);
 
     return mod;
-}
-
-void AddModuleSymbol(struct module* mod, const char* symbol, size_t addr) {
-    AcquireSpinlock(&mod->sym_list_lock);
-    mod->sym_list = AddSymbol(mod->sym_list, symbol, addr);
-    ReleaseSpinlock(&mod->sym_list_lock);
 }
 
 export uint16_t GetModuleMajorVersion(struct module* mod) {
@@ -79,9 +82,7 @@ export size_t ResolveSymbol(const char* sym, const char* mod_name, int ver_mode,
     while (curr) {
         if (mod_name == NULL || !strcmp(curr->name, mod_name)) {
             if (IsMatchingModuleVersion(curr, ver_mode, major, minor)) {
-                AcquireSpinlock(&curr->sym_list_lock);
                 struct symbol* s = FindSymbol(curr->sym_list, sym);
-                ReleaseSpinlock(&curr->sym_list_lock);
                 if (s != NULL) {
                     ReleaseSpinlock(&modlock);
                     return s->addr;

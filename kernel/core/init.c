@@ -64,8 +64,26 @@ export _Noreturn void InitKernelResidentPortion(void) {
     res = WaitIO(&aio, TIMEOUT_INFINITE);
     LogPrintf("WaitIO: res = %d\n", res);
 
-    LogPrintf("Check out the floppy bootsector (if it worked) at 0x%X\n", buffer);
+    LogPrintf("sizeof(struct mutex      ):    0x%X\n", sizeof(struct mutex));
+    LogPrintf("sizeof(struct sem        ):    0x%X\n", sizeof(struct sem));
+    LogPrintf("sizeof(struct aio        ):    0x%X\n", sizeof(struct aio));
+    LogPrintf("sizeof(struct page_origin):    0x%X\n", sizeof(struct page_origin));
+    LogPrintf("sizeof(struct vas_chain  ):    0x%X\n", sizeof(struct vas_chain));
+    LogPrintf("sizeof(struct virt_page  ):    0x%X\n", sizeof(struct virt_page));
+    LogPrintf("sizeof(struct virt_arena ):    0x%X\n", sizeof(struct virt_arena));
 
+    LogPrintf("\nCheck out the floppy bootsector (if it worked) at 0x%X\n", buffer);
+
+    uint8_t* fmm = AllocFileMemory(f, 0, 1440 * 1024, 0, 0);
+    for (int i = 0; i < 1440 * 2; ++i) {
+        uint8_t* fm = fmm + i * 512;
+        LogPrintf("Sector %d: %X %X %X ... %X %X\n", i, fm[0], fm[1], fm[2], fm[510], fm[511]);
+
+        if (i % 16 == 15 || (i > 700 && (i % 8 == 2))) {
+            DiscardPage();
+        }
+    }
+    
     WmInit();
     WmMainloop();
 }

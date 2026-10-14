@@ -4,10 +4,13 @@
 #include <log.h>
 #include <mutex.h>
 #include <msgbox.h>
+#include <vfs.h>
 #include <spinlock.h>
 #include <arch.h>
+#include <fcntl.h>
 #include <vmm.h>
 #include <thread.h>
+#include <scheduler.h>
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
@@ -241,6 +244,24 @@ static void RepaintIfNeeded(struct window* win) {
     }
 }
 
+static void TestDiskRead(void*) {
+    BeginNewThread();
+    struct file* f;
+    OpenFile("raw-fd0:", O_RDONLY, 0, &f);
+    uint8_t* fmm = AllocFileMemory(f, 0, 1440 * 1024, 0, 0);
+    for (int i = 0; i < 1440 * 2; ++i) {
+        uint8_t* fm = fmm + i * 512;
+        LogPrintf("Sector %d: %X %X %X ... %X %X\n", i, fm[0], fm[1], fm[2], fm[510], fm[511]);
+
+        if (i % 16 == 15 || (i > 700 && (i % 8 == 2))) {
+            //DiscardPage();
+        }
+    }
+    while (true) {
+        Schedule();
+    }
+}
+
 _Noreturn void WmMainloop(void) {
     SetThreadPriority(GetCurrentThread(), PRIORITY_MAX);
 
@@ -297,6 +318,8 @@ _Noreturn void WmMainloop(void) {
         int retv = KeGetMessageFromMany(boxes, 3, &m, TIMEOUT_INFINITE, true, &box_num);
         LogPrintf("[retv %d] Got a message with content %d from box %d\n", retv, m, box_num + 1);
     }
+
+    CreateThread(GetKernelVas(), TestDiskRead, NULL);
 
     while (true) {
         extern bool anything_happened;

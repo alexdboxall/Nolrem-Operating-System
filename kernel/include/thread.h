@@ -27,6 +27,7 @@ struct thread {
 
     uint8_t state;
     uint8_t priority;
+    bool idling;
     int block_return_val;
 
     struct thread* next_ready;
@@ -34,6 +35,8 @@ struct thread {
     struct thread* next_waiting_timer;
     void* waiting_sem_or_clot;
     uint64_t wakeup_time_ns;
+
+    uint32_t affinity_bitmask;
 };
 
 struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context);

@@ -5,12 +5,15 @@
 #include <mutex.h>
 #include <msgbox.h>
 #include <vfs.h>
+#include <string.h>
 #include <spinlock.h>
 #include <arch.h>
 #include <fcntl.h>
 #include <vmm.h>
 #include <thread.h>
 #include <scheduler.h>
+#include <kgfx.h>
+#include <phys.h>
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
@@ -252,11 +255,9 @@ static void TestDiskRead(void*) {
     for (int i = 0; i < 1440 * 2; ++i) {
         uint8_t* fm = fmm + i * 512;
         LogPrintf("Sector %d: %X %X %X ... %X %X\n", i, fm[0], fm[1], fm[2], fm[510], fm[511]);
-
-        if (i % 16 == 15 || (i > 700 && (i % 8 == 2))) {
-            //DiscardPage();
-        }
     }
+    FreeMemory(fmm, 1440 * 1024);
+    LogPrintf("Freed memory.\n");
     while (true) {
         Schedule();
     }
@@ -321,6 +322,7 @@ _Noreturn void WmMainloop(void) {
 
     CreateThread(GetKernelVas(), TestDiskRead, NULL);
 
+    size_t prev_kb_free = 0;
     while (true) {
         extern bool anything_happened;
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
@@ -332,6 +334,26 @@ _Noreturn void WmMainloop(void) {
             RepaintIfNeeded(win);
             RepaintIfNeeded(win2);
             RepaintIfNeeded(win3);
+        }
+
+        {
+            size_t kb_free = GetFreeMemory() / 1024;
+            char str[16];
+            strcpy(str, "---- KB free");
+            str[3] = ((kb_free / 1) % 10) + '0';
+            str[2] = ((kb_free / 10) % 10) + '0';
+            str[1] = ((kb_free / 100) % 10) + '0';
+            str[0] = ((kb_free / 1000) % 10) + '0';
+
+            if (prev_kb_free != kb_free) {
+                prev_kb_free = kb_free;
+                struct region rgn = CdCreateRectRegion(0, 0, 200, 20);
+                WmInvalidateRegion(WmGetDesktop(), rgn, true);
+                CdFreeRegion(rgn);
+                RepaintIfNeeded(WmGetDesktop());    
+            }
+            extern void VGADrawString(int x, int y, int pt, uint8_t col, const char* s, bool bold, bool italic);
+            VGADrawString(0, 0, 12, 0, str, false, false);
         }
     }
 

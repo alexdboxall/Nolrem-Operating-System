@@ -21,6 +21,9 @@ void InitPs2(void);
 
 void SendPicEoi(int num);
 
+struct Elf32_Ehdr;
+bool IsElfValid(struct Elf32_Ehdr* header);
+
 #define PIC_IRQ_BASE 32
 
 struct x86_regs

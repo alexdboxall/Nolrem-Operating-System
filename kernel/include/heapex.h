@@ -19,6 +19,7 @@ struct heap {
     void*(*get_memory)(size_t*);
     struct spinlock lock;
 
+    uint32_t _free_list_bitmap;
     size_t outstanding_allocated_memory;
 };
 

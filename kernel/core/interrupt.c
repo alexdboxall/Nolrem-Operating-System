@@ -1,5 +1,6 @@
 #include <arch.h>
 #include <common.h>
+#include <log.h>
 
 static void(*irq_handlers[16])(irqcontext_t) = {0};
 

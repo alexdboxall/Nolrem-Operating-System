@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <aio.h>
+#include <filesystem.h>
 
 struct partition_data {
     struct file* fs;
@@ -144,8 +145,7 @@ pageable struct file* CreatePartition(
 
     struct file* partition = CreateFile(node, 0, 0, true, true);
     LogPrintf("Creating partition...\n");
-    // TODO:
-    //MountFilesystemForDisk(partition);
+    MountFilesystemForDisk(partition);
     return partition;
 }
 

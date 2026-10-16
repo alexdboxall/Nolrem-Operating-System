@@ -71,3 +71,7 @@ void ArchSetupNewThreadEntry(struct thread* thr, void(*entry)(void*), void*);
 
 /* If true, the hardware timer will not call AdvanceTimer */
 void ArchDebugInhibitTimerAdvance(bool inhibit);
+
+struct module;
+struct file;
+struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_hash);

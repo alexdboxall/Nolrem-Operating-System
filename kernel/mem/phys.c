@@ -8,7 +8,7 @@
 #include <arch.h>
 
 /* At or below this number of physical pages, we start discarding. */
-#define LOW_MEM_THRESHOLD   16
+#define LOW_MEM_THRESHOLD   20
 
 static struct phys_page* sys_pp_table;
 static _Atomic size_t sys_total_pp;

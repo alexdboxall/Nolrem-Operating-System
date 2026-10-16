@@ -13,6 +13,7 @@
 #include <vfs.h>
 #include <cpu.h>
 #include <file.h>
+#include <filesystem.h>
 #include <module.h>
 #include <fcntl.h>
 #include <vmm.h>
@@ -107,6 +108,7 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitVnode();
     InitDiskUtil();
     InitFile();
+    InitFilesystemTable();
     InitUserObjectType();
     InitVfs();
     InitNullDevice();

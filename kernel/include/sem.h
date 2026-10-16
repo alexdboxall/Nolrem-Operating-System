@@ -3,13 +3,11 @@
 struct sem;
 struct mutex;
 
+#include <common.h>
 #include <obj.h>
 
 struct thread;
 struct wait_clot;
-
-#define TIMEOUT_INFINITE (-1LL)
-#define TIMEOUT_INSTANT  (0)
 
 struct sem {
     struct obj_header hdr;

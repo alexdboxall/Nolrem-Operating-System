@@ -229,6 +229,7 @@ static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys
     vp->busy = 0;
     vp->dirty = 0;
     vp->present = 1;
+    vp->fixed = false;
     vp->phys = existing_phys;
 
     struct phys_page* pp = GetPhysPage(existing_phys);
@@ -308,6 +309,7 @@ export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
     vp->busy = 0;
     vp->dirty = 0;
     vp->present = 0;
+    vp->fixed = fixed;
     vp->origin = po;            /* aliases vp->phys - set one or the other */
 
     LockVas(vas);
@@ -889,4 +891,176 @@ export void ZeroPhysPage(size_t phys) {
     memset((void*) virt, 0, PAGE_SIZE);
     ArchReleaseTemporaryPage(virt);
     ArchUnlockFromCpu(r);
+}
+
+static struct vas_chain* UnregisterVasAsPhysUser(struct phys_page* pp, struct virt_page* vp) {
+    if (pp->vp == vp) {
+        struct vas_chain* node = pp->chain;
+        if (node != NULL) {
+            pp->chain = node->next;
+            pp->vas = node->vas;
+            pp->vp = node->vp;
+        } else {
+            pp->vas = NULL;
+            pp->vp = NULL;
+        }
+        return node;
+    }
+
+    struct vas_chain** link = &pp->chain;
+    while (*link != NULL && (*link)->vp != vp) {
+        link = &(*link)->next;
+    }
+    assert(*link != NULL);      /* present + matching phys => must be registered */
+    struct vas_chain* node = *link;
+    *link = node->next;
+    return node;
+}
+
+static void ReleaseVirtPage(struct vas* vas, size_t virt) {
+    int retries = 0;
+
+    for (;;) {
+        if (++retries > VMM_MAX_FAULT_RETRIES) {
+            Panic(PANIC_VMM_LIVELOCK);
+        }
+
+        LockVas(vas);
+        struct virt_page** slot = GetVirtualPageSlot(vas, virt, false);
+        struct virt_page* vp = (slot == NULL) ? NULL : *slot;
+
+        /* Double free, or a ptr/size that doesn't match the allocation. */
+        assert(vp != NULL);
+        if (vp == NULL) {
+            UnlockVas(vas);
+            return;
+        }
+
+        if (!vp->present) {
+            /*
+             * vp->origin is the live union arm; CleanupVirtPage drops it.
+             * busy may be nonzero if a DiscardPage() is mid-flight on this vp;
+             * that's fine, the discarder's registration still holds its own
+             * reference to the vp and only drops it after busy returns to 0.
+             */
+            *slot = NULL;
+            UnlockVas(vas);
+            DerefObject(vp);                /* the slot's reference */
+            return;
+        }
+
+        if (vp->fixed) {
+            /*
+             * Fixed pages never touch a phys_page, so nobody else ever bumps
+             * busy. Use it as a "treat as unmapped" marker to make the sync
+             * tear the PTE down, then put it back to 0 for CleanupVirtPage's
+             * assert. 'present' stays 1 on purpose: the fault handler already
+             * dropped the origin reference, and CleanupVirtPage only derefs
+             * vp->origin when !present (vp->origin aliases vp->phys here!).
+             */
+            assert(vp->busy == 0);
+            vp->busy++;
+            SynchroniseVirt(vp);
+            vp->busy--;
+            *slot = NULL;
+            UnlockVas(vas);
+            DerefObject(vp);                /* the slot's reference */
+            return;
+        }
+
+        /*
+         * Present, backed by a frame. We hold vas->lock but the lock order is
+         * phys outer / vas inner, so drop it, take the phys_page, and
+         * revalidate. The extra reference keeps the vp alive across the gap.
+         */
+        size_t phys = vp->phys;
+        RefObject(vp);
+        UnlockVas(vas);
+
+        struct phys_page* pp = GetPhysPage(phys);
+        EnterPhysPageCriticalSection(pp);
+        LockVas(vas);
+
+        slot = GetVirtualPageSlot(vas, virt, false);
+        if (slot == NULL || *slot != vp || !vp->present || vp->phys != phys) {
+            /* Discarded (or discarded and refaulted) while we were waiting. */
+            UnlockVas(vas);
+            LeavePhysPageCriticalSection(pp);
+            DerefObject(vp);
+            continue;
+        }
+
+        assert(pp->wired == 0);
+        assert(vp->busy == 1);              /* ours, from the Enter above */
+
+        /*
+         * Enter already harvested accessed/dirty into pp->dirty and unmapped
+         * the PTE. Drop the vp from the tables and from the phys_page's user
+         * list, and take back the busy count Enter gave it: Leave won't visit
+         * it any more, and we deliberately do NOT sync - it must stay unmapped.
+         */
+        *slot = NULL;
+        vp->busy--;
+        struct vas_chain* node = UnregisterVasAsPhysUser(pp, vp);
+        UnlockVas(vas);
+
+        struct page_origin* dead_origin = NULL;
+        if (pp->vas == NULL && pp->chain == NULL) {
+            /*
+             * Last user gone. Detach the frame from its origin while still
+             * under pp->lock: a concurrent faulter peeking origin->phys will
+             * either see 0, or see the old value, block on our lock, and then
+             * fail its (pp->origin != origin) recheck. Either way it can't
+             * map the frame.
+             *
+             * (Dirty file-backed contents are simply dropped: there is no
+             * write-back path anywhere in the VMM yet.)
+             */
+            dead_origin = pp->origin;
+            assert(dead_origin != NULL && dead_origin->phys == phys);
+            dead_origin->phys = 0;
+            pp->origin = NULL;
+        }
+        LeavePhysPageCriticalSection(pp);   /* re-syncs any remaining sharers */
+
+        /* Everything below runs with no phys_page / vas lock held. */
+        if (dead_origin != NULL) {
+            FreeDiscardedPhys(GetPhysPage(phys));
+            DerefObject(dead_origin);       /* the phys_page's reference */
+        }
+        if (node != NULL) {
+            FreeVmmHeap(node);
+        }
+        DerefObject(vas);                   /* registration's vas reference */
+        DerefObject(vp);                    /* registration's vp reference */
+        DerefObject(vp);                    /* the slot's reference */
+        DerefObject(vp);                    /* ours, taken above - frees the vp */
+        return;
+    }
+}
+
+/*
+ * Frees a range returned by AllocAnonMemory(), AllocFixedMemory() or
+ * AllocFileMemory(). 'bytes' must be exactly what was passed to the Alloc.
+ *
+ * Physical frames owned by anon/file pages are returned to the allocator;
+ * frames behind fixed mappings are left alone. Dirty file pages are dropped,
+ * not written back.
+ */
+export void FreeMemory(void* ptr, size_t bytes) {
+    if (ptr == NULL || bytes == 0) {
+        return;
+    }
+
+    size_t base = (size_t) ptr;
+    assert(base % PAGE_SIZE == 0);
+
+    struct vas* vas = GetCurrentVas();
+    size_t pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    for (size_t i = 0; i < pages; ++i) {
+        ReleaseVirtPage(vas, base + i * PAGE_SIZE);
+    }
+
+    FreeVirt(base, pages * PAGE_SIZE);
 }

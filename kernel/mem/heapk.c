@@ -82,8 +82,9 @@ void* KernelHeapRequestMemory(size_t* size) {
     if (retv != NULL) {
         return retv;
     }
-    LogPrintf("No more bootstrap heap available! AllocAnonMemory...\n");
+    LogPrintf("KernelHeapRequestMemory: about to AllocAnonMemory...\n");
     retv = AllocAnonMemory(*size, VP_WRITE);
+    LogPrintf("KernelHeapRequestMemory: got anon memory\n");
     *size = (*size + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1));
     return retv;
 }

@@ -16,7 +16,8 @@ char* panic_msgs[] = {
     "Fuck me",
     "Assertion failure bootstrapping VMM special heap",
     "Assertion failure",
-    "System message box full"
+    "System message box full",
+    "Bad kernel file"
 };
 
 static _Noreturn void PanicEx(int panic_reason, const char* msg1, const char* msg2) {

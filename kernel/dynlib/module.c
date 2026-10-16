@@ -3,6 +3,9 @@
 #include <module.h>
 #include <common.h>
 #include <string.h>
+#include <arch.h>
+#include <vfs.h>
+#include <fcntl.h>
 #include <spinlock.h>
 
 struct symbol_list;
@@ -36,6 +39,12 @@ void InitModule(void) {
 export struct module* CreateModule(const char* path) {
     // TODO: load the version
     // TODO: load the name
+    struct file* file;
+    int res = OpenFile(path, O_RDONLY, 0, &file);
+    if (res != 0) {
+        return NULL;
+    }
+
     char* name = "KERNEL";
     uint16_t maj_ver = 1;
     uint16_t min_ver = 0;
@@ -49,16 +58,8 @@ export struct module* CreateModule(const char* path) {
     mod->major_ver = maj_ver;
     mod->minor_ver = min_ver;
     mod->path = KeStrdup(path);
-    
 
-    /* TODO: load the module symbols */
-    int total_syms = 0;
-    mod->sym_list = CreateSymbolList(total_syms);
-    for (int i = 0; i < total_syms; ++i) {
-        const char* id = "NotASymbol";
-        size_t addr = 0xCCAAFFEE;
-        AddToSymbolList(mod->sym_list, i, id, use_hash, addr);
-    }
+    mod->sym_list = ArchLoadSymbols(file, 0, use_hash);
 
     AcquireSpinlock(&modlock);
     mod->next = module_list_head;

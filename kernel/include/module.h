@@ -23,9 +23,9 @@ size_t ResolveSymbol(const char* sym, const char* mod_name, int ver_mode, uint16
 
 struct symbol_list;
 struct symbol {
-    size_t hash_or_str;
+    uint64_t hash_or_str;
     size_t addr;
-};
+} __attribute__((packed));
 
 struct symbol_list* CreateSymbolList(int total_syms);
 void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);

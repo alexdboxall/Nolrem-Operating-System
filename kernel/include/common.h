@@ -6,6 +6,9 @@
 #include <stdarg.h>
 #include <stdatomic.h>
 
+#define TIMEOUT_INFINITE (-1LL)
+#define TIMEOUT_INSTANT  (0)
+
 #ifdef COMPILE_KERNEL
 #include <sys/types.h>
 #endif

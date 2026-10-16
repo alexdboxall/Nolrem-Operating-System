@@ -41,7 +41,9 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     thr->priority = PRIORITY_NORMAL;
     thr->block_return_val = 0;
     thr->wakeup_time_ns = 0;
-
+    thr->affinity_bitmask = -1;     /* all processors */
+    thr->idling = false;
+    
     if (vas == GetKernelVas()) {
         thr->stack_pointer = thr->kernel_stack_top;
     } else {

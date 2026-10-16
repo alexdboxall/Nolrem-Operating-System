@@ -48,9 +48,57 @@ struct block {
 
 #define MIN_REQ_SIZE (2 * sizeof(size_t))
 
+/*
+ * heap->_free_list_bitmap (a uint32_t, which must be added to struct heap and
+ * zeroed in InitHeapEx) has bit N set if and only if free list N is non-empty.
+ * This means each free list needs a bit, and the layout of the lists below is
+ * baked into GetInsertionIndex, so both are checked at compile time.
+ */
+#define LIST_BIT(index) (((uint32_t) 1) << (index))
+
+_Static_assert(TOTAL_NUM_FREE_LISTS == 24, 
+    "GetInsertionIndex assumes the 24 list layout in free_list_block_sizes");
+_Static_assert(TOTAL_NUM_FREE_LISTS <= 32, 
+    "The free list bitmap is a uint32_t, so there can be at most 32 lists");
+
+/**
+ * Index of the least significant set bit. The value MUST be non-zero, as the
+ * result of BSF on a zero input is undefined.
+ *
+ * BSF/BSR have existed since the 386, so are fine on an i486 (unlike TZCNT,
+ * LZCNT and POPCNT, which must not be used here).
+ */
+static userexec inline int BitScanForward(uint32_t value) {
+#if defined(__i386__) || defined(__x86_64__)
+    int result;
+    __asm__ ("bsfl %1, %0" : "=r" (result) : "rm" (value) : "cc");
+    return result;
+#else
+    return __builtin_ctz(value);
+#endif
+}
+
+/**
+ * Index of the most significant set bit (i.e. floor(log2(value))). The value 
+ * MUST be non-zero, as the result of BSR on a zero input is undefined.
+ */
+static userexec inline int BitScanReverse(uint32_t value) {
+#if defined(__i386__) || defined(__x86_64__)
+    int result;
+    __asm__ ("bsrl %1, %0" : "=r" (result) : "rm" (value) : "cc");
+    return result;
+#else
+    return 31 - __builtin_clz(value);
+#endif
+}
+
 /**
  * An array which holds the minimum allocation sizes that each free list can 
  * hold.
+ *
+ * This is no longer used to look up lists (GetInsertionIndex works it out with 
+ * BSR), but it is the source of truth for what the layout is, and FindBlock 
+ * uses it to pick the size to request from the system.
  */
 
  /*                                                 
@@ -74,33 +122,52 @@ static const userrodata uint16_t free_list_block_sizes[TOTAL_NUM_FREE_LISTS] = {
 };
 
 /**
- * Used to work out which free list a block should be in, when we are *reading*
- * a block. This rounds the size *up*, meaning it cannot be used to insert a 
- * block into a list. NOT USED TO INSERT BLOCKS!! 
+ * Calculates which free list a block should be inserted in. This rounds down,
+ * and so it should not normally be used to look up where a block should be.
+ *
+ * The table above has a very regular shape, which lets us skip searching it:
+ *  - Below 64 bytes, the lists are in steps of 8 (index 0 is 8 bytes, index 6 
+ *    is 56 bytes).
+ *  - From 64 bytes upwards, every power of two is split into 4 lists. If the
+ *    highest set bit of the size is k, the next two bits below it pick the 
+ *    sub-list, and each power of two starts 4 lists after the previous one 
+ *    (64 starts at index 7, 128 at 11, 256 at 15, 512 at 19).
+ *  - 1024 and above all go in the last list.
  */
-static userexec int GetSmallestListIndexThatFits(size_t size_without_metadata) {
-    int i = 0;
-    while (i < TOTAL_NUM_FREE_LISTS) {
-        if (size_without_metadata <= free_list_block_sizes[i]) {
-            return i;
+static userexec int GetInsertionIndex(size_t size_without_metadata) {
+    if (size_without_metadata < 64) {
+        if (size_without_metadata < 8) {
+            return 0;
         }
-        ++i;
+        return (int) (size_without_metadata >> 3) - 1;
     }
-    return TOTAL_NUM_FREE_LISTS - 1;
+
+    if (size_without_metadata >= 1024) {
+        return TOTAL_NUM_FREE_LISTS - 1;
+    }
+
+    int k = BitScanReverse((uint32_t) size_without_metadata);
+    int sublist = (int) ((size_without_metadata >> (k - 2)) & 3);
+    return 7 + (k - 6) * 4 + sublist;
 }
 
 /**
- * Calculates which free list a block should be inserted in. This rounds down,
- * and so it should not normally be used to look up where a block should be.
+ * Used to work out which free list a block should be in, when we are *reading*
+ * a block. This rounds the size *up*, meaning it cannot be used to insert a 
+ * block into a list. NOT USED TO INSERT BLOCKS!! 
+ *
+ * The smallest list that fits a size is one past the largest list whose 
+ * minimum size is strictly less than it, i.e. one past the insertion index of 
+ * (size - 1).
  */
-static userexec int GetInsertionIndex(size_t size_without_metadata) {
-    int result = 0;
-    for (int i = 0; i < TOTAL_NUM_FREE_LISTS; ++i) {
-        if (free_list_block_sizes[i] <= size_without_metadata) {
-            result = i;
-        } else {
-            break;
-        }
+static userexec int GetSmallestListIndexThatFits(size_t size_without_metadata) {
+    if (size_without_metadata <= free_list_block_sizes[0]) {
+        return 0;
+    }
+
+    int result = GetInsertionIndex(size_without_metadata - 1) + 1;
+    if (result >= TOTAL_NUM_FREE_LISTS) {
+        return TOTAL_NUM_FREE_LISTS - 1;
     }
     return result;
 }
@@ -199,12 +266,16 @@ static userexec struct block* RequestBlock(struct heap* heap, size_t total_size)
  * index (as opposed to calculating it itself), as this may be used halfway 
  * though allocations or deallocations where the block isn't yet in its correct 
  * block.
+ *
+ * This is one of the two places that changes which lists are non-empty (the 
+ * other is AddBlock), so it must keep the bitmap up to date.
  */
 static userexec void RemoveBlock(struct heap* heap, int free_list_index, struct block* block) {
     struct block** head_list = GetHeap(heap);
 
     if (block->prev == NULL && block->next == NULL) {
         head_list[free_list_index] = NULL;
+        heap->_free_list_bitmap &= ~LIST_BIT(free_list_index);
         
     } else if (block->prev == NULL) {
         head_list[free_list_index] = block->next;
@@ -243,6 +314,7 @@ static userexec struct block* AddBlock(struct heap* heap, struct block* block) {
             block->next->prev = block;
         }
         head_list[free_list_index] = block;
+        heap->_free_list_bitmap |= LIST_BIT(free_list_index);
         MarkFree(block);
         return block;
 
@@ -352,20 +424,31 @@ static userexec struct block* AllocateBlock(
 static userexec struct block* FindBlock(struct heap* heap, size_t user_requested_size) {
     struct block** head_list = GetHeap(heap);
 
+    /*
+     * Every list from min_index upwards holds blocks that are big enough (the
+     * only exception being the last list, which holds a range of sizes and 
+     * needs to be searched). So, mask off the lists that are too small, and 
+     * the lowest remaining set bit is the smallest non-empty list that fits.
+     */
     int min_index = GetSmallestListIndexThatFits(user_requested_size);
-    for (int i = min_index; i < TOTAL_NUM_FREE_LISTS; ++i) {
-        if (head_list[i] != NULL) {
-            if (i == TOTAL_NUM_FREE_LISTS - 1) {
-                struct block* current = head_list[i];
-                while (current) {
-                    if (GetSize(current) - METADATA_TOTAL >= user_requested_size) {
-                        return AllocateBlock(heap, current, i, user_requested_size);
-                    }
-                    current = current->next;
-                }
-            } else {
-                return AllocateBlock(heap, head_list[i], i, user_requested_size);
+    uint32_t candidates = heap->_free_list_bitmap & ((~(uint32_t) 0) << min_index);
+
+    if (candidates != 0) {
+        int i = BitScanForward(candidates);
+        if (i != TOTAL_NUM_FREE_LISTS - 1) {
+            return AllocateBlock(heap, head_list[i], i, user_requested_size);
+        }
+
+        /*
+         * The last list is the highest one, so if nothing in it fits then 
+         * there is nowhere left to look.
+         */
+        struct block* current = head_list[i];
+        while (current) {
+            if (GetSize(current) - METADATA_TOTAL >= user_requested_size) {
+                return AllocateBlock(heap, current, i, user_requested_size);
             }
+            current = current->next;
         }
     }
 
@@ -455,5 +538,5 @@ export userexec void InitHeapEx(struct heap* heap, void*(*get_memory)(size_t*)) 
     InitSpinlock(&heap->lock);
     heap->get_memory = get_memory;
     memset(heap->_head_block, 0, sizeof(heap->_head_block));
+    heap->_free_list_bitmap = 0;
 }
-

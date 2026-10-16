@@ -114,6 +114,9 @@ KernelEntryPoint:
 	; Set the stack to the one we defined
 	mov esp, stack_top
 
+	call IsIntel386
+	jc Fail386
+
 	; Call the kernel main function, passing it in the table given to us by the
 	; bootloader.
 	push ebx
@@ -123,3 +126,54 @@ KernelEntryPoint:
 	cli
 	hlt
 	jmp $
+
+
+global IsIntel386
+
+IsIntel386:
+    pushfd                      ; Save original EFLAGS
+    pushfd                      ; Push EFLAGS again to read into EAX
+    pop eax                     ; Get EFLAGS into EAX
+    
+    mov ecx, eax                ; Save original EFLAGS in ECX for comparison
+    xor eax, 0x00040000         ; Flip the AC bit (Bit 18: 0x40000)
+    
+    push eax                    ; Push modified EFLAGS onto stack
+    popfd                       ; Load modified value into EFLAGS register
+    
+    pushfd                      ; Push current EFLAGS back onto stack
+    pop eax                     ; Get current EFLAGS into EAX
+    
+    popfd                       ; Restore the CPU's original state
+    
+    xor eax, ecx                ; XOR original and modified EFLAGS
+    and eax, 0x00040000         ; Check if the AC bit actually changed
+    
+    jnz .is_i486
+    
+.is_i386:
+    stc
+    ret
+
+.is_i486:
+	clc
+    ret
+
+
+Fail386:
+	mov edi, 0xC00B8000
+	mov ax, 0x0F00
+	mov ecx, 4000
+	rep stosb
+
+	mov ebx, 0xC00B8000 / 2 + 82
+	mov esi, fail_386_msg
+.again:
+	lodsb
+	test al, al
+	jz short $
+	mov [ebx + ebx], ax
+	inc ebx
+	jmp short .again
+
+fail_386_msg db "Nolrem requires an i486 or later processor", 0

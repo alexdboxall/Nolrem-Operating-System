@@ -9,7 +9,22 @@
 #include <arch.h>
 #include <msgbox.h>
 #include <timer.h>
+#include <interrupt.h>
+#include <stdatomic.h>
 
+/*
+ * REQUIRES in <thread.h>:
+ *     bool idling;
+ * inside `struct thread`. It must be initialised to false in CreateThread
+ * (and is protected by `sched_lock`).
+ *
+ * `idling` means: some CPU is parked in `IdleUntilRunnable` on this thread's
+ * stack. While it is set the thread must NEVER be put on the ready queue (or
+ * any other CPU could start running it on top of the idling CPU). If it gets
+ * unblocked it is just marked READY, and the idling CPU resumes it itself.
+ */
+
+static _Atomic uint32_t something_unblocked_seq = 0;
 static struct spinlock sched_lock;
 static int sched_prevent_count = 0;
 static bool sched_postponed = false;
@@ -30,16 +45,67 @@ export struct thread* GetCurrentThread(void) {
 }
 
 export void AcquireScheduler(void) {
-    ArchDisableInterrupts();
+    AcquireIrqPrevent();
     AcquireSpinlock(&sched_lock);
     sched_prevent_count++;
     ReleaseSpinlock(&sched_lock);
+}
+
+static bool CanThreadRunOnThisCpu(struct thread* thr) {
+    int cpu_num = ArchGetCpuNum();
+    return !!(thr->affinity_bitmask & (1ULL << cpu_num));
+}
+
+/*
+ * Remove and return the first thread on the ready queue that is allowed to run
+ * on this CPU, or NULL if there is none. Scheduler lock must be held.
+ */
+static struct thread* FindNextThread(void) {
+    struct thread* prev = NULL;
+    struct thread* thr = ready_list_head;
+    while (thr != NULL) {
+        if (CanThreadRunOnThisCpu(thr)) {
+            /* Unlink `thr`. */
+            if (prev == NULL) {
+                ready_list_head = thr->next_ready;
+            } else {
+                prev->next_ready = thr->next_ready;
+            }
+            if (thr == ready_list_tail) {
+                /* `prev` is NULL if `thr` was the only element. */
+                ready_list_tail = prev;
+            }
+            thr->next_ready = NULL;
+            return thr;
+        }
+        prev = thr;
+        thr = thr->next_ready;
+    }
+    return NULL;
+}
+
+static void AddToBackOfReadyQueue(struct thread* thr) {
+    thr->state = THREAD_STATE_READY;
+    thr->next_ready = NULL;
+    if (ready_list_tail != NULL) {
+        ready_list_tail->next_ready = thr;
+    }
+    ready_list_tail = thr;
+    if (ready_list_head == NULL) {
+        ready_list_head = thr;
+    }
+}
+
+/* Is this CPU currently parked in the idle loop (on current_thread's stack)? */
+static bool IsCurrentThreadIdling(void) {
+    return sched_init && current_thread != NULL && current_thread->idling;
 }
 
 void SwitchToThread(struct thread* thr);
 
 export void ReleaseScheduler(void) {
     if (ArchAreInterruptsEnabled()) {
+        LogPrintf("A\n");
         Panic(PANIC_FUCK_ME);
     }
     AcquireSpinlock(&sched_lock);
@@ -48,12 +114,21 @@ export void ReleaseScheduler(void) {
         sched_postponed = false;
         struct thread* thr = sched_postponed_thr;
         sched_postponed_thr = NULL;
-        SwitchToThread(thr);
+        if (IsCurrentThreadIdling()) {
+            /* We are an IRQ that landed inside the idle loop, running on the
+             * idling thread's stack. Do NOT switch from here: the idle loop
+             * does the picking. Just make sure anything postponed is visible
+             * to it, and kick it so it re-checks. */
+            if (thr != NULL) {
+                AddToBackOfReadyQueue(thr);
+                ++something_unblocked_seq;
+            }
+        } else {
+            SwitchToThread(thr);
+        }
     }
     ReleaseSpinlock(&sched_lock);
-    if (zero) {
-        ArchEnableInterrupts();
-    }
+    ReleaseIrqPrevent();
 }
 
 export void PostMessageIrq(struct msg msg) {
@@ -88,30 +163,6 @@ void ProcessIrqPostMessage(void) {
     }
 }
 
-static struct thread* FindNextThread(void) {
-    if (ready_list_head == NULL) {
-        Panic(PANIC_IDLE_TASK_HAS_BLOCKED);
-    }
-    struct thread* thr = ready_list_head;
-    ready_list_head = ready_list_head->next_ready;
-    if (thr == ready_list_tail) {
-        ready_list_tail = NULL;
-    }
-    return thr;
-}
-
-static void AddToBackOfReadyQueue(struct thread* thr) {
-    thr->state = THREAD_STATE_READY;
-    thr->next_ready = NULL;
-    if (ready_list_tail != NULL) {
-        ready_list_tail->next_ready = thr;
-    }
-    ready_list_tail = thr;
-    if (ready_list_head == NULL) {
-        ready_list_head = thr;
-    }
-}
-
 static void SetupInitialThread(void) {
     struct thread* thr = FindNextThread();
     current_thread = thr;
@@ -123,10 +174,53 @@ void BeginNewThread(void) {
     bool zero = sched_prevent_count == 0;
     ReleaseSpinlock(&sched_lock);
     if (zero) {
-        ArchEnableInterrupts();
+        ReleaseIrqPrevent();
     } else {
+        LogPrintf("B\n");
         Panic(PANIC_FUCK_ME);
     }
+}
+
+/*
+ * Idle this CPU on the (BLOCKED) current thread's own stack until something is
+ * runnable. Costs no extra stack.
+ *
+ * Called with `sched_lock` held and interrupts off; returns the same way.
+ * Returns either:
+ *   - `current_thread` (it was unblocked while we idled; it is NOT on the
+ *     ready queue, because UnblockThread never queues an idling thread), or
+ *   - a thread freshly removed from the ready queue.
+ */
+static struct thread* IdleUntilRunnable(void) {
+    struct thread* idler = current_thread;
+    struct thread* thr;
+
+    idler->idling = true;
+    while (true) {
+        /* Read under the lock, after our last FindNextThread: any unblock
+         * after this point must take the lock, so it will bump the seq. */
+        uint32_t og_seq = something_unblocked_seq;
+        ReleaseSpinlock(&sched_lock);
+        ArchEnableInterrupts();
+        do {
+            ArchIdle();
+        } while (something_unblocked_seq == og_seq);
+        ArchDisableInterrupts();
+        AcquireSpinlock(&sched_lock);
+
+        /* Prefer resuming ourselves: we're already off the queue, so no queue
+         * fixup is needed, and no other CPU can have touched us. */
+        if (idler->state == THREAD_STATE_READY) {
+            thr = idler;
+            break;
+        }
+        thr = FindNextThread();
+        if (thr != NULL) {
+            break;
+        }
+    }
+    idler->idling = false;
+    return thr;
 }
 
 /* 
@@ -141,9 +235,10 @@ void SwitchToThread(struct thread* thr) {
         return;
     }
     if (ArchAreInterruptsEnabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
+        LogPrintf("C\n");
         Panic(PANIC_FUCK_ME);
     }
-    //LogPrintf("Switch to thread: 0x%X\n", thr);
+    //LogPrintf("About to switch out of current_thread: 0x%X in state %d\n", current_thread, current_thread->state);
     if (current_thread->state == THREAD_STATE_RUNNING) {
         if (ready_list_head == NULL && thr == NULL) {
             /* Nothing else is available to run, so keep running. */
@@ -153,11 +248,33 @@ void SwitchToThread(struct thread* thr) {
     }
     if (thr == NULL) {
         thr = FindNextThread();
+        if (thr == NULL) {
+            if (current_thread->state != THREAD_STATE_BLOCKED) {
+                /* Should be unreachable: if the current thread was RUNNING it
+                 * was just queued, and it can obviously run on this CPU, so
+                 * FindNextThread would at worst have returned it. We can't
+                 * idle on a stack that's sitting on the ready queue. */
+                LogPrintf("SwitchToThread: current thread in unexpected state\n");
+                Panic(PANIC_FUCK_ME);
+            }
+            LogPrintf("IDLE\n");
+            thr = IdleUntilRunnable();
+        }
+        /* This is allowed: either we were blocked then woken (e.g. by a timer)
+         * before we got around to switching away, or we were RUNNING and every
+         * other queued thread is pinned to other CPUs, so we just keep going. */
         if (thr == current_thread) {
-            LogPrintf("current thread was also on the queue...\n");
+            thr->state = THREAD_STATE_RUNNING;
+            thr->next_ready = NULL;
+            return;
+        }
+    } else {
+        if (!CanThreadRunOnThisCpu(thr)) {
+            LogPrintf("SwitchToThread: called with a thread with wrong affinity\n");
             Panic(PANIC_FUCK_ME);
         }
     }
+
     struct thread* old_thr = current_thread;
     current_thread = thr;
     current_thread->state = THREAD_STATE_RUNNING;
@@ -180,7 +297,19 @@ void BlockThread(void) {
 }
 
 static bool ShouldPreempt(struct thread* thr) {
-    return sched_init && (ready_list_head == NULL || thr->priority < GetCurrentThread()->priority);
+    if (!sched_init) {
+        return false;
+    }
+    if (GetCurrentThread()->state != THREAD_STATE_RUNNING) {
+        /* Current is blocked / on its way out: there is nothing to preempt, 
+         * so the woken thread should just be queued. */
+        return false;
+    }
+    if (!CanThreadRunOnThisCpu(thr)) {
+        /* Can't switch to it from here; queue it for a CPU that can. */
+        return false;
+    }
+    return ready_list_head == NULL || thr->priority < GetCurrentThread()->priority;
 }
 
 /*
@@ -200,15 +329,34 @@ void UnblockThread(struct thread* thr, int retv) {
     thr->next_ready = NULL;
     thr->state = THREAD_STATE_READY;
 
+    /* TODO: may need some sort of IPI thing in the future somewhere in this
+     * func to wake other idling CPUs.
+     */
+    if (thr->idling) {
+        /* A CPU is parked on this thread's stack. Queueing it would let another
+         * CPU run it on top of the idler, so leave it off the queue; it is now
+         * marked READY and the idling CPU will notice and resume it. */
+        ++something_unblocked_seq;
+        return;
+    }
+
     if (ShouldPreempt(thr)) {
         sched_postponed = true;
-        if (sched_postponed_thr == NULL || thr->priority < sched_postponed_thr->priority) {
+        if (sched_postponed_thr == NULL) {
             sched_postponed_thr = thr;
+        } else if (thr->priority < sched_postponed_thr->priority) {
+            /* Replace `sched_postponed_thr` with something even higher
+             * priority, so put the old `sched_postponed_thr` on the queue so it
+             * isn't dropped completely! */
+            AddToBackOfReadyQueue(sched_postponed_thr);
+            sched_postponed_thr = thr;
+        } else {
+            AddToBackOfReadyQueue(thr);
         }
-
     } else {
         AddToBackOfReadyQueue(thr);
     }
+    ++something_unblocked_seq;
 }
 
 export void Schedule(void) {
@@ -221,7 +369,7 @@ void InitScheduler(void) {
     sched_prevent_count = 0;
     InitSpinlock(&sched_lock);
     CreateThread(GetKernelVas(), NULL, NULL);
-    CreateThread(GetKernelVas(), IdleTask, NULL);
+    //CreateThread(GetKernelVas(), IdleTask, NULL);
     sched_init = true;
     SetupInitialThread();
 }

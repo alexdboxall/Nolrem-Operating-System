@@ -1,5 +1,6 @@
 #include <spinlock.h>
 #include <common.h>
+#include <interrupt.h>
 #include <stdatomic.h>
 #include <arch.h>
 
@@ -8,6 +9,7 @@ export void InitSpinlock(struct spinlock* lock) {
 }
 
 export void AcquireSpinlock(struct spinlock* lock) {
+    AcquireIrqPrevent();
     while (atomic_flag_test_and_set_explicit(&lock->lock, memory_order_acquire)) {
         ArchIndicateSpinLoop();
     }
@@ -15,8 +17,14 @@ export void AcquireSpinlock(struct spinlock* lock) {
 
 export inline __attribute__((__always_inline__)) void ReleaseSpinlock(struct spinlock* lock) {
     atomic_flag_clear_explicit(&lock->lock, memory_order_release);
+    ReleaseIrqPrevent();
 }
 
 export inline __attribute__((__always_inline__)) bool TryAcquireSpinlock(struct spinlock* lock) {
-    return !atomic_flag_test_and_set_explicit(&lock->lock, memory_order_acquire);
+    AcquireIrqPrevent();
+    bool acquired = !atomic_flag_test_and_set_explicit(&lock->lock, memory_order_acquire);
+    if (!acquired) {
+        ReleaseIrqPrevent();
+    }
+    return acquired;
 }

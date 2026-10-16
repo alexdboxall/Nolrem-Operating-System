@@ -17,8 +17,10 @@
 
 
 export void SignalDoneIO(struct aio* aio, int result_code) {
+    LogPrintf("SignalDoneIO starting (mutex 0x%X)\n", &aio->mtx);
     aio->result_code = result_code;
     ReleaseMutex(&aio->mtx);
+    LogPrintf("SignalDoneIO released mutex 0x%X\n", &aio->mtx);
 }
 
 export int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt) {

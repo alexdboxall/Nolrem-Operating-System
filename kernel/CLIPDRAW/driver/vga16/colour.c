@@ -1,4 +1,5 @@
 #include "vga16.h"
+#include <stdatomic.h>
 
 #define WR 3
 #define WG 4
@@ -26,104 +27,48 @@ static const RGB16 vga_palette[16] = {
     {255,255,255}, // 15 white
 };
 
+uint8_t VgaNearestColour(uint32_t col) {
+    /* Fast case for black text. */
+    if (col == 0xFF000000U) {
+        return 0;
+    }
+    if ((col >> 24) != 0xFF) {
+        /* If transparent at all, we don't care about colour. */
+        return 0;
+    }
+ 
+    /* Check if the same as the previous colour. */
+    static _Atomic uint32_t cached = 0;
+    uint32_t cached_r = atomic_load_explicit(&cached, memory_order_relaxed);
+    if ((cached_r & 0xFFFFFF) == (col & 0xFFFFFF)) {
+        return cached_r >> 24;
+    }
+ 
+    int r = (int)((col >> 16) & 0xFF);
+    int g = (int)((col >> 8)  & 0xFF);
+    int b = (int)( col        & 0xFF);
+ 
+    int best      = 0;
+    int best_dist = 0x7FFFFFFF;
+    for (int i = 0; i < 16; i++) {
+        int dr = r - vga_palette[i].r;
+        int dg = g - vga_palette[i].g;
+        int db = b - vga_palette[i].b;
+        int d  = dr * dr + dg * dg + db * db;
+        if (d < best_dist) {
+            best_dist = d;
+            best = i;
+            if (d == 0) break; // exact palette hit, can't do better
+        }
+    }
+ 
+    atomic_store_explicit(&cached, (((uint32_t) best) << 24) | (col & 0xFFFFFF), memory_order_relaxed);
+    return best;
+}
+
 colour_t ConvertVgaColourToARGB(int vgacol) {
     RGB16 color = vga_palette[vgacol];
     return 0xFF000000 | (color.r << 16) | (color.g << 8) | color.b;
-}
-
-void FindVgaColours(uint32_t rgb, uint8_t* col_out, uint8_t* level_out) {
-    /* Optimise some common colours. */
-    if (rgb == 0x000000) {
-        *col_out = 0;
-        return;
-    }
-    if (rgb == 0xFFFFFF) {
-        *col_out = 0xFF;
-        return;
-    }
-    if (rgb == 0x808080) {
-        *col_out = 0x88;
-        return;
-    }
-    if (rgb == 0xC0C0C0) {
-        *col_out = 0x77;
-        return;
-    }
-
-    int16_t tr = (int16_t)((rgb >> 16) & 0xFF);
-    int16_t tg = (int16_t)((rgb >> 8)  & 0xFF);
-    int16_t tb = (int16_t)( rgb        & 0xFF);
-
-    int32_t solid_err = 0x7FFFFFFF;
-    uint8_t solid_i = 0;
-    for (uint8_t i = 0; i < 16; i++) {
-        int32_t er = tr - vga_palette[i].r;
-        int32_t eg = tg - vga_palette[i].g;
-        int32_t eb = tb - vga_palette[i].b;
-        int32_t err = WR*er*er + WG*eg*eg + WB*eb*eb;
-        if (err < solid_err) { solid_err = err; solid_i = i; }
-    }
-
-    int32_t dither_err = 0x7FFFFFFF;
-    uint8_t dither_i = 0, dither_j = 0, dither_level = 0;
-
-    const int MAX_LEVELS = 16;
-    const int MAX_LEVELS_LOG2 = 4;
-
-    for (uint8_t i = 0; i < 16; i++) {
-        int16_t pir = vga_palette[i].r;
-        int16_t pig = vga_palette[i].g;
-        int16_t pib = vga_palette[i].b;
-
-        for (uint8_t j = i + 1; j < 16; j++) {
-            int16_t dx = vga_palette[j].r - pir;
-            int16_t dy = vga_palette[j].g - pig;
-            int16_t dz = vga_palette[j].b - pib;
-
-            int16_t tx = tr - pir;
-            int16_t ty = tg - pig;
-            int16_t tz = tb - pib;
-
-            int32_t A = (int32_t)WR*dx*dx + (int32_t)WG*dy*dy + (int32_t)WB*dz*dz;
-            int32_t B = (int32_t)WR*tx*dx + (int32_t)WG*ty*dy + (int32_t)WB*tz*dz;
-
-            int32_t level32;
-            if (B <= 0)      level32 = 0;
-            else if (B >= A) level32 = MAX_LEVELS;
-            else {
-                level32 = (MAX_LEVELS*B + (A >> 1)) / A;
-                if (level32 > MAX_LEVELS) level32 = MAX_LEVELS;
-            }
-
-            // Endpoints aren't dithers -- pass 1 already covers them.
-            if (level32 == 0 || level32 == MAX_LEVELS) continue;
-
-            int32_t cr = pir + ((level32*(int32_t)dx) >> MAX_LEVELS_LOG2);
-            int32_t cg = pig + ((level32*(int32_t)dy) >> MAX_LEVELS_LOG2);
-            int32_t cb = pib + ((level32*(int32_t)dz) >> MAX_LEVELS_LOG2);
-
-            int32_t er = tr - cr;
-            int32_t eg = tg - cg;
-            int32_t eb = tb - cb;
-            int32_t err = WR*er*er + WG*eg*eg + WB*eb*eb;
-
-            if (err < dither_err) {
-                dither_err   = err;
-                dither_i     = i;
-                dither_j     = j;
-                dither_level = (uint8_t)level32;
-            }
-        }
-    }
-
-    // Only accept the dither if it earns its keep.
-    if (dither_err + DITHER_BIAS < solid_err) {
-        *col_out   = (dither_i << 4) | dither_j;
-        *level_out = dither_level;
-    } else {
-        *col_out   = (solid_i << 4) | solid_i;
-        *level_out = 0;
-    }
 }
 
 static inline void WaitVRetraceReset(void) {

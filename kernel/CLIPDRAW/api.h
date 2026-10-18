@@ -158,8 +158,8 @@ static inline bool IsOpaqueColour(colour_t argb) {
     return GetAlpha(argb) == 0xFF;
 }
 
-#define BlackColour() 0xFF000000
-#define WhiteColour() 0xFFFFFFFF
+#define BlackColour() ((colour_t) 0xFF000000)
+#define WhiteColour() ((colour_t) 0xFFFFFFFF)
 colour_t TransparentColour(void);
 colour_t SystemColour(void);
 

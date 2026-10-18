@@ -1,6 +1,6 @@
 
 make osdebug
 # python tools/goofyfdcfix.py build/output/floppy.img
-qemu-system-i386 -cpu 486 -m 4M -audiodev coreaudio,id=audio0 -machine pcspk-audiodev=audio0 -monitor stdio -fda build/output/floppy.img -serial file:log.txt -rtc base=localtime -d guest_errors,cpu_reset 
+qemu-system-i386 -cpu 486 -m 8M -audiodev coreaudio,id=audio0 -machine pcspk-audiodev=audio0 -monitor stdio -fda build/output/floppy.img -serial file:log.txt -rtc base=localtime -d guest_errors,cpu_reset 
 
 read -p "Press Enter to continue" </dev/tty

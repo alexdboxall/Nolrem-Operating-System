@@ -368,6 +368,7 @@ void InitVga() {
     drv.remove_mouse = VGARemoveMouse;
     drv.create_compatible_bitmap = VGACreateCompatibleBitmap;
     drv.blit_compatible_bitmap = VGABitmapBlit;
+    drv.draw_glyph = VGADrawGlyph;
 
     RegisterPrimaryGraphicsDriver(drv);
     

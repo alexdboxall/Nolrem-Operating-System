@@ -4,7 +4,7 @@
 
 struct spinlock {
     _Atomic char lock;
-};
+} __attribute__((packed));
 
 void InitSpinlock(struct spinlock* lock);
 void AcquireSpinlock(struct spinlock* lock);

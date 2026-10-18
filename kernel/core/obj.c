@@ -15,8 +15,7 @@ void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*)) {
 
 void InitObject(void* obj, uint8_t type) {
     struct obj_header* hdr = obj;
-    atomic_store_explicit(&hdr->ref_count, 1, memory_order_relaxed);
-    atomic_store_explicit(&hdr->objtype, type, memory_order_relaxed);
+    atomic_store_explicit(&hdr->ref_count, 1U | ((uint32_t) type << 27U), memory_order_relaxed);
     atomic_thread_fence(memory_order_release);
 }
 
@@ -27,11 +26,10 @@ export void RefObject(void* obj) {
 
 export void DerefObject(void* obj) {
     struct obj_header* hdr = obj;
-    if (--hdr->ref_count == 0) {
-        objtype_cleanup_handlers[hdr->objtype](obj);
+    if (((--hdr->ref_count) & 0x7FFFFFF) == 0) {
+        objtype_cleanup_handlers[hdr->ref_count >> 27](obj);
     }
 }
-
 
 static void CleanupUserObj(void* _obj) {
     struct user_obj_header* uo = _obj;

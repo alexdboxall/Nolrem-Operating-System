@@ -15,7 +15,6 @@ export struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, uint8_t* bm
     return CdCreateCompatibleBitmapStretched(dc, bmp, -1, -1);
 }
 
-
 struct context {
     struct dc* dc;
     struct point dest;

@@ -198,19 +198,22 @@ void CreateInitialVas(void) {
 
 static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
                                             size_t base, size_t phys, bool fixed) {
-    struct page_origin* po = AllocVmmHeap(sizeof(struct page_origin));
+
+    struct page_origin* po = AllocVmmHeap(
+        file == NULL ? SIZEOF_PAGE_ORIGIN_ANON : SIZEOF_PAGE_ORIGIN_FILE
+    );
     if (po == NULL) {
         return NULL;
     }
     InitStaticMutex(&po->mtx);
     InitObject(po, OBJTYPE_PAGE_ORIGIN);
-    po->rebase_page = base;
-    po->file = file;
+    po->is_file = file != NULL;
     po->phys = phys;
-    po->file_offset = file_offset;
     po->fixed = fixed;
-
-    if (file != NULL) {
+    if (po->is_file) {
+        po->file = file;
+        po->file_offset = file_offset;
+        po->rebase_page = base;
         RefObject(file);
     }
     return po;
@@ -241,6 +244,7 @@ static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys
     RefObject(vp);
     RefObject(vas);
     pp->origin = CreatePageOrigin(file, file_offset, 0, existing_phys, false);
+    LogPrintf("Origin set!\n");
     LockVas(vp->vas);
     struct virt_page** slot = GetVirtualPageSlot(vas, existing_virt, true);
     if (slot == NULL || *slot != NULL) {
@@ -248,6 +252,7 @@ static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys
     }
     *slot = vp;
     UnlockVas(vp->vas);
+    LogPrintf("Done.\n");
 }
 
 void MarkPageableSegmentsDiscardable(void) {
@@ -263,9 +268,9 @@ void MarkPageableSegmentsDiscardable(void) {
     size_t u_start_page = ((size_t) __start_pageablekuser) / PAGE_SIZE;
     size_t u_end_page   = (((size_t) __end_pageablekuser) + PAGE_SIZE - 1) / PAGE_SIZE;
 
-    struct obj_header* dummy_file = AllocHeap(sizeof(struct obj_header));
-    InitObject(&dummy_file, OBJTYPE_FILE);
+    struct obj_header* dummy_file = AllocHeap(sizeof(struct file));
     LogPrintf("The dummy file is at: 0x%X\n", dummy_file);
+    InitObject(dummy_file, OBJTYPE_FILE);
     for (size_t i = k_start_page; i < k_end_page; ++i) {
         // TODO: need a real file! And offset! To know where to reload them from!
         MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, false, (void*) dummy_file, 0xCAFEBABE);
@@ -273,7 +278,7 @@ void MarkPageableSegmentsDiscardable(void) {
     for (size_t i = u_start_page; i < u_end_page; ++i) {
         // TODO: need a real file! And offset! To know where to reload them from!
         MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, true, (void*) dummy_file, 0xCAFEBABE);
-    } 
+    }
 }
 
 /*
@@ -406,7 +411,7 @@ static void SynchroniseVirt(struct virt_page* vp) {
 
 static void CleanupPageOrigin(void* _po) {
     struct page_origin* po = _po;
-    if (po->file != NULL) {
+    if (po->is_file) {
         DerefObject(po->file);
     }
     DestroyStaticMutex(&po->mtx);
@@ -541,7 +546,7 @@ static struct phys_page* FindDiscardPage(void) {
          * section, but we're only ruling pages out, so it can't hurt. */
         AcquireSpinlock(&curr->lock);
         bool candidate = curr->wired == 0
-                      && (curr->origin != NULL && curr->origin->file != NULL)
+                      && (curr->origin != NULL && curr->origin->is_file)
                       && (curr->vas != NULL || curr->chain != NULL);
         if (candidate) {
             curr->lru >>= 1;    /* age first; Enter puts the new bit back in */
@@ -556,7 +561,7 @@ static struct phys_page* FindDiscardPage(void) {
         bool usable = curr->wired == 0
                    && !curr->dirty
                    && curr->origin != NULL
-                   && curr->origin->file != NULL;
+                   && curr->origin->is_file;
         uint16_t lru = curr->lru;
         LeavePhysPageCriticalSection(curr);
 
@@ -575,7 +580,7 @@ static struct phys_page* FindDiscardPage(void) {
     if (best->wired
         || best->dirty
         || best->origin == NULL
-        || best->origin->file == NULL
+        || !best->origin->is_file
         || (best->vas == NULL && best->chain == NULL)) {
         LeavePhysPageCriticalSection(best);
         return NULL;
@@ -739,10 +744,10 @@ retry:
         AcquireMutex(&origin->mtx, TIMEOUT_INFINITE);
         if (origin->phys == 0) {
             size_t frame;
-            if (origin->file == NULL) {
-                frame = AllocZeroedPhys();
-            } else {
+            if (origin->is_file) {
                 frame = AllocPhys(true);
+            } else {
+                frame = AllocZeroedPhys();
             }
             if (frame == 0) {
                 ReleaseMutex(&origin->mtx);
@@ -756,7 +761,7 @@ retry:
              * it until then, so this needs no frame lock and no other thread
              * can observe it half-initialised.
              */
-            if (origin->file != NULL) {
+            if (origin->is_file) {
                 int res = ReadOriginIntoFrame(origin, frame);
                 if (res != 0) {
                     /* free 'frame' here */

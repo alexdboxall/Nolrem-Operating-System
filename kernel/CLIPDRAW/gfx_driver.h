@@ -32,7 +32,7 @@ struct graphics_driver {
     struct graphics_capabilities (*get_capabilities)(struct graphics_driver*);
     void (*log)(char c);
     void (*panic)(const char* s);
-    void (*draw_char)(struct graphics_driver*, int x, int y, int bndx1, int bndy1, int bndx2, int bndy2, const char* s, int pt, bool bold, bool italic, uint32_t col);    
+    void (*draw_glyph)(struct graphics_driver*, int x, int y, struct rect bound, uint32_t col, int glyph_w_px, int gypth_h, uint8_t* glyph_col_maj_order);    
     void (*thin_line)(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour);
     void (*solid_line)(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour, int thickness);
     void (*pen_line)(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour, int thickness, uint8_t* pattern, int pat_width, int pat_height, bool inv_instead);

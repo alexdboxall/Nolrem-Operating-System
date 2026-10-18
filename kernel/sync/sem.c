@@ -23,7 +23,7 @@ static void AbandonSemLocked(struct sem* sem) {
         void* head = sem->waiting_list_start;
         struct thread* thr;
 
-        if (((struct obj_header*) head)->objtype == OBJTYPE_WAITCLOT) {
+        if (KeGetObjectType((struct obj_header*) head) == OBJTYPE_WAITCLOT) {
             thr = ((struct wait_clot*) head)->thr;
         } else {
             thr = head;
@@ -119,7 +119,7 @@ static void AddThreadToSemQueues(struct thread* thr, struct sem** sems, int coun
 
         /* Point the existing last thing to the newly added last thing. */
         if (sem->waiting_list_end != NULL) {
-            if (((struct obj_header*) sem->waiting_list_end)->objtype == OBJTYPE_THREAD) {
+            if (KeGetObjectType(sem->waiting_list_end) == OBJTYPE_THREAD) {
                 ((struct thread*) sem->waiting_list_end)->next_waiting_sem = to_add;
             } else {
                 struct wait_clot* clot = sem->waiting_list_end;
@@ -138,7 +138,7 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
     for (int i = 0; i < count; ++i) {
         struct sem* sem = sems[i];
 
-        uint8_t head_hdr_type = ((struct obj_header*) sem->waiting_list_start)->objtype;
+        uint8_t head_hdr_type = KeGetObjectType(sem->waiting_list_start);
         if (head_hdr_type == OBJTYPE_THREAD && ((struct thread*) sem->waiting_list_start) == thr) {
             /* Remove from head. */
             sem->waiting_list_start = ((struct thread*) sem->waiting_list_start)->next_waiting_sem;
@@ -169,10 +169,10 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
             while (curr != NULL) {
                 struct wait_clot* curr_as_clot = curr;
                 struct thread* curr_as_thr = curr;
-                bool curr_is_clot = ((struct obj_header*) curr)->objtype == OBJTYPE_WAITCLOT;
+                bool curr_is_clot = KeGetObjectType(curr) == OBJTYPE_WAITCLOT;
                 struct wait_clot* prev_as_clot = prev;
                 struct thread* prev_as_thr = prev;
-                bool prev_is_clot = ((struct obj_header*) prev)->objtype == OBJTYPE_WAITCLOT;
+                bool prev_is_clot = KeGetObjectType(prev) == OBJTYPE_WAITCLOT;
                 int curr_clot_idx = curr_is_clot ? LookupClotIndex(curr_as_clot, sem) : -1;
                 int prev_clot_idx = prev_is_clot ? LookupClotIndex(prev_as_clot, sem) : -1;
 
@@ -202,7 +202,7 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
 }
 
 void CancelSems(struct thread* thr) {
-    if (((struct obj_header*) thr->waiting_sem_or_clot)->objtype == OBJTYPE_WAITCLOT) {
+    if (KeGetObjectType(thr->waiting_sem_or_clot) == OBJTYPE_WAITCLOT) {
         struct wait_clot* clot = thr->waiting_sem_or_clot;
         CleanupAfterSem(clot->sems, clot->count, thr);
         DerefObject(clot);
@@ -282,7 +282,7 @@ export int ReleaseSem(struct sem* sem) {
             sem->count--;
         } else {
             struct obj_header* hdr = sem->waiting_list_start;
-            if (hdr->objtype == OBJTYPE_THREAD) {
+            if (KeGetObjectType(hdr) == OBJTYPE_THREAD) {
                 UnblockThread((struct thread*) sem->waiting_list_start, 0);
             } else {
                 struct wait_clot* clot = sem->waiting_list_start;

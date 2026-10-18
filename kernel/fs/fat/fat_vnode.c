@@ -15,7 +15,7 @@
 
 struct vnode_data {
     struct fat* fs;             /* Shared by every vnode on the volume. */
-    uint32_t first_cluster;     /* 0 for the root directory, and for empty files. */
+    uint32_t first_cluster;     /* The root directory's is fat->root_cluster. 0 for empty files. */
     uint32_t file_length;
     bool directory;
 };
@@ -128,7 +128,7 @@ int FatMountCreator(struct file* raw_device, struct file** out) {
     }
 
     data->fs = fat;
-    data->first_cluster = 0;        /* root directory */
+    data->first_cluster = fat->root_cluster;    /* root directory (0 on FAT12/FAT16, as it isn't in a cluster) */
     data->file_length = 0;          /* root directory has no length */
     data->directory = true;
 

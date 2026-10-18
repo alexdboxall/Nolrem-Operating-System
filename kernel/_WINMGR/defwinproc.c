@@ -23,6 +23,33 @@ static void HandleWmPaint(struct window* win) {
         CdGetStockBrush(STOCK_BRUSH_WHITE)
     );
     
+
+    extern void VGADrawGlyph(struct graphics_driver*, int x, int y, struct rect bound, uint32_t col,
+    int glyph_w_px, int glyph_h, uint8_t* glyph_col_maj_order);
+
+    uint8_t g[16] = {
+        0x00, // 
+        0x3E, //   #####  
+        0x63, //  ##   ## 
+        0x63, //  ##      
+        0x60, //  ##      
+        0x60, //  ##      
+        0x6F, //  ## #### 
+        0x63, //  ##   ## 
+        0x63, //  ##   ## 
+        0x63, //  ##   ## 
+        0x3E, //   #####  
+        0x00, // 
+        0x00, // 
+        0x00, // 
+        0x00, // 
+        0x00  // 
+    };
+
+    VGADrawGlyph(GetKernelGraphicsDriver(), 100, 100, (struct rect) {
+        .x = 0, .y = 0, .w = 640, .h = 480,
+    }, BlackColour(), 8, 16, g);
+
     WmEndPaint(win, dc);
 }
 

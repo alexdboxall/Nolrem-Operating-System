@@ -8,7 +8,7 @@
 #include <arch.h>
 
 /* At or below this number of physical pages, we start discarding. */
-#define LOW_MEM_THRESHOLD   20
+#define LOW_MEM_THRESHOLD   16
 
 static struct phys_page* sys_pp_table;
 static _Atomic size_t sys_total_pp;
@@ -139,11 +139,22 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
                 }
                 if (j < sys_pp_table_max_index) {
                     ++sys_free_pp;
+                    LogPrintf("Phys page at 0x%X usable!\n", j * PAGE_SIZE);
                     sys_pp_table[j].exists = true;
                 }
             }
         }
     }
+
+    /* Now we've used the RAM data table at 0xC000, we can use that now too. 
+     * We're also the last thing to use the kernel boot table, so that can be
+     * reclaimed as well.
+     */
+    sys_free_pp += 2;
+    LogPrintf("Phys page at 0x%X usable!\n", 0xA000);
+    LogPrintf("Phys page at 0x%X usable!\n", 0xC000);
+    sys_pp_table[0xA000 / PAGE_SIZE].exists = true;
+    sys_pp_table[0xC000 / PAGE_SIZE].exists = true;
 
     LogPrintf("Total RAM: %dKB\n", sys_total_pp * PAGE_SIZE / 1024);
     LogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);

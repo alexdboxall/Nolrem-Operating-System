@@ -70,6 +70,11 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
         (void*)((size_t) boot_info->ram_table + ARCH_KRNL_MAPPING_BASE), 
         boot_info->num_ram_table_entries
     );
+    
+    /* We can't use the boot table from this point forwards, as
+     * InitPhys ends by reclaiming the RAM used behind `boot_info`. */
+    boot_info = NULL;
+
     InitVmm();
     InitSem();
     InitThread();

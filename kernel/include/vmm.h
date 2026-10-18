@@ -16,15 +16,23 @@
 struct file;
 struct mutex;
 
+/* TODO: could look into having this only allocate the first half for non-file
+ * origins, and it allocating the whole lot on file pages - metadata reduction!*/
 struct page_origin {
     struct obj_header hdr;
+    uint8_t fixed       : 1;
+    uint8_t is_file     : 1;
+    struct mutex mtx;
+    size_t phys;
+
+    /* Only stored if it's a file-backed page. */
     struct file* file;
     size_t rebase_page;   
     size_t file_offset;
-    struct mutex mtx;
-    size_t phys;
-    bool fixed;
 };
+
+#define SIZEOF_PAGE_ORIGIN_ANON  (offsetof(struct page_origin, file))
+#define SIZEOF_PAGE_ORIGIN_FILE  (sizeof(struct page_origin))
 
 struct vas_chain {
     struct vas* vas;
@@ -59,7 +67,7 @@ struct virt_page {
     uint8_t executable : 1;
     uint8_t fixed    : 1;
     uint8_t busy;
-};
+} __attribute__((packed));
 
 struct phys_page {
     struct page_origin* origin;

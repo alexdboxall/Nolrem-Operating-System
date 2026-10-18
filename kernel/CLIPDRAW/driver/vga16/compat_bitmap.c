@@ -18,9 +18,7 @@ struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, uint8_t
     size_t plane_size = (size_t)plane_stride * (size_t)target_height;
     size_t total_len = plane_size * 4;
  
-    LogPrintf("Allocating for the compatible bitmap... total length = 0x%X\n", total_len);
     uint8_t* data = (uint8_t*)AllocHeap(total_len);
-    LogPrintf("Done alloacting compatible bitmap! It's at 0x%X\n", data);
     if (!data) return NULL;
     memset(data, 0, total_len); // planes start at 0; the loop below only sets bits
  

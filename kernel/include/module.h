@@ -14,6 +14,7 @@ struct module;
 void InitModule(void);
 
 struct module* CreateModule(const char* path);
+struct module* LoadKernelModule(void);
 
 uint16_t GetModuleMajorVersion(struct module* mod);
 uint16_t GetModuleMinorVersion(struct module* mod);
@@ -29,4 +30,5 @@ struct symbol {
 
 struct symbol_list* CreateSymbolList(int total_syms);
 void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);
+void AddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr);
 struct symbol* FindSymbol(struct symbol_list* sl, const char* id);

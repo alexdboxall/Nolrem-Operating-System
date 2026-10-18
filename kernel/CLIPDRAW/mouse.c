@@ -74,7 +74,7 @@ static struct graphics_driver* GetMouseDriver(void) {
         int bytes = MOUSE_HEIGHT * MOUSE_WIDTH * 4;
         if (caps.desired_mouse_restore_buffer_mode == MOUSE_BUFFER_UINT8) bytes /= 4;
         if (caps.desired_mouse_restore_buffer_mode == MOUSE_BUFFER_UINT16) bytes /= 2;
-        drv->mouse_restore_buffer = AllocHeap(bytes);
+        drv->mouse_restore_buffer = AllocPermanentHeap(bytes);
     }
     return drv;
 }

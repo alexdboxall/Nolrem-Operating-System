@@ -179,7 +179,7 @@ export struct vas* CreateVas(void) {
 }
 
 void CreateInitialVas(void) {
-    struct vas* vas = AllocHeap(sizeof(struct vas));
+    struct vas* vas = AllocPermanentHeap(sizeof(struct vas));
     assert(vas != NULL);
     InitObject(vas, OBJTYPE_VAS);
 
@@ -282,7 +282,7 @@ void MarkPageableSegmentsDiscardable(void) {
  * dedup machinery. Previously AllocFixedMemory() produced an origin that the
  * fault handler could never satisfy, and it spun on 'goto retry' forever.
  */
-export struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
+static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
                                         struct file* file, size_t file_offset,
                                         size_t base, size_t phys, bool fixed) {
     struct virt_page* vp = AllocVmmHeap(sizeof(struct virt_page));
@@ -500,12 +500,12 @@ static void LeaveCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
 
 /* Don't go calling these willy-nilly! */
 /* These prevent anyone else accessing the physical page while held. */
-export void EnterPhysPageCriticalSection(struct phys_page* pp) {
+static void EnterPhysPageCriticalSection(struct phys_page* pp) {
     AcquireSpinlock(&pp->lock);
     CallOnVirtualUsers(pp, EnterCriticalVirt);
 }
 
-export void LeavePhysPageCriticalSection(struct phys_page* pp) {
+static void LeavePhysPageCriticalSection(struct phys_page* pp) {
     CallOnVirtualUsers(pp, LeaveCriticalVirt);
     ReleaseSpinlock(&pp->lock);
 }
@@ -832,14 +832,12 @@ retry:
     }
 }
 
-export struct phys_page* DiscardPage(void) {
+struct phys_page* DiscardPage(void) {
     struct phys_page* pp = FindDiscardPage();
-    LogPrintf("Found a page to discard! 0x%X\n", pp);
-    LogPrintf("PHYS = 0x%X\n", GetPhysAddr(pp));
-
     if (pp == NULL) {
         return NULL;
     }
+    LogPrintf("Found a page to discard! 0x%X\n", GetPhysAddr(pp));
 
     /*
      * Unmap first, THEN detach. While origin->phys still points here, a
@@ -877,15 +875,7 @@ export struct phys_page* DiscardPage(void) {
     return pp;
 }
 
-export void CopyToPhysPage(size_t phys, void* data) {
-    size_t r = ArchLockToCpu();
-    size_t virt = ArchGetTemporaryPage(phys);
-    memcpy((void*) virt, data, PAGE_SIZE);
-    ArchReleaseTemporaryPage(virt);
-    ArchUnlockFromCpu(r);
-}
-
-export void ZeroPhysPage(size_t phys) {
+void ZeroPhysPage(size_t phys) {
     size_t r = ArchLockToCpu();
     size_t virt = ArchGetTemporaryPage(phys);
     memset((void*) virt, 0, PAGE_SIZE);

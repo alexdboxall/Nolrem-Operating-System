@@ -54,7 +54,6 @@ static void PartitionAccessAsyncCallback(void* _aio) {
 }
 
 static int Access(struct aio* aio, bool write) {
-    LogPrintf("Partition.Access...\n");
     struct vnode* node = aio->node;
     struct transfer* tr = &aio->transfer;
     struct partition_data* partition = node->data;
@@ -70,11 +69,9 @@ static int Access(struct aio* aio, bool write) {
     real_transfer.offset = start_addr;
 
     struct aio* subaio = AllocHeap(sizeof(struct aio));
-    LogPrintf("Creating sub IO...\n");
     CreateIO(subaio, partition->disk, real_transfer, PartitionAccessAsyncCallback, (void*) aio);
     aio->sub = subaio;
     subaio->extra_data = length;
-    LogPrintf("Read/WriteFile on partition underlying...\n");
     return (write ? WriteFile : ReadFile)(subaio);
 }
 
@@ -144,7 +141,6 @@ pageable struct file* CreatePartition(
     node->data = data;
 
     struct file* partition = CreateFile(node, 0, 0, true, true);
-    LogPrintf("Creating partition...\n");
     MountFilesystemForDisk(partition);
     return partition;
 }

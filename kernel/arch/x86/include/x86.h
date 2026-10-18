@@ -49,3 +49,7 @@ static inline uint8_t inb(uint16_t port) {
     __asm__ volatile ("inb %w1, %b0" : "=a"(ret) : "Nd"(port) : "memory");
     return ret;
 }
+
+static inline void x86IoDelay(void) {
+	__asm__ volatile ("outb %al, $0x80");
+}

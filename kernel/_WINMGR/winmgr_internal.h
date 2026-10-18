@@ -13,11 +13,10 @@
 
 struct window_class {
     struct user_obj_header hdr;
-
-    char* name;
     winproc_t proc;
     struct window_class* next;
     int flags;
+    char name[];
 };
 
 #define WS_MAXIMISED        1

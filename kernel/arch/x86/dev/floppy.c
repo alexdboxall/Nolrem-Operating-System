@@ -231,7 +231,6 @@ static void FloppyMotor(struct floppy_data* flp, bool on) {
     if (on) {
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_ON);
         if (!flp->motor_on) {
-            LogPrintf("[Floppy]: waiting %dms for motor to spin up...\n", MOTOR_SPINUP_MS);
             SleepMilli(MOTOR_SPINUP_MS);
         }
     } else {
@@ -578,11 +577,9 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
     uint64_t length = io->length_remaining;
 
     if (offset % SECTOR_SIZE != 0 || length % SECTOR_SIZE != 0) {
-        LogPrintf("[floppy]: bad offset / length\n");
         return EINVAL;
     }
     if (offset >= FLOPPY_SIZE || length > FLOPPY_SIZE - offset) {
-        LogPrintf("[floppy]: out of range\n");
         return EINVAL;
     }
     if (length == 0) {
@@ -767,7 +764,7 @@ void InitFloppy(void) {
     flp->msgbox = CreateMessageBox(sizeof(struct aio*), 16);
     floppy_drives_installed[0] = flp;
 
-    CreateThread(GetKernelVas(), FloppyDriverThread, flp);
+    CreateThreadEx(GetKernelVas(), FloppyDriverThread, flp, 1200);
 
     struct vnode* node = CreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFBLK | S_IRWXU | S_IRWXG | S_IRWXO,
@@ -782,5 +779,4 @@ void InitFloppy(void) {
     InitDiskPartitionHelper(&flp->partitions);
     Mount(node, GenerateNewRawDiskName(DISKUTIL_TYPE_FLOPPY));
     CreateDiskPartitions(CreateFile(node, 0, 0, true, true));
-    LogPrintf("Floppy setup done.\n");
 }

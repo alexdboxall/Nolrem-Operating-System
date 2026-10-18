@@ -51,6 +51,11 @@ static size_t MakeSymbol(const char* id, bool use_hash) {
     }
 }
 
+void AddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr) {
+    sl->syms[index].addr = addr;
+    sl->syms[index].hash_or_str = hash << 1;
+}
+
 void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr) {
     sl->syms[index].addr = addr;
     sl->syms[index].hash_or_str = MakeSymbol(id, use_hash);

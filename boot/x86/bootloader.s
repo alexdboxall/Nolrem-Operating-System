@@ -1,4 +1,3 @@
-
 org 0x7C00
 bits 16
 
@@ -16,8 +15,8 @@ dw 9
 dw 18
 dw 2
 
-kernel_kilobytes dw 0x0
-boot_drive_number db 0
+dw 0x0
+db 0
 db 0
 dd 0
 db 0
@@ -28,170 +27,144 @@ db "DUMMYBPB   "
 db "FAT12   "
 
 start:
-	; This bootloader is at 0x7C00, but we don't know which combination of segment
-	; and offset. This bootloader is meant to be loaded at 0x0000:0x7C00, so do a 
-	; far jump to segment 0x0000.
-	cli
-	cld
-	jmp 0:set_cs
-
-
+    cli
+    cld
+    jmp 0:set_cs        ; Short jump saves a byte
 
 set_cs:
-	; Zero out the other segments. This allows for correct access of data.
-	xor ax, ax
-	mov ds, ax
-	mov es, ax
-	mov gs, ax
+    xor ax, ax
+    mov ds, ax
+    mov es, ax
+    mov gs, ax
+    mov ss, ax
+    mov sp, ax              ; Stack at 0x0000:0x0000 (wraps to 0xFFFE)
 
-	; Set the stack to 0x0000:0x0000, so it will wrap around to
-	; 0x0000:0xFFFE and so on.
-	mov ss, ax
-	mov sp, ax
+    mov [boot_drive_number], dl
 
-	; The BIOS puts the 'boot drive number' in DL. This can be passed to BIOS 
-	; disk calls to select the correct disk.
+	; Clear screen (AH already zero from above)
+    mov al, 3
+    int 0x10
+
+    ; --- STEP 1: Calculate Root Directory LBA ---
+    mov al, [0x7C10]        ; NumFATs
+    cbw
+    mov bx, [0x7C16]        ; FATSz16
+    mul bx                  ; DX:AX = NumFATs * FATSz16
+    mov bx, [0x7C0E]        ; RsvdSecCnt
+    add ax, bx              ; AX = Root Directory LBA
+    
+    ; --- STEP 2: Read First Sector of Root Directory ---
+    movzx eax, ax           
+    mov cx, 1               
+    xor bx, bx 
+    mov di, 0x7E00          
+    call BiosReadSector     
+
+    ; --- STEP 3: Extract Starting Cluster of 'SYSTEM' Folder ---
+    mov ax, [0x7E1A]        
+    push ax                 ; Save cluster temporarily
+
+    ; --- STEP 4: Calculate First Data Sector ---
+    mov al, [0x7C10]
+    cbw
+    mov bx, [0x7C16]
+    mul bx
+    mov bx, [0x7C0E]
+    add ax, bx              ; AX = RootSec
+    
+    push ax                 
+    mov ax, [0x7C11]        ; RootEntCnt
+    shl ax, 5               ; Multiply by 32 bytes per entry
+    mov bx, [0x7C0B]        ; BytesPerSec
+    xor dx, dx
+    div bx                  ; AX = Root Directory size in sectors
+    mov bx, ax              
+    pop ax                  
+    add ax, bx              ; AX = First Data Sector
+    mov bp, ax              ; Save First Data Sector in BP
+
+    ; --- STEP 5: Map 'SYSTEM' Cluster to LBA Sector ---
+    pop ax                  ; Restore 'SYSTEM' folder cluster
+    sub ax, 2               
+    xor bx, bx
+    mov bl, [0x7C0D]        ; SecPerClust
+    mul bx                  
+    add ax, bp              
+    movzx eax, ax           
+
+    ; --- STEP 6: Read the 'SYSTEM' Folder Sector ---
+    mov cx, 1               
+    xor bx, bx
+    mov di, 0x8200          
+    call BiosReadSector
+
+    ; --- STEP 7: Search for 'BIOS.SYS' in the SYSTEM Folder Sector ---
+    mov si, 0x8200          
+    mov cx, 16              
+
+search_loop:
+    mov al, [ds:si]
+    test al, al
+    jz short file_not_found 
+    cmp al, 0xE5            
+    je short next_entry
+
+    push si
+    push cx
+    mov di, bios_sys_name   
+    mov cx, 11              
+    repe cmpsb              
+    pop cx
+    pop si
+    je short found_bios_sys 
+
+next_entry:
+    add si, 32              
+    dec cx
+    jnz short search_loop
+
+file_not_found:
+    jmp short $             
+
+found_bios_sys:
+    ; --- STEP 8: Extract File Size & Convert Cluster to LBA ---
+    mov ecx, [si + 0x1C]    ; ECX = File size in bytes
+
+    mov ax, [si + 0x1A]     ; AX = Starting cluster
+    dec ax
+	dec ax  
+    xor bx, bx
+    mov bl, [0x7C0D]        
+    mul bx                  
+    add ax, bp              
+    movzx eax, ax           ; EAX = Starting LBA of BIOS.SYS
+
+    ; Convert from bytes to sectors
+    add ecx, 511
+    shr ecx, 9
+
 	mov [boot_drive_number], dl
+    mov di, 0xC000
 
-	; Clear the screen by calling the BIOS.
-	mov ax, 0x3
-	int 0x10
+.next_sector:
+    push ecx
+    mov cx, 1               
+    xor bx, bx
+    call BiosReadSector
+    pop ecx
+    add di, 512
+    inc eax
+    dec cx
+    jnz short .next_sector
+    jmp 0xC000
 
-	; Load the rest of the bootloader, and the DemoFS table.
-	xor eax, eax
-	inc ax
-	mov cx, 8
-	mov di, 0x7C00 + 512
-	xor bx, bx
-	call BiosReadSector
-
-	; Read the kernel's inode number, and size.
-	mov eax, [0x7C00 + 512 * 8 + 12]
-	mov ecx, eax
-	
-	; Inode number
-	and eax, 0xFFFFFF
-	
-	; Size in kilobytes (must do two shifts to chop off the low bit,
-	; or I guess you could do shr ebx, 23; and bl, 0xFE)
-	shr ecx, 24
-	shl ecx, 1
-	mov [kernel_kilobytes], cx
-
-	; Load a sector at at time to 0x1000:0x0000
-	; ie. 0x10000. This allows sizes of approx. 448KB (our filesystem
-	; only supports a kernel size of 255KB anyway).
-	mov bx, 0xC00
-	xor di, di	
-
-next_sector:
-	push cx
-	mov cx, 1
-	call BiosReadSector
-	pop cx
-
-	; Move to next sector
-	inc eax
-	
-	; Move 512 bytes along ( = 0x200 bytes = offset change of 0x20)
-	add bx, 0x20
-	loop next_sector
-
-	mov [boot_drive_number], dl
-	jmp 0xC000
-	
+bios_sys_name: 
+    db "BIOS    SYS"    
 
 %include "boot/x86/int13h.s"
 
+boot_drive_number:
+    db 0
 
-; The GDT. We are required to have this setup before we go into 32 bit mode, as
-; it defines the segments we use in 32 bit mode.
-align 8
-gdt_start:
-	dd 0
-	dd 0
-	
-	dw 0xFFFF
-	dw 0x0000
-	db 0
-	db 10011010b
-	db 11001111b
-	db 0
-
-	dw 0xFFFF
-	dw 0x0000
-	db 0
-	db 10010010b
-	db 11001111b
-	db 0
-gdt_end:
-
-gdtr:
-	dw gdt_end - gdt_start - 1
-	dd gdt_start
-
-times 0x1BE - ($-$$) db 0
-
-; Partition table
-db 0x80					; bootable
-db 0x01
-db 0x01
-db 0x01
-db 0x0C					; pretend to be FAT32
-db 0x01
-db 0x01
-db 0x01
-dd 0					; start sector (we put a dummy VBR here)
-dd 16384				; total sectors in partition
-
-db 0x00					; bootable
-db 0x01
-db 0x01
-db 0x01
-db 0x0C					; pretend to be FAT32
-db 0x01
-db 0x01
-db 0x01
-dd 16384				; start sector (we put a dummy VBR here)
-dd 100000    			; total sectors in partition
-
-times 0x1FE - ($-$$) db 0
-dw 0xAA55
-
-; Pretend to be a FAT32 partition by having a 'valid enough' VBR
-; (this will never get used, it just might 'help' with the USB)
-
-bits 16
-jmp short vbr_dummy
-nop
-db "DEMOFS  "
-dw 0x200
-db 0x1
-dw 0x187E
-db 0x2
-dw 0x0
-dw 0x0
-db 0xF8
-dw 0x0
-dw 0x0
-dw 0x0
-dd 0x1
-dd 131072
-dd 0x3C1
-dw 0
-dw 0
-dd 2
-dw 1
-dw 6
-db "DEMOFSDEMOFS"
-db 0x80
-db 0x00
-db 0x28
-dd 0xDEADC0DE
-
-vbr_dummy:
-	jmp 0x7C00
-
-times (512 * 2 - 2) - ($-$$) db 0x90
-dw 0xAA55
-
+    times 510 - ($ - $$) db 0
+    dw 0xAA55

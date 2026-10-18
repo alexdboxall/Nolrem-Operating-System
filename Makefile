@@ -51,16 +51,26 @@ common_footer:
 	cp $(BUILD_SOURCE_DIR)/kernel.map $(BUILD_OUTPUT_DIR)/kernel.map
 	objdump -drwC -Mintel $(BUILD_OUTPUT_DIR)/kernel.exe >> $(BUILD_OUTPUT_DIR)/disassembly.txt
 	/Users/alex/Desktop/TOS/toolchain/output/bin/i386-elf-strip --discard-all $(BUILD_OUTPUT_DIR)/KERNEL.EXE
+	python tools/elf_symhash.py $(BUILD_OUTPUT_DIR)/KERNEL.EXE -o $(BUILD_OUTPUT_DIR)/kernel.sym
+	/Users/alex/Desktop/TOS/toolchain/output/bin/i386-elf-strip --strip-unneeded $(BUILD_OUTPUT_DIR)/KERNEL.EXE
 	nasm $(BOOTLOADER_DIR)/bootloader.s -o bootloader.bin
 	rm $(BUILD_OUTPUT_DIR)/drivers/TEMPLATE.SYS || true
 	rm $(BUILD_OUTPUT_DIR)/applications/TEMPLATE.EXE || true
-	cp -r $(BUILD_OUTPUT_DIR)/drivers/* $(SYSROOT)/System || true
-	cp -r $(BUILD_OUTPUT_DIR)/applications/* $(SYSROOT)/System || true
-	cp $(BUILD_OUTPUT_DIR)/kernel.exe $(SYSROOT)/System
-	gcc ./tools/mkdemofs.cpp -o ./tools/mkdemofs
-	chmod 777 ./tools/mkdemofs
-	./tools/mkdemofs 64 $(SYSROOT)/System/bios.sys $(SYSROOT) $(BUILD_OUTPUT_DIR)/disk.bin bootloader.bin
-	head -c 1474560 $(BUILD_OUTPUT_DIR)/disk.bin >> $(BUILD_OUTPUT_DIR)/floppy.img
+	cp -r $(BUILD_OUTPUT_DIR)/drivers/* $(SYSROOT)/SYSTEM || true
+	cp -r $(BUILD_OUTPUT_DIR)/applications/* $(SYSROOT)/SYSTEM || true
+	cp $(BUILD_OUTPUT_DIR)/kernel.exe $(SYSROOT)/SYSTEM
+	cp $(BUILD_OUTPUT_DIR)/kernel.sym $(SYSROOT)/SYSTEM
+
+	dd if=/dev/zero of=$(BUILD_OUTPUT_DIR)/floppy.img bs=512 count=2880
+	mformat -i $(BUILD_OUTPUT_DIR)/floppy.img -f 1440 -B bootloader.bin ::
+# SYSTEM needs to be the first thing in the root directory
+	mmd -i $(BUILD_OUTPUT_DIR)/floppy.img ::/SYSTEM
+	mcopy -i $(BUILD_OUTPUT_DIR)/floppy.img -s $(SYSROOT)/* ::/
+
+#	gcc ./tools/mkdemofs.cpp -o ./tools/mkdemofs
+#	chmod 777 ./tools/mkdemofs
+#	./tools/mkdemofs 64 $(SYSROOT)/System/bios.sys $(SYSROOT) $(BUILD_OUTPUT_DIR)/disk.bin bootloader.bin
+#	head -c 1474560 $(BUILD_OUTPUT_DIR)/disk.bin >> $(BUILD_OUTPUT_DIR)/floppy.img
 
 
 app_header:

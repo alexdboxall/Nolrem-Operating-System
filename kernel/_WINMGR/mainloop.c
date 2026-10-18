@@ -224,7 +224,6 @@ struct window* win3;
 static void ProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
-        LogPrintf("Low memory...\n");
         DiscardPage();
         break;
 
@@ -232,10 +231,6 @@ static void ProcessMessage(struct msg msg) {
         HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
         break;
     }
-}
-
-static void PostSize_t(struct msgbox* box, size_t v) {
-    KePostMessage(box, &v, TIMEOUT_INFINITE);
 }
 
 static void RepaintIfNeeded(struct window* win) {
@@ -258,6 +253,17 @@ static void TestDiskRead(void*) {
     }
     FreeMemory(fmm, 1440 * 1024);
     LogPrintf("Freed memory.\n");
+    DerefObject(f);
+
+    int res = OpenFile("drv0:/test3.c", O_RDONLY, 0, &f);
+    LogPrintf("OpenFile: res = %d\n", res);
+    fmm = AllocFileMemory(f, 0, 4096, 0, 0);
+    for (int i = 0; i < 4096; ++i) {
+        LogPrintf("%c (0x%X)\n", fmm[i], fmm[i]);
+    }
+    FreeMemory(fmm, 4096);
+    DerefObject(f);
+
     while (true) {
         Schedule();
     }
@@ -295,30 +301,6 @@ _Noreturn void WmMainloop(void) {
     WmCallWinProc(win3, (struct msg) {
         .type = WM_PAINT
     });
-
-    struct msgbox* box1 = CreateMessageBox(sizeof(size_t), 10);
-    struct msgbox* box2 = CreateMessageBox(sizeof(size_t), 10);
-    struct msgbox* box3 = CreateMessageBox(sizeof(size_t), 10);
-    
-    PostSize_t(box2, 22);
-    PostSize_t(box3, 3);
-    PostSize_t(box1, 111);
-    PostSize_t(box2, 2);
-    PostSize_t(box2, 222);
-    PostSize_t(box3, 33);
-    PostSize_t(box1, 1);
-    PostSize_t(box1, 11);
-    PostSize_t(box3, 333);
-     
-    while (false) {
-        struct msgbox* boxes[] = {
-            box1, box2, box3
-        };
-        size_t m;
-        int box_num;
-        int retv = KeGetMessageFromMany(boxes, 3, &m, TIMEOUT_INFINITE, true, &box_num);
-        LogPrintf("[retv %d] Got a message with content %d from box %d\n", retv, m, box_num + 1);
-    }
 
     CreateThread(GetKernelVas(), TestDiskRead, NULL);
 

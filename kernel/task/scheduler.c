@@ -10,6 +10,7 @@
 #include <msgbox.h>
 #include <timer.h>
 #include <interrupt.h>
+#include <cpu.h>
 #include <stdatomic.h>
 
 /*
@@ -36,7 +37,7 @@ static bool sched_init = false;
 static struct msg defer_msg;
 static bool has_defer_msg = 0;
 
-export bool IsSchedulingInitialised(void) {
+bool IsSchedulingInitialised(void) {
     return sched_init;
 }
 
@@ -167,7 +168,6 @@ static void SetupInitialThread(void) {
     struct thread* thr = FindNextThread();
     current_thread = thr;
     current_thread->state = THREAD_STATE_RUNNING;
-    LogPrintf("Switched to initial thread: 0x%X\n", current_thread);
 }
 
 void BeginNewThread(void) {
@@ -235,10 +235,8 @@ void SwitchToThread(struct thread* thr) {
         return;
     }
     if (ArchAreInterruptsEnabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
-        LogPrintf("C\n");
         Panic(PANIC_FUCK_ME);
     }
-    //LogPrintf("About to switch out of current_thread: 0x%X in state %d\n", current_thread, current_thread->state);
     if (current_thread->state == THREAD_STATE_RUNNING) {
         if (ready_list_head == NULL && thr == NULL) {
             /* Nothing else is available to run, so keep running. */
@@ -257,7 +255,6 @@ void SwitchToThread(struct thread* thr) {
                 LogPrintf("SwitchToThread: current thread in unexpected state\n");
                 Panic(PANIC_FUCK_ME);
             }
-            LogPrintf("IDLE\n");
             thr = IdleUntilRunnable();
         }
         /* This is allowed: either we were blocked then woken (e.g. by a timer)
@@ -282,6 +279,11 @@ void SwitchToThread(struct thread* thr) {
     /* TODO: set the VAS */
 
     //LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);
+    struct cpu_data* cpu = GetCpu();
+    old_thr->irq_disable_counter     = cpu->irq_disable_counter;   /* per-thread copies in struct thread */
+    old_thr->saved_interrupt_enabled = cpu->saved_interrupt_enabled;
+    cpu->irq_disable_counter         = thr->irq_disable_counter;
+    cpu->saved_interrupt_enabled     = thr->saved_interrupt_enabled;
     ArchSwitchThread(old_thr, current_thread);
 
     /* NOTHING GOES HERE! We need the tail of the call chain to be as
@@ -369,7 +371,6 @@ void InitScheduler(void) {
     sched_prevent_count = 0;
     InitSpinlock(&sched_lock);
     CreateThread(GetKernelVas(), NULL, NULL);
-    //CreateThread(GetKernelVas(), IdleTask, NULL);
     sched_init = true;
     SetupInitialThread();
 }

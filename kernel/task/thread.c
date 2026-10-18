@@ -7,10 +7,10 @@
 #include <arch.h>
 #include <log.h>
 
-#define KSTACK_SIZE     (1024 * 8)
+#define KSTACK_SIZE     (1024 * 4)
 #define USTACK_SIZE     (1024 * 16)
 
-export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context) {
+export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size) {
     struct thread* thr = AllocHeap(sizeof(struct thread));
     InitObject(thr, OBJTYPE_THREAD);
 
@@ -29,8 +29,13 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
         thr->kernel_stack_size = 0xDEADBEEF;
 
     } else {
-        thr->kernel_stack_size = entry == IdleTask ? PAGE_SIZE : KSTACK_SIZE;
-        size_t kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
+        thr->kernel_stack_size = kstack_size;
+        size_t kernel_stack_bottom;
+        if (kstack_size < PAGE_SIZE) {
+            kernel_stack_bottom = (size_t) AllocHeap(thr->kernel_stack_size);
+        } else {
+            kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
+        }
         thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
     }
     
@@ -43,17 +48,13 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     thr->wakeup_time_ns = 0;
     thr->affinity_bitmask = -1;     /* all processors */
     thr->idling = false;
+    thr->irq_disable_counter = 2;   /* BeginThread does TWO pops to IF state */
+    thr->saved_interrupt_enabled = true;
     
     if (vas == GetKernelVas()) {
         thr->stack_pointer = thr->kernel_stack_top;
     } else {
-        // TODO: need to get this to allocate multiple virt pages 
-        struct virt_page* vp = CreateVirtPage(vas, AllocVirtEx(vas->va, USTACK_SIZE), VP_USER | VP_WRITE, NULL, 0, 0, 0, false);
-        if (vp == NULL) {
-            LogString("CreateThread: CreateVirtPage for stack is NULL!\n");
-            while (true) {;}
-        }
-        thr->user_stack_base = vp->virt;
+        thr->user_stack_base = (size_t) AllocAnonMemory(USTACK_SIZE, VP_WRITE | VP_USER);
         thr->stack_pointer = thr->user_stack_base + USTACK_SIZE;
     }
 
@@ -66,6 +67,10 @@ export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* c
     ReleaseScheduler();
 
     return thr;
+}
+
+export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context) {
+    return CreateThreadEx(vas, entry, context, KSTACK_SIZE);
 }
 
 export uint8_t GetThreadPriority(struct thread* thr) {

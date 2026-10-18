@@ -13,7 +13,9 @@ enum panic_codes {
         PANIC_VMM_SPECIAL_HEAP_BOOTSTRAPPED_WRONGLY,
         PANIC_ASSERTION_FAILURE,
         PANIC_SYSTEM_MESSAGES_FULL,
-        PANIC_BAD_KERNEL
+        PANIC_BAD_KERNEL,
+        PANIC_DRIVER_FAULT,
+        PANIC_NOT_IMPLEMENTED
 };
 
 _Noreturn void Panic(int panic_reason);

@@ -12,7 +12,7 @@ static void x86LoadTss(uint16_t tss_selector) {
 void x86InitTss(void) {
     platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
     
-    cpu_data->tss = AllocHeap(sizeof(struct tss));
+    cpu_data->tss = AllocPermanentHeap(sizeof(struct tss));
     cpu_data->tss->link = 0x10;
     cpu_data->tss->esp0 = 0;
     cpu_data->tss->ss0 = 0x10;

@@ -9,7 +9,7 @@ COMPILE_FLAGS = -c -Os -flto -fipa-icf -std=gnu2x -fvisibility=hidden -ftree-tai
 LINK_FLAGS = -fuse-ld=gold -fvisibility=hidden -Wl,--icf=all -Wl,-flto -Wl,-X -Wl,-Map=kernel.map -nostartfiles -nostdlib -lgcc  
 
 # Set by the higher level Makefile before calling us - changes depending on whether we are compiling the debug or release build
-LINKER_STRIP =
+LINKER_STRIP = 
 CPPDEFINES = 
 
 COBJECTS = $(patsubst %.c, %.o, $(wildcard *.c) $(wildcard */*.c) $(wildcard */*/*.c) $(wildcard */*/*/*.c) $(wildcard */*/*/*/*.c) $(wildcard **/*.c))

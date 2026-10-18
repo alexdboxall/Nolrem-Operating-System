@@ -39,7 +39,6 @@ void x86HandleInterrupt(struct x86_regs* r) {
     int num = r->int_no;
 
     if (num == ISR_SYSTEM_CALL) {
-        LogStringAndHexLine("Handling system call number 0x", r->eax);
         r->eax = PerformSystemCall(r->eax, r->ebx, r->ecx, r->edx, r->esi);
         return;
     }
@@ -52,17 +51,16 @@ void x86HandleInterrupt(struct x86_regs* r) {
         if (r->err_code & 4) reason |= PF_USER;
         if (r->err_code & 8) reason |= PF_FETCH;
 
-        LogStringAndHexLine("Page fault: EIP 0x", r->eip);
-        LogStringAndHexLine("            CR2 0x", cr2);
-        LogStringAndHexLine("         REASON 0x", reason);
+        LogPrintf("Page fault: EIP 0x%X\n", r->eip);
+        LogPrintf("            CR2 0x%X\n", cr2);
+        LogPrintf("         REASON 0x%X\n", reason);
 
         HandlePageFault(cr2, reason);
         return;
     }
 
     if (num < PIC_IRQ_BASE) {
-        LogStringAndHexLine("Interrupt 0x", num);
-        LogStringAndHexLine("EIP = ", r->eip);
+        LogPrintf("Interrupt %d\nEIP = 0x%X", num, r->eip);
         while (true) {
             ;
         }

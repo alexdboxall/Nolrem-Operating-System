@@ -15,7 +15,7 @@
 #define ICW4_8086       0x01
 
 static void IoWait(void) {
-    asm volatile ("nop");
+    x86IoDelay();
 }
 
 void SendPicEoi(int irq_num) {

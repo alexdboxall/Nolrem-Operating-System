@@ -10,11 +10,10 @@ static struct spinlock winclass_lock;
 static struct window_class* classes;
 
 export struct window_class* WmCreateWindowClass(const char* name, winproc_t proc, int flags) {
-    (void) flags;
-    struct window_class* wc = AllocHeap(sizeof(struct window_class));
+    struct window_class* wc = AllocHeap(sizeof(struct window_class) + strlen(name) + 1);
     InitUserObject(wc, UOBJ_WINDOW_CLASS);
 
-    wc->name = KeStrdup(name);
+    strcpy(wc->name, name);
     wc->proc = proc;
 
     AcquireSpinlock(&winclass_lock);

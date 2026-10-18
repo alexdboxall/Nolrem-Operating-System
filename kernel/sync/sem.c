@@ -64,10 +64,6 @@ void InitSem(void) {
     RegisterObjectType(OBJTYPE_WAITCLOT, CleanupWaitClot);
 }
 
-export void PrintSemCount(struct sem* sem) {
-    LogPrintf("%d", sem->count);
-}
-
 export void InitStaticSem(struct sem* sem, int max, int initial) {
     InitObject(sem, OBJTYPE_SEM);
     sem->count = initial;

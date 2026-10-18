@@ -7,17 +7,21 @@
 #include <vfs.h>
 #include <fcntl.h>
 #include <spinlock.h>
+#include <panic.h>
+#include <log.h>
+#include <unaligned.h>
+#include <vmm.h>
 
 struct symbol_list;
 
 struct module {
     struct obj_header hdr;
-    char* name;
     char* path;
     uint16_t major_ver;
     uint16_t minor_ver;
     struct module* next;
     struct symbol_list* sym_list;
+    char name[];
 };
 
 static struct module* module_list_head;
@@ -36,6 +40,60 @@ void InitModule(void) {
     InitSpinlock(&modlock); 
 }
 
+static struct symbol_list* CreateSymbolListFromSymFile(struct file* f) {
+    void* initial = AllocFileMemory(f, 0, PAGE_SIZE, 0, 0);
+    void* mem = initial;
+    int total_symbols = ReadUnaligned16AndAdvance(&mem);
+    size_t address = ReadUnalignedSizeT(mem);
+    FreeMemory(initial, PAGE_SIZE);
+
+    struct symbol_list* symlist = CreateSymbolList(total_symbols);
+    size_t file_size = 2 + sizeof(size_t) + total_symbols * 10;
+    
+    void* og_mem = AllocFileMemory(f, 0, file_size, 0, 0);
+    mem = AddVoidPtr(og_mem, 2 + sizeof(size_t));
+
+    for (int i = 0; i < total_symbols; ++i) {
+        uint64_t hash = ReadUnaligned64AndAdvance(&mem);
+        uint16_t offset = ReadUnaligned16AndAdvance(&mem);
+
+        address += offset;
+        AddToSymbolListPreHashed(symlist, i, hash, address);
+
+        LogPrintf("Added symbol: addr 0x%X, hash_low = 0x%X\n", address, (uint32_t) hash);
+    }
+    FreeMemory(og_mem, file_size);
+    return symlist;
+}
+
+struct module* LoadKernelModule(void) {
+    uint16_t maj_ver = 1;
+    uint16_t min_ver = 0;
+
+    struct module* mod = AllocPermanentHeap(sizeof(struct module) + strlen("KERNEL") + 1);
+    InitObject(mod, OBJTYPE_MODULE);
+
+    strcpy(mod->name, "KERNEL");
+    mod->major_ver = maj_ver;
+    mod->minor_ver = min_ver;
+    mod->path = "";
+
+    struct file* file;
+    int res = OpenFile("drv0:/SYSTEM/KERNEL.SYM", O_RDONLY, 0, &file);
+    if (res != 0) {
+        Panic(PANIC_BAD_KERNEL);
+    }
+    mod->sym_list = CreateSymbolListFromSymFile(file);
+    DerefObject(file);
+
+    AcquireSpinlock(&modlock);
+    mod->next = module_list_head;
+    module_list_head = mod;
+    ReleaseSpinlock(&modlock);
+
+    return mod;
+}
+
 export struct module* CreateModule(const char* path) {
     // TODO: load the version
     // TODO: load the name
@@ -49,17 +107,15 @@ export struct module* CreateModule(const char* path) {
     uint16_t maj_ver = 1;
     uint16_t min_ver = 0;
 
-    bool use_hash = !strcmp(name, "KERNEL");
-
-    struct module* mod = AllocHeap(sizeof(struct module));
+    struct module* mod = AllocHeap(sizeof(struct module) + strlen(name) + 1);
     InitObject(mod, OBJTYPE_MODULE);
 
-    mod->name = KeStrdup(name);
+    strcpy(mod->name, name);
     mod->major_ver = maj_ver;
     mod->minor_ver = min_ver;
     mod->path = KeStrdup(path);
 
-    mod->sym_list = ArchLoadSymbols(file, 0, use_hash);
+    mod->sym_list = ArchLoadSymbols(file, 0, false);
 
     AcquireSpinlock(&modlock);
     mod->next = module_list_head;

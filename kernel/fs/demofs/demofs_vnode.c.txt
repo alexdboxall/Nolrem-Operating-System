@@ -60,6 +60,7 @@ static int Truncate(struct vnode*, off_t) {
 static struct vnode* CreateDemoFsVnode(ino_t, off_t);
 
 static int Follow(struct vnode* node, struct vnode** out, const char* name) {
+    LogPrintf("demofs_node: Follow: %s\n", name);
     struct vnode_data* data = node->data;
     if (data->directory) {
         ino_t child_inode;
@@ -151,7 +152,7 @@ int DemofsMountCreator(struct file* raw_device, struct file** out) {
     node->stat.st_dev = raw_device->node->stat.st_dev;
     struct vnode_data* data = AllocHeap(sizeof(struct vnode_data));
     
-    data->fs.msgbox = CreateMessageBox(sizeof(struct demofs_request), 24);
+    /* demofs_start_driver allocates the fs->msgbox */
     data->fs.disk = raw_device;
     data->fs.root_inode = 9 | (1 << 31);
 
@@ -161,7 +162,6 @@ int DemofsMountCreator(struct file* raw_device, struct file** out) {
 
     int res = demofs_start_driver(&data->fs);
     if (res != 0) {
-        DerefObject(data->fs.msgbox);
         DerefObject(node);
         return res;
     }

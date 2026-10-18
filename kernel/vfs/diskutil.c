@@ -24,7 +24,7 @@ static int next_mounted_disk_num = 0;
 /*
  * Maps a drive type to a string that will form part of the drive name.
  */
-static char* type_strings[__DISKUTIL_NUM_TYPES] = {
+static char type_strings[__DISKUTIL_NUM_TYPES][6] = {
 	[DISKUTIL_TYPE_FIXED] 	    = "hd",
 	[DISKUTIL_TYPE_FLOPPY] 	    = "fd",
 	[DISKUTIL_TYPE_NETWORK]		= "net",
@@ -89,6 +89,8 @@ export pageable char* GenerateNewMountedDiskName() {
     ReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
+
+    LogPrintf("MNT : %s\n", name);
     return KeStrdup(name);
 }
 
@@ -111,7 +113,7 @@ export pageable char* GenerateNewRawDiskName(int type) {
     ReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
-    LogPrintf("GenerateNewRawDiskName: %s\n", name);
+    LogPrintf("RAW : %s\n", name);
     return KeStrdup(name);
 }
 
@@ -122,6 +124,7 @@ export pageable char* GenerateNewRawDiskName(int type) {
 static pageable char* GetPartitionNameString(int index) {
     char name[16] = "part";
     AppendNumberToString(name, index);
+    LogPrintf("PART: %s\n", name);
     return KeStrdup(name);
 }
 

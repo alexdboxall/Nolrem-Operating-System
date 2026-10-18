@@ -37,8 +37,12 @@ struct thread {
     uint64_t wakeup_time_ns;
 
     uint32_t affinity_bitmask;
+
+    uint32_t irq_disable_counter;
+    bool saved_interrupt_enabled;
 };
 
+struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size);
 struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context);
 uint8_t GetThreadPriority(struct thread* thr);
 void SetThreadPriority(struct thread* thr, uint8_t priority);

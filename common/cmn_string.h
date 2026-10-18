@@ -12,6 +12,7 @@
  * calling themselves, use please comment out these definitions.
  */
 
+/*
 #undef memset
 void* memset(void* addr, int c, size_t n)
 {
@@ -43,6 +44,7 @@ void* memcpy(void* restrict dst, const void* restrict src, size_t n)
 	return dst;
 #endif
 }
+*/
 
 int strcmp(const char* s1, const char* s2)
 {

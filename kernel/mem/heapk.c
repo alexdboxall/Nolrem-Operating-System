@@ -40,6 +40,13 @@ export void* KeAllocHeap(size_t bytes) {
     return retv;
 }
 
+void* AllocPermanentHeap(size_t bytes) {
+    static size_t sum = 0;
+    sum += bytes;
+    LogPrintf("Alloc 0x%X bytes permanently... sum = 0x%X\n", bytes, sum);
+    return KeAllocHeap(bytes);
+}
+
 export size_t KeGetAllocationSize(void* ptr) {
     return GetAllocationSizeEx(&kernel_heap, ptr);
 }
@@ -82,9 +89,7 @@ void* KernelHeapRequestMemory(size_t* size) {
     if (retv != NULL) {
         return retv;
     }
-    LogPrintf("KernelHeapRequestMemory: about to AllocAnonMemory...\n");
     retv = AllocAnonMemory(*size, VP_WRITE);
-    LogPrintf("KernelHeapRequestMemory: got anon memory\n");
     *size = (*size + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1));
     return retv;
 }
@@ -93,7 +98,6 @@ void InitBootstrapHeap(void) {
     memset(bootstrap_heap, 0xEE, sizeof(bootstrap_heap));
     InitSpinlock(&heap_lock);
     InitHeapEx(&kernel_heap, KernelHeapRequestMemory);
-    LogPrintf("Bootstrap heap is at 0x%X\n", bootstrap_heap);
 }
 
 size_t GetHeapAllocatedAmount(void) {

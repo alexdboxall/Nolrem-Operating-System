@@ -20,8 +20,8 @@ int ArchGetCpuNum(void) {
 }
 
 void ArchInitPlatformSpecificData(struct cpu_data* cpu) {
-    cpu->platform_specific = AllocHeap(sizeof(platform_cpu_data_t));
-    cpu->platform_specific->tss = AllocHeap(sizeof(struct tss));
+    cpu->platform_specific = AllocPermanentHeap(sizeof(platform_cpu_data_t));
+    cpu->platform_specific->tss = AllocPermanentHeap(sizeof(struct tss));
     cpu->irq_disable_counter = 0;
-    cpu->saved_interrupt_enabled = false;
+    cpu->saved_interrupt_enabled = true;
 }

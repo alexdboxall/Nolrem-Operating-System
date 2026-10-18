@@ -71,7 +71,6 @@ export size_t AllocPhys(bool pin) {
             curr->allocated = 1;
             curr->wired = pin;
             if (sys_free_pp <= LOW_MEM_THRESHOLD) {
-                LogPrintf("SENDING LOW MEM\n");
                 PostMessageIrq((struct msg) {
                     .type = SYSMSG_LOWMEMORY
                 });
@@ -87,7 +86,7 @@ export size_t AllocPhys(bool pin) {
 }
 
 void InitPhys(struct boot_memory_entry* table, size_t count) {
-    LogString("\nInit physical memory... ");
+    LogPrintf("\nInit physical memory... ");
     size_t total_phys_pages = 0;
     size_t max_phys_page_idx = 0;
 

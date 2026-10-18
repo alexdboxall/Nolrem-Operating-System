@@ -60,7 +60,7 @@ static void LogHex(size_t hx) {
     }
 }
 
-void LogString(char* s) {
+static void LogString(char* s) {
     while (*s) {
         LogCharacter(*s);
         ++s;
@@ -121,10 +121,6 @@ export void LogPrintf(const char* format, ...) {
     va_end(args);
 }
 
-void LogStringAndHexLine(char* s, size_t hx) {
-    LogPrintf("%s%x\n", s, hx);
-}
-
 void InitLog(void) {
     uint16_t* vram = (uint16_t*) (0xC0000000 + 0xB8000);
     memset(vram, 0, 2 * 25 * 80);
@@ -137,6 +133,6 @@ void InitLog(void) {
     outb(PORT + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
     outb(PORT + 4, 0x0B);    // IRQs enabled, RTS/DSR set
 
-    LogString("Kernel started...\n");
+    LogPrintf("Kernel started...\n");
 }
 

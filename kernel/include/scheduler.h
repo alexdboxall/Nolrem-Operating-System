@@ -7,7 +7,7 @@ void ReleaseScheduler(void);
 void Schedule(void);
 
 void InitScheduler(void);
-void IdleTask(void*);
+void LowPriorityBackgroundThread(void*);
 bool IsSchedulingInitialised(void);
 
 void PostMessageIrq(struct msg msg);

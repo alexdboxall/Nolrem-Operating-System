@@ -124,8 +124,6 @@ static void Ps2MouseIrqHandler(struct x86_regs*) {
 }
 
 void InitPs2Mouse(void) {
-    LogString("[mouse] init start\n");
-
     /* Enable port 2. */
     Ps2ControllerEnableDevice(true);
 
@@ -135,7 +133,7 @@ void InitPs2Mouse(void) {
     /* Reset to defaults. This disables data reporting, so the mouse stays
      * quiet during negotiation. */
     if (Ps2DeviceWrite(PS2_MOUSE_CMD_SET_DEFAULTS, true) != 0) {
-        LogString("[mouse] set-defaults not ACKed;\n  no mouse present\n");
+        LogPrintf("[mouse] set-defaults not ACKed;\n  no mouse present\n");
         return;
     }
 
@@ -150,12 +148,9 @@ void InitPs2Mouse(void) {
         if (Ps2MouseTryEnable5Button()) {
             mouse_has_5buttons = true;
         }
-        LogString(mouse_has_5buttons ? "[mouse] 5-button mode (4-byte\npackets)\n"
-                                     : "[mouse] wheel mode (4-byte\npackets)\n");
     } else {
         /* If wheel negotiation fails part-way, reset to standard mode. */
         Ps2DeviceWrite(PS2_MOUSE_CMD_SET_DEFAULTS, true);
-        LogString("[mouse] standard mode (3-byte\npackets)\n");
     }
 
     mouse_cycle = 0;
@@ -169,8 +164,6 @@ void InitPs2Mouse(void) {
 
     /* Enable packet reporting. */
     if (Ps2DeviceWrite(PS2_MOUSE_CMD_ENABLE_DATA_REPORTING, true) != 0) {
-        LogString("[mouse] enable-reporting (0xF4) not\nACKed\n");
+        LogPrintf("[mouse] enable-reporting (0xF4) not\nACKed\n");
     }
-
-    LogString("[mouse] init done\n");
 }

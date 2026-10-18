@@ -1,4 +1,3 @@
-
 ;
 ; This file is quite the circus. But that's alright (for now at least) - the
 ; whole point of splitting up the bootloader into a generic C part and a
@@ -12,8 +11,8 @@
 ; 0x6F?? - 0x7000		REAL MODE (FIRMWARE.LIB STACK)
 ; 0x7C00 - 0x7DFF		STAGE 1/2 BOOTLOADER CODE/DATA
 ; 0x8000 - 0xBFFF		BOOTLOAD.EXE CODE/DATA
-; 0xC000 - 0xCFFF		FIRMWARE.LIB CODE/DATA
-; 0xD000 - 0xDFFF		FIRMWARE.LIB SECTOR BUFFER
+; 0xC000 - 0xCFFF		BIOS.SYS CODE/DATA
+; 0xD000 - 0xDFFF		BIOS.SYS SECTOR BUFFER
 ; 0xF000 - 0xFFFF		ALL (PRE-KERNEL) STACKS
 
 org 0xC000
@@ -280,6 +279,17 @@ protected_mode_main:
 	dec cx
 	jnz .ram_table_loop
 
+	; Parse the BPB and work out whether this is FAT12 or FAT16
+	call fat_init
+	jnc .fs_ok
+	mov esi, STR_bad_fs
+	call dbgprint
+	cli
+.fs_halt:
+	hlt
+	jmp .fs_halt
+.fs_ok:
+
 	push dword 0x8000
 	push bootload_path
 	call read_file
@@ -292,6 +302,7 @@ protected_mode_main:
 STR_reached_protected_mode db "Reached protected mode...", 0xA, 0
 STR_processed_ram_table db "Processed RAM table...", 0xA, 0
 STR_read_file db "Read file...", 0xA, 0
+STR_bad_fs db "Unsupported or missing FAT12/FAT16 volume", 0xA, 0
 
 ; IN: ESI = string, null terminated
 cur_pos_x db 0
@@ -377,10 +388,8 @@ sleep_100ms:
 get_file_size:
 	pusha
 	mov esi, [esp + 4 + 8 * 4]
-	call demofs_find_file
-	mov ecx, eax
-	or ecx, ebx
-	jz fail_generic1
+	call fat_find_file
+	jc fail_generic1
 
 	mov eax, [esp + 8 + 8 * 4]
 	mov [eax], ebx
@@ -391,22 +400,26 @@ get_file_size:
 read_file:
 	pusha
 	mov esi, [esp + 4 + 8 * 4]
-	call demofs_find_file
-	mov ecx, eax
-	or ecx, ebx
-	jz fail_generic2
+	call fat_find_file
+	jc fail_generic2
 
 	add ebx, 511
-	shr ebx, 9
+	shr ebx, 9			; ebx = number of sectors left to read
 	mov edi, [esp + 8 + 8 * 4]
+.next_cluster:
+	test ebx, ebx
+	jz .done
+	cmp eax, 2
+	jb fail_generic2		; chain ended before the whole file was read
+
+	push eax			; remember the cluster for the FAT lookup
+	sub eax, 2
+	movzx ecx, byte [fat_spc]
+	imul eax, ecx
+	add eax, [fat_data_lba]		; eax = first sector of this cluster
+	mov edx, ecx			; edx = sectors left in this cluster
 .next_sector:
-	push eax
-	push ebx
-	push edi
-	call real_read_sector
-	pop edi
-	pop ebx
-	pop eax
+	call read_vol_sector		; preserves all registers
 
 	mov ecx, 512
 	mov esi, 0xD000
@@ -415,8 +428,17 @@ read_file:
 
 	inc eax
 	dec ebx
+	jz .last
+	dec edx
 	jnz .next_sector
 
+	pop eax
+	call fat_next_cluster
+	jmp .next_cluster
+
+.last:
+	add esp, 4			; drop the saved cluster
+.done:
 	popa
 	xor eax, eax
 	ret
@@ -437,131 +459,320 @@ exit_firmware:
 STR_fail_generic1_reached db "Could not find file (op: size)", 0xA, 0
 STR_fail_generic2_reached db "Could not find file (op: read)", 0xA, 0
 
-; IN:
-; 	ESI = path to file
+; ============================================================================
+; FAT12 / FAT16
+;
+; Assumes 512 byte sectors. FAT32 (and anything else) is rejected by fat_init.
+; Names are matched as 8.3 short names, case insensitively. Long file name
+; entries are skipped, so a file needs a valid short name on disk.
+; ============================================================================
+
+; Sets up the fat_* variables from the BPB at the start of the volume, and
+; auto-detects FAT12 vs FAT16 from the cluster count (as per the MS spec).
 ; OUT:
-; 	EAX = starting sector of file (both 0 on fail)
-; 	EBX = length of file
-demofs_find_file:
+;	CF clear = OK
+;	CF set   = not a FAT12/FAT16 volume
+fat_init:
+	pusha
+	xor eax, eax
+	call read_vol_sector		; volume boot sector -> 0xD000
+
+	mov esi, 0xD000
+	cmp word [esi + 11], 512	; bytes per sector
+	jne .bad
+
+	movzx eax, byte [esi + 13]	; sectors per cluster
+	test al, al
+	jz .bad
+	mov [fat_spc], al
+
+	movzx ebx, word [esi + 14]	; reserved sectors
+	mov [fat_start_lba], ebx
+
+	movzx eax, word [esi + 22]	; sectors per FAT (0 on FAT32)
+	test eax, eax
+	jz .bad
+	movzx ecx, byte [esi + 16]	; number of FATs
+	imul eax, ecx
+	add ebx, eax			; ebx = root directory LBA
+	mov [fat_root_lba], ebx
+
+	movzx eax, word [esi + 17]	; root directory entries
+	shl eax, 5			; * 32 bytes each
+	add eax, 511
+	shr eax, 9
+	mov [fat_root_sectors], eax
+	add ebx, eax			; ebx = first data sector (cluster 2)
+	mov [fat_data_lba], ebx
+
+	movzx eax, word [esi + 19]	; total sectors (16 bit)
+	test eax, eax
+	jnz .have_total
+	mov eax, [esi + 32]		; total sectors (32 bit)
+.have_total:
+	sub eax, ebx			; eax = number of data sectors
+	movzx ecx, byte [fat_spc]
+	xor edx, edx
+	div ecx				; eax = number of clusters
+
+	cmp eax, 4085
+	jb .is12
+	cmp eax, 65525
+	jae .bad			; that many clusters = FAT32
+	mov byte [fat_is16], 1
+	jmp .ok
+.is12:
+	mov byte [fat_is16], 0
+.ok:
+	popa
+	clc
+	ret
+.bad:
+	popa
+	stc
+	ret
+
+; IN:
+; 	ESI = path to file, '/' separated, null terminated
+; OUT:
+;	CF clear: EAX = first cluster of file, EBX = length of file
+;	CF set:   not found (or the path is a directory)
+fat_find_file:
 	cld
-	mov edx, 9		; root inode
+	xor edx, edx		; directory to search, 0 = the root directory
 
 .next_segment:
-	xor ecx, ecx
-	xor ebx, ebx	; index into segment_buffer
-
-	mov [segment_buffer], ecx
-	mov [segment_buffer + 4], ecx
-	mov [segment_buffer + 8], ecx
-	mov [segment_buffer + 12], ecx
-	mov [segment_buffer + 16], ecx
-	mov [segment_buffer + 20], ecx
+	; Turn the next path component into an 11 byte, space padded, upper
+	; case 8.3 name in segment_buffer
+	mov edi, segment_buffer
+	mov ecx, 11
+	mov al, ' '
+	rep stosb
+	mov edi, segment_buffer
+	mov ecx, 8		; space left in the current field (name, then extension)
 
 .get:
 	lodsb
-
 	cmp al, '/'
-	je .perform_follow
+	je .got_segment
 	cmp al, 0
-	je .perform_follow
-
-	mov [segment_buffer + ebx], al
-	inc ebx	
+	je .got_segment
+	cmp al, '.'
+	je .ext
+	cmp al, 'a'
+	jb .store
+	cmp al, 'z'
+	ja .store
+	sub al, 'a' - 'A'
+.store:
+	test ecx, ecx
+	jz .not_found		; component doesn't fit in 8.3
+	stosb
+	dec ecx
 	jmp .get
 
-.perform_follow:
-	push esi
-	mov eax, edx
-	mov esi, segment_buffer
-	call demofs_follow
-	mov edx, ebx
-	cmp eax, 0
-	je .not_found
-	cmp eax, 2
-	je .continue
-	; found a file (not a directory) - so must be end
-	add esp, 4
-	mov eax, ebx
-	mov ebx, ecx
-	ret
+.ext:
+	mov edi, segment_buffer + 8
+	mov ecx, 3
+	jmp .get
 
-.continue:
+.got_segment:
+	push esi
+	call fat_search_dir
 	pop esi
+	jc .not_found
+
+	cmp byte [esi - 1], 0	; what terminated this component?
+	je .last_segment
+
+	; More path to go, so this one has to be a directory
+	test cl, 0x10
+	jz .not_found
+	mov edx, eax		; descend into it
 	jmp .next_segment
 
-.not_found:
-	add esp, 4
-	xor eax, eax
-	xor ebx, ebx
+.last_segment:
+	test cl, 0x10
+	jnz .not_found		; a directory, not a file
+	clc
 	ret
 
-segment_buffer_ptr db 0
-segment_buffer:
-	times 24 db 0
+.not_found:
+	stc
+	ret
 
-
-STR_about_to_read_sector db " <<< ", 0
-STR_done_read_sector db ">>> ", 0
+; Searches one directory for the 8.3 name in segment_buffer.
 ; IN:
-; 	EAX = root inode
-; 	ESI = 24 byte, null padded path component
+;	EDX = first cluster of the directory (0 = fixed root directory)
 ; OUT:
-; 	EAX = 2 if directory, 1 if file, 0 if not found
-;	EBX = starting inode
-; 	ECX = length if file
-demofs_follow:
+;	CF clear: EAX = first cluster, EBX = length, ECX = attribute byte
+;	CF set:   not found
+; Clobbers EDX, ESI, EDI, EBP and the sector buffer.
+fat_search_dir:
 	cld
+	test edx, edx
+	jnz .cluster
 
-.next_sector:
-	pusha
-	call real_read_sector
-	popa
-	mov edi, 0xD020
-	mov edx, 15
-.next_within_sector:
+	; Fixed root directory: one contiguous run of sectors
+	mov eax, [fat_root_lba]
+	mov ebp, [fat_root_sectors]
+	jmp .scan_run
+
+.cluster:
+	cmp edx, 2
+	jb .fail
+	mov eax, edx
+	sub eax, 2
+	movzx ecx, byte [fat_spc]
+	mov ebp, ecx
+	imul eax, ecx
+	add eax, [fat_data_lba]
+
+.scan_run:
+	; EAX = sector, EBP = sectors left in this run
+	call read_vol_sector
+	mov edi, 0xD000
+
+.entry:
+	cmp byte [edi], 0
+	je .fail			; 0x00 = no more entries
+	cmp byte [edi], 0xE5
+	je .next_entry			; deleted
+	test byte [edi + 11], 0x08
+	jnz .next_entry			; volume label / long file name entry
+
+	mov esi, segment_buffer
+	mov ecx, 11
 	push edi
-	push esi
-	mov ecx, 24
 	repe cmpsb
-	je short .found
-	pop esi
 	pop edi
-	add edi, 32
-	dec edx
-	jnz .next_within_sector
+	je .found
 
-	; ok, need to move onto the next one...
-	mov al, [0xD000]
-	cmp al, 0xFE
-	jne .not_found
-	mov eax, [0xD000]
-	shr eax, 8
-	jmp .next_sector
+.next_entry:
+	add edi, 32
+	cmp edi, 0xD200
+	jb .entry
+
+	inc eax
+	dec ebp
+	jnz .scan_run
+
+	; Ran out of sectors in this run. The root directory is a single run,
+	; but subdirectories continue along their cluster chain.
+	test edx, edx
+	jz .fail
+	mov eax, edx
+	call fat_next_cluster
+	mov edx, eax
+	test edx, edx
+	jnz .cluster
+
+.fail:
+	stc
+	ret
 
 .found:
-	pop esi
-	pop edi
-	; the entry starts at EDI, and goes thru to EDI + 31 (incl.)
-	mov ebx, [edi + 24 + 4]
-	and ebx, 0xFFFFFF
-	mov al, [edi + 24 + 7]
-	and al, 1
-	jz .is_file
-
-	; directory
-	mov eax, 2
+	movzx ecx, byte [edi + 11]	; attributes
+	movzx eax, word [edi + 26]	; first cluster
+	mov ebx, [edi + 28]		; file size
+	clc
 	ret
 
-.is_file:
-	mov ecx, [edi + 24]
-	mov eax, 1
-	ret
+; IN:
+;	EAX = cluster
+; OUT:
+;	EAX = next cluster in the chain, or 0 if this was the last one (or the
+;	      FAT entry is free/bad)
+; Preserves everything else, but overwrites the sector buffer.
+fat_next_cluster:
+	push ebx
+	push ecx
+	push edx
 
-.not_found:
+	mov ebx, eax			; ebx = cluster
+	cmp byte [fat_is16], 0
+	jne .fat16
+
+	; FAT12: 12 bit entries at byte offset cluster * 3 / 2
+	mov ecx, ebx
+	shr ecx, 1
+	add ecx, ebx			; ecx = byte offset into the FAT
+	mov eax, ecx
+	shr eax, 9
+	add eax, [fat_start_lba]	; sector holding the low byte
+	and ecx, 511
+	call read_vol_sector
+	movzx edx, byte [0xD000 + ecx]	; low byte
+	cmp ecx, 511
+	je .straddle
+	movzx ecx, byte [0xD000 + ecx + 1]	; high byte, same sector
+	jmp .combine
+.straddle:
+	; Entry is split across two sectors: high byte is first byte of the next
+	inc eax
+	call read_vol_sector
+	movzx ecx, byte [0xD000]
+.combine:
+	shl ecx, 8
+	or ecx, edx
+	mov eax, ecx
+	test bl, 1
+	jz .even
+	shr eax, 4			; odd cluster: top 12 bits
+	jmp .got12
+.even:
+	and eax, 0xFFF			; even cluster: bottom 12 bits
+.got12:
+	mov ecx, 0xFF7
+	jmp .range
+
+.fat16:
+	mov eax, ebx
+	shr eax, 8			; 256 entries per sector
+	add eax, [fat_start_lba]
+	call read_vol_sector
+	and ebx, 255
+	movzx eax, word [0xD000 + ebx * 2]
+	mov ecx, 0xFFF7
+
+.range:
+	cmp eax, ecx			; bad cluster or end of chain marker
+	jae .end
+	cmp eax, 2
+	jae .out			; valid data cluster
+.end:
 	xor eax, eax
+.out:
+	pop edx
+	pop ecx
+	pop ebx
 	ret
 
-; EAX = LBA
+; EAX = LBA relative to the start of the FAT volume
+; output at 0xD000
+; Unlike real_read_sector, this preserves all registers.
+read_vol_sector:
+	pusha
+	add eax, [fat_vol_lba]
+	call real_read_sector
+	popa
+	ret
+
+; fat_vol_lba is the absolute LBA the volume starts at. It's 0 for a floppy /
+; unpartitioned disk. If the stage 1 bootsector ever boots from a partition,
+; set this to the partition's start LBA before fat_init runs.
+fat_vol_lba dd 0
+fat_start_lba dd 0		; first FAT (volume relative)
+fat_root_lba dd 0		; fixed root directory (volume relative)
+fat_root_sectors dd 0
+fat_data_lba dd 0		; cluster 2 (volume relative)
+fat_spc db 0			; sectors per cluster
+fat_is16 db 0			; 0 = FAT12, 1 = FAT16
+
+segment_buffer:
+	times 11 db 0
+
+; EAX = LBA (absolute)
 ; output at 0xD000
 real_read_sector:
 	mov [realModeCommand], byte 2

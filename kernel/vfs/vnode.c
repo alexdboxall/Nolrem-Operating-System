@@ -49,12 +49,9 @@ int VnodeRead(struct aio* aio) {
     struct vnode* node = aio->node;
     struct transfer* io = &aio->transfer;
     CheckVnode(node);
-    LogPrintf("Calling Vnode read...\n");
     if (node->ops.read == NULL || io->direction != TRANSFER_READ) {
-        LogPrintf("Bad vnode...\n");
         return EINVAL;
     }
-    LogPrintf("node->ops.read == 0x%X\n", (size_t) node->ops.read);
     return node->ops.read(aio);
 }
 

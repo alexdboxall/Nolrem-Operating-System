@@ -10,24 +10,21 @@
 #include <filesystem.h>
 #include <heap.h>
 
-#include <fs/demofs/demofs.h>
-
-#define MAX_REGISTERED_FILESYSTEMS 16
+//#include <fs/demofs/demofs.h>
+#include <fs/fat/fat.h>
 
 struct filesystem {
-    char* name;
     fs_mount_creator mount_creator;
+    struct filesystem* next;
+    char name[];
 };
 
-static struct filesystem registered_filesystems[MAX_REGISTERED_FILESYSTEMS];
-static int num_filesystems = 0;
-static struct mutex* fs_table_lock;
+static struct filesystem* registered_filesystems = NULL;
+static struct mutex fs_table_lock;
 
 void InitFilesystemTable(void) {
-    num_filesystems = 0;
-    fs_table_lock = CreateMutex();
-
-    InitDemofs();
+    InitStaticMutex(&fs_table_lock);
+    InitFat();
 }
 
 export int RegisterFilesystem(char* fs_name, fs_mount_creator mount) {
@@ -35,53 +32,40 @@ export int RegisterFilesystem(char* fs_name, fs_mount_creator mount) {
         return EINVAL;
     }
 
-    struct filesystem fs;
-    fs.name = KeStrdup(fs_name);
-    fs.mount_creator = mount;
+    struct filesystem* fs = AllocPermanentHeap(sizeof(struct filesystem) + strlen(fs_name) + 1);
+    fs->mount_creator = mount;
+    strcpy(fs->name, fs_name);
 
-    int ret = 0;
-
-    AcquireMutex(fs_table_lock, TIMEOUT_INFINITE);
-    if (num_filesystems < MAX_REGISTERED_FILESYSTEMS) {
-        registered_filesystems[num_filesystems++] = fs;
-    } else {
-        ret = EALREADY;
-    }
-    registered_filesystems[num_filesystems++] = fs;
-    ReleaseMutex(fs_table_lock);
-
-    if (ret != 0) {
-        FreeHeap(fs.name);
-    }
-    
-    return ret;
+    AcquireMutex(&fs_table_lock, TIMEOUT_INFINITE);
+    fs->next = registered_filesystems;
+    registered_filesystems = fs;
+    ReleaseMutex(&fs_table_lock);
+  
+    return 0;
 }
 
 export int MountFilesystemForDisk(struct file* partition) {
-    AcquireMutex(fs_table_lock, TIMEOUT_INFINITE);
+    AcquireMutex(&fs_table_lock, TIMEOUT_INFINITE);
 
-    LogPrintf("MountFilesystemForDisk...\n");
-
-    struct file* fs = NULL;
-    for (int i = 0; i < num_filesystems; ++i) {
-        fs = NULL;
-        int res = registered_filesystems[i].mount_creator(partition, &fs);
+    struct filesystem* fs = registered_filesystems;
+    struct file* file_out;
+    while (fs) {
+        int res = fs->mount_creator(partition, &file_out);
         if (res == 0) {
             break;
         }
+        fs = fs->next;
     }
+    ReleaseMutex(&fs_table_lock);
 
-    ReleaseMutex(fs_table_lock);
-
-    if (fs == NULL) {
+    if (file_out == NULL) {
         return ENODEV;
     }
 
-    int res = VnodeCreate(partition->node, &fs->node, "fs", 0, 0);
+    int res = VnodeCreate(partition->node, &file_out->node, "fs", 0, 0);
     if (res != 0) {
         return res;
     }
 
-    Mount(fs->node, GenerateNewMountedDiskName());
-    return 0;
+    return Mount(file_out->node, GenerateNewMountedDiskName());
 }

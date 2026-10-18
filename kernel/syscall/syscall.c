@@ -19,7 +19,7 @@ static size_t (* const syscall_table[])(size_t, size_t, size_t, size_t) = {
     [SYS_GetRegionBounds] = SysGetRegionBounds,
 };
 
-export size_t PerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d) {
+size_t PerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d) {
     if (call >= sizeof(syscall_table) / sizeof(syscall_table[0])) {
         return ENOSYS;
     }

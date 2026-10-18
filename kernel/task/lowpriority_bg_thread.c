@@ -6,16 +6,20 @@
 #include <thread.h>
 #include <phys.h>
 #include <vmm.h>
+#include <panic.h>
 
-export void IdleTask(void*) {
-    LogPrintf("IdleTask\n");
+void LowPriorityBackgroundThread(void*) {
     BeginNewThread();
     SetThreadPriority(GetCurrentThread(), PRIORITY_IDLE);
-    
+
     size_t spare_frame = 0;
     bool is_zeroed = false;
 
     while (true) {
+        if (!ArchAreInterruptsEnabled()) {
+            Panic(PANIC_FUCK_ME);
+        }
+
         /* As we don't yet have a way to pre-empt, manually switch. */
         Schedule();
         ArchIdle();

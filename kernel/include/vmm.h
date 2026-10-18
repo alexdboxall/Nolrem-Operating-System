@@ -101,11 +101,9 @@ void* AllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
 void FreeMemory(void* ptr, size_t bytes);
 
 void HandlePageFault(size_t virt, int reason);
-struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags, struct file* file, size_t file_offset, size_t base, size_t phys, bool fixed);
 struct vas* GetKernelVas(void);
 struct vas* GetCurrentVas(void); 
 
-void CopyToPhysPage(size_t phys, void* data);
 void ZeroPhysPage(size_t phys);
 
 struct phys_page* DiscardPage(void);

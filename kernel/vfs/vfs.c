@@ -26,13 +26,13 @@
 * A structure for mounted devices and filesystems.
 */
 struct mounted_file {
+	struct mounted_file* next;
+
 	/* The vnode representing the device / root directory of a filesystem */
 	struct file* node;
 
 	/* What the device / filesystem mount is called */
-	char* name;
-
-	struct mounted_file* next;
+	char name[];
 };
 
 static struct mutex* mount_list_lock;
@@ -118,8 +118,8 @@ export int Mount(struct vnode* node, const char* name) {
         return EEXIST;
     }
 
-    struct mounted_file* mount = AllocHeap(sizeof(struct mounted_file));
-	mount->name = KeStrdup(name);
+    struct mounted_file* mount = AllocHeap(sizeof(struct mounted_file) + strlen(name) + 1);
+	strcpy(mount->name, name);
     mount->node = CreateFile(node, 0, 0, true, true);
 	mount->next = mounted_file_list;
 	mounted_file_list = mount;
@@ -460,7 +460,6 @@ static void FileAccessAsyncCallback(void* _aio) {
 }
 
 static int FileAccess(struct aio* aio, bool write) {
-	LogPrintf("FileAccess called...\n");
 	if (aio == NULL) {
 		return EINVAL;
 	}
@@ -476,10 +475,8 @@ static int FileAccess(struct aio* aio, bool write) {
 	io->blockable = !(file->node->flags & O_NONBLOCK);
 
 	struct aio* subaio = AllocHeap(sizeof(struct aio));
-	LogPrintf("Creating sub IO...\n");
 	CreateIO(subaio, file->node, *io, FileAccessAsyncCallback, (void*) aio);
 	aio->sub = subaio;
-	LogPrintf("Calling VnodeRead/Write...\n");
 	return (write ? VnodeWrite : VnodeRead)(subaio);
 }
 

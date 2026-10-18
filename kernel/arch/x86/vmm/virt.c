@@ -118,7 +118,7 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     // or does this only ever get called on the current vas?
 
     if (vas != GetCurrentVas()){ 
-        LogString("SetPte called in non-current VAS!");
+        LogPrintf("SetPte called in non-current VAS!");
         Panic(PANIC_INVALID_ARCH_OPERATION);
     }
 
@@ -129,7 +129,6 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     size_t* directory = GetRecursiveTable(1023);
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Time to map a new table. */
-        LogPrintf("SetPte: Allocating new phys for it...\n");
         size_t phys = AllocPhys(true);
         directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
         size_t* table = GetRecursiveTable(level1_index);

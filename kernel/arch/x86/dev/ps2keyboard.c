@@ -192,36 +192,29 @@ static int Ps2KeyboardSetScancodeSet(int num) {
     return (result == num) ? 0 : -1;
 }
 
-void InitPs2Keyboard(void) {
-    LogString("[keyboard] detecting translation...\n");
-    
+void InitPs2Keyboard(void) {    
     /* Read controller config to check translation bit. */
     uint8_t config = Ps2ControllerGetConfiguration();
     bool translation_on = (config & (1 << 6)) != 0;
     
-    LogString(translation_on ? "[keyboard] translation ON\n" : "[keyboard] translation OFF\n");
-
     /* If translation is on, disable it. We want set 1 scancodes from the keyboard
      * directly, not set 2 converted by the controller. */
     if (translation_on) {
-        LogString("[keyboard] disabling translation...\n");
         config &= ~(1 << 6);
         Ps2ControllerSetConfiguration(config);
     }
 
     /* Read current scancode set. */
     int current_set = Ps2KeyboardGetScancodeSet();
-    LogPrintf("[keyboard] current scancode set: %d\n", current_set);
 
     /* Make sure we're in set 1. */
     if (current_set != 1) {
-        LogString("[keyboard] switching to set 1...\n");
         Ps2KeyboardSetScancodeSet(1);
     }
 
     /* Enable scanning. */
     if (Ps2DeviceWrite(0xF4, false) != 0) {
-        LogString("[keyboard] WARNING: enable-scanning not ACKed\n");
+        LogPrintf("[keyboard] WARNING: enable-scanning not ACKed\n");
     }
 
     /* Flush stray bytes. */
@@ -229,6 +222,4 @@ void InitPs2Keyboard(void) {
 
     /* Register handler. */
     RegisterInterruptHandler(1, Ps2KeyboardIrqHandler);
-    
-    LogString("[keyboard] init done\n");
 }

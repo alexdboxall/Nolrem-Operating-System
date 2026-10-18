@@ -24,7 +24,6 @@
 #endif
 
 #define warn_unused __attribute__((warn_unused_result))
-#define always_inline __attribute__((always_inline)) inline
 
 #define export __attribute__((used)) __attribute__((visibility ("default")))
 

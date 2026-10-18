@@ -1009,16 +1009,6 @@ export bool CdIsRegionEmpty(struct region rgn) {
     return data->num_bands == 0;
 }
 
-int LogRect(struct rect r, void*, int rv, bool* cancel) {
-    *cancel = false;
-    LogPrintf("RECT: %d, %d (W: %d, H: %d)\n", r.x, r.y, r.w, r.h);
-    return rv;
-}
-
-void CdLogRegion(struct region r) {
-    IterateRegion(r, LogRect, NULL, 0);
-}
-
 int IterateRegion(
     struct region rgn, 
     int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel), 

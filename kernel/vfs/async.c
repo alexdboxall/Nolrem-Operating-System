@@ -17,10 +17,8 @@
 
 
 export void SignalDoneIO(struct aio* aio, int result_code) {
-    LogPrintf("SignalDoneIO starting (mutex 0x%X)\n", &aio->mtx);
     aio->result_code = result_code;
     ReleaseMutex(&aio->mtx);
-    LogPrintf("SignalDoneIO released mutex 0x%X\n", &aio->mtx);
 }
 
 export int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt) {
@@ -44,20 +42,16 @@ export int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, voi
  */
 export int WaitIO(struct aio* aio, uint64_t timeout) {
     if (aio->completed) {
-        LogPrintf("Waiting on something already done! EALREADY\n");
         return EALREADY;
     }
     int res;
-    LogPrintf("WaitIO called... mutex 0x%X\n", &aio->mtx);
     if (aio->sub != NULL) {
-        LogPrintf(" but waiting on sub first...\n");
         res = WaitIO(aio->sub, timeout);
         if (res != 0) {
             goto cleanup_on_err;
         }
     }
     res = AcquireMutex(&aio->mtx, timeout);
-    LogPrintf("WaitIO got past the mutex...\n");
     if (res != 0) {
         goto cleanup_on_err;
     }

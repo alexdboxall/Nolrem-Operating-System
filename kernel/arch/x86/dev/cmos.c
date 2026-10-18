@@ -10,7 +10,7 @@ static bool nmi_on = true;
 #define CMOS_DATA 0x71
 
 static void CmosDelay(void) {
-    asm volatile ("nop");
+    x86IoDelay();
 }
 
 static void SelectAddress(uint8_t addr) {

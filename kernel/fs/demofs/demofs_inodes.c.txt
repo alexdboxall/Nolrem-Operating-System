@@ -17,32 +17,7 @@
 #include <fs/demofs/demofs_private.h>
 
 #define SECTOR_SIZE 512
-
-/*
-* How many requests can be queued for the filesystem thread at once.
-*/
 #define DEMOFS_QUEUE_DEPTH 16
-
-/*
-* ---------------------------------------------------------------------------
-* Overview
-*
-* Like the floppy driver, each demofs mount has its own thread and message box.
-* The vnode read operations (demofs_read_file and demofs_read_directory_entry)
-* only post a request to the message box and return, so the request starts
-* being processed straight away on the filesystem thread. When the thread has
-* finished it calls SignalDoneIO, and whoever calls WaitIO gets the result.
-* That might happen before they call WaitIO, or they might have to wait.
-*
-* The filesystem thread is entirely synchronous: it reads from the disk with
-* CreateIO + ReadFile + WaitIO and just waits for each read in turn. There is no
-* chaining of sub-requests or completion callbacks to worry about.
-*
-* Follow is still synchronous too, and runs on the caller's thread. That's fine
-* as nothing in struct demofs is modified after mount: every function here uses
-* only its own local buffers, so the thread and Follow can run at the same time.
-* ---------------------------------------------------------------------------
-*/
 
 /*
 * Tear down an aio that was created with CreateIO but which the driver failed to
@@ -245,9 +220,11 @@ int demofs_follow(struct demofs* fs, ino_t parent, ino_t* child, const char* nam
                 * If so, read the inode number and return it.
                 * Remember to add the directory flag if necessary.
                 */
+                LogPrintf("Found name.\n");
                 ino_t inode = buffer[i * 32 + MAX_NAME_LENGTH + 4];
                 inode |= (ino_t) buffer[i * 32 + MAX_NAME_LENGTH + 5] << 8;
                 inode |= (ino_t) buffer[i * 32 + MAX_NAME_LENGTH + 6] << 16;
+                LogPrintf("inode 0x%X (offset 0x%X).\n", inode, inode * SECTOR_SIZE);
 
                 if (buffer[i * 32 + MAX_NAME_LENGTH + 7] & 1) {
                     /*
@@ -447,7 +424,7 @@ int demofs_start_driver(struct demofs* fs) {
         return ENOMEM;
     }
 
-    CreateThread(GetKernelVas(), DemofsDriverThread, fs);
+    CreateThreadEx(GetKernelVas(), DemofsDriverThread, fs, 1024 * 3);
     return 0;
 }
 

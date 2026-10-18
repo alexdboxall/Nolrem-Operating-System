@@ -49,7 +49,7 @@ BiosReadSector:
     ; ================================================
 
 
-    dec dh		; @@@ TODO HACK GOOFY FIX FOR DODGY FLOPPY DRIVE
+    ;dec dh		; @@@ TODO HACK GOOFY FIX FOR DODGY FLOPPY DRIVE
 				; @@@ REMOVE THIS LINE WHEN FDD IS FIXED!!
 
 	inc dh				;BIOS returns one less than actual value

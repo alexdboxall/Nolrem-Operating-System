@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <obj.h>
 #include <spinlock.h>
+#include <sys/types.h>
 #include <allocvirt.h>
 #include <mutex.h>
 

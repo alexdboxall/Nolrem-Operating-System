@@ -6,6 +6,8 @@
 #define MIN4(a,b,c,d) MIN(MIN(a,b), MIN(c,d))
 #define MAX4(a,b,c,d) MAX(MAX(a,b), MAX(c,d))
 
+// TODO: this needs CdStart/End video update?
+
 static void DrawThinLine(struct graphics_driver* drv, int x1, int y1, int x2, int y2, uint32_t colour) {
     int dx =  x2 - x1; if (dx < 0) dx = -dx;
     int dy =  y2 - y1; if (dy < 0) dy = -dy;

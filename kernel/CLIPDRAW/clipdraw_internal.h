@@ -82,6 +82,7 @@ void CdInitUserRegionSubsystem(void);
 void CdInitPenSubsystem(void);
 void CdInitDcSubsystem(void);
 void CdInitMouseSubsystem(void);
+void CdInitTypefaceSubsystem(void);
 
 void CdRemoveMouse(int x, int y);
 void CdDrawMouse(int x, int y);

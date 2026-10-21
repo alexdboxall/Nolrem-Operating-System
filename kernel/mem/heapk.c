@@ -51,6 +51,12 @@ export size_t KeGetAllocationSize(void* ptr) {
     return GetAllocationSizeEx(&kernel_heap, ptr);
 }
 
+export void KePurgeFreeAreasFromHeap(void) {
+    AcquireSpinlock(&heap_lock);
+    PurgeFreeAreasFromHeapEx(&kernel_heap);
+    ReleaseSpinlock(&heap_lock);
+}
+
 export void* KeReallocHeap(void* ptr, size_t new_size) {
     if (ptr == NULL) {
         return KeAllocHeap(new_size);
@@ -83,6 +89,17 @@ export void KeFreeHeap(void* ptr) {
     ReleaseSpinlock(&heap_lock);
 }
 
+void KernelHeapReturnMemory(void* ptr, size_t size) {
+    size_t addr = (size_t) ptr;
+    if ((addr & (PAGE_SIZE - 1)) != 0) {
+        return;
+    }
+    if ((size & (PAGE_SIZE - 1)) != 0) {
+        return;
+    }
+    FreeMemory(ptr, size);
+}
+
 void* KernelHeapRequestMemory(size_t* size) {
     *size = (*size + 1023) & ~1023;
     void* retv = AllocBootstrapHeap(*size);
@@ -97,7 +114,7 @@ void* KernelHeapRequestMemory(size_t* size) {
 void InitBootstrapHeap(void) {
     memset(bootstrap_heap, 0xEE, sizeof(bootstrap_heap));
     InitSpinlock(&heap_lock);
-    InitHeapEx(&kernel_heap, KernelHeapRequestMemory);
+    InitHeapEx(&kernel_heap, KernelHeapRequestMemory, KernelHeapReturnMemory);
 }
 
 size_t GetHeapAllocatedAmount(void) {

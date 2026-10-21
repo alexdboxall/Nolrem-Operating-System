@@ -17,6 +17,8 @@ struct heap {
     struct block* _head_block[TOTAL_NUM_FREE_LISTS];
 
     void*(*get_memory)(size_t*);
+    void(*return_memory)(void*, size_t);
+
     struct spinlock lock;
 
     uint32_t _free_list_bitmap;
@@ -24,9 +26,11 @@ struct heap {
 };
 
 
-void InitHeapEx(struct heap*, void*(*get_memory)(size_t*));
+void InitHeapEx(struct heap*, void*(*get_memory)(size_t*), void(*return_memory)(void*, size_t));
 
 void* AllocHeapEx(struct heap* heap, size_t bytes);
 void FreeHeapEx(struct heap* heap, void* ptr);
 void* ReallocHeapEx(struct heap* heap, void* ptr, size_t new_size);
 size_t GetAllocationSizeEx(struct heap* heap, void* ptr);
+void PurgeFreeAreasFromHeapEx(struct heap* heap);
+

@@ -226,8 +226,9 @@ struct window* win3;
 static void ProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
-        PurgeScaledGlyphCacheIfNeeded();
         DiscardPage();
+        PurgeScaledGlyphCacheIfNeeded();
+        KePurgeFreeAreasFromHeap();
         break;
 
     case SYSMSG_MOUSEEVENT:

@@ -5,6 +5,7 @@
 #include <spinlock.h>
 #include <heapex.h>
 #include <string.h>
+#include <arch.h>
 
 /* THIS FILE IS BYO LOCKING */
 
@@ -16,7 +17,7 @@ struct block {
     /*
      * The entire size of the block. The low 2 bits do not form part of the 
      * size, the low bit is set for allocated blocks, and the second lowest bit 
-     * is indicates if it is on the swappable heap or not.
+     * is indicates if it is a fencepost.
      */
     size_t size;
 
@@ -183,6 +184,10 @@ static userexec size_t RoundUpSize(size_t size) {
     return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
 }
 
+static userexec void MarkFencepost(struct block* block) {
+    block->size |= 2;
+}
+
 static userexec void MarkFree(struct block* block) {
     block->size &= ~1;
 }
@@ -195,6 +200,21 @@ static userexec bool IsAllocated(struct block* block) {
     return block->size & 1;
 }
 
+static userexec bool IsFencepost(struct block* block) {
+    return block->size & 2;
+}
+
+static userexec bool DoesFreeBlockSpanEntireChunk(struct block* block) {
+    if (IsAllocated(block)) {
+        return false;
+    }
+    size_t size = GetSize(block);
+    size_t prev_size = *(((size_t*) block) - 1);
+    struct block* prev = (struct block*) (((size_t*) block) - prev_size / sizeof(size_t));
+    struct block* next = (struct block*) (((size_t*) block) + size / sizeof(size_t));
+    return IsFencepost(prev) && IsFencepost(next);
+}
+
 static userexec struct block** GetHeap(struct heap* heap) {
     return heap->_head_block;
 }
@@ -204,7 +224,7 @@ static userexec struct block** GetHeap(struct heap* heap) {
  * account the flags on the size field and removes them from the return value. 
  */
 static userexec size_t GetSize(struct block* block) {
-    return block->size & ~1;
+    return block->size & ~7;
 }
 
 /**
@@ -214,7 +234,7 @@ static userexec size_t GetSize(struct block* block) {
  * back tags.
  */
 static userexec void SetSizeTags(struct block* block, size_t size) {
-    block->size = (block->size & 1) | size;
+    block->size = (block->size & 7) | size;
     *(((size_t*) block) + (size / sizeof(size_t)) - 1) = size;
 }
 
@@ -253,7 +273,8 @@ static userexec struct block* RequestBlock(struct heap* heap, size_t total_size)
 
     actual_block->prev = NULL;
     actual_block->next = NULL;
-    
+    MarkFencepost(left_fence);
+    MarkFencepost(right_fence);
     MarkAllocated(left_fence);
     MarkAllocated(right_fence);
     MarkFree(actual_block);
@@ -413,6 +434,32 @@ static userexec struct block* AllocateBlock(
         MarkFree(block);
         AddBlock(heap, block);
         return allocated_block;
+    }
+}
+
+export userexec void PurgeFreeAreasFromHeap(struct heap* heap) {
+    struct block** head_list = GetHeap(heap);
+
+    /* Only look at the largest list class. */
+restart:
+    struct block* block = head_list[TOTAL_NUM_FREE_LISTS - 1];
+    while (block) {
+        if (DoesFreeBlockSpanEntireChunk(block)) {
+            size_t size = GetSize(block);
+            size_t prev_size = *(((size_t*) block) - 1);
+            struct block* left_fencepost = (struct block*) (((size_t*) block) - prev_size / sizeof(size_t));
+            struct block* right_fencepost = (struct block*) (((size_t*) block) + size / sizeof(size_t));
+
+            /* Remove from free list */
+            AllocateBlock(heap, block, TOTAL_NUM_FREE_LISTS - 1, GetSize(block) - METADATA_TOTAL);
+
+            size_t start_addr = (size_t) left_fencepost;
+            size_t length = ((size_t) right_fencepost) + MIN_REQ_SIZE - start_addr;
+            // TODO: heap->return_memory(start_addr, length);
+            goto restart;
+        } else {
+            block = block->next;
+        }
     }
 }
 

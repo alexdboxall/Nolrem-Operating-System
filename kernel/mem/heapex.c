@@ -5,7 +5,6 @@
 #include <spinlock.h>
 #include <heapex.h>
 #include <string.h>
-#include <arch.h>
 
 /* THIS FILE IS BYO LOCKING */
 

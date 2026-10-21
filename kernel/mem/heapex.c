@@ -583,9 +583,10 @@ export userexec size_t GetAllocationSizeEx(struct heap* heap, void* ptr) {
     return GetSize(SubVoidPtr(ptr, METADATA_LEADING)) - METADATA_TOTAL;
 }
 
-export userexec void InitHeapEx(struct heap* heap, void*(*get_memory)(size_t*)) {
+export userexec void InitHeapEx(struct heap* heap, void*(*get_memory)(size_t*), void(*return_memory)(void*, size_t)) {
     InitSpinlock(&heap->lock);
     heap->get_memory = get_memory;
+    heap->return_memory = return_memory;
     memset(heap->_head_block, 0, sizeof(heap->_head_block));
     heap->_free_list_bitmap = 0;
 }

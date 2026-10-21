@@ -26,7 +26,7 @@ struct heap {
 };
 
 
-void InitHeapEx(struct heap*, void*(*get_memory)(size_t*));
+void InitHeapEx(struct heap*, void*(*get_memory)(size_t*), void*(*return_memory)(void*, size_t));
 
 void* AllocHeapEx(struct heap* heap, size_t bytes);
 void FreeHeapEx(struct heap* heap, void* ptr);

@@ -17,6 +17,8 @@
 #include <stdatomic.h>
 #include "winmgr_internal.h"
 
+extern void PurgeScaledGlyphCacheIfNeeded();
+
 #define SYSTEM_MSGBOX_SIZE      8
 
 static struct msgbox* sys_mbox = NULL;
@@ -224,6 +226,7 @@ struct window* win3;
 static void ProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
+        PurgeScaledGlyphCacheIfNeeded();
         DiscardPage();
         break;
 
@@ -311,12 +314,16 @@ _Noreturn void WmMainloop(void) {
         ProcessMessage(msg);
 
         if (anything_happened) {
-            anything_happened = false;            
+            PurgeScaledGlyphCacheIfNeeded();
+            anything_happened = false;      
+
             RepaintIfNeeded(WmGetDesktop());
             RepaintIfNeeded(win);
             RepaintIfNeeded(win2);
             RepaintIfNeeded(win3);
         }
+
+
 
         {
             size_t kb_free = GetFreeMemory() / 1024;

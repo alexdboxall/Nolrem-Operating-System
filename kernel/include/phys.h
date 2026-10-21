@@ -24,3 +24,5 @@ struct phys_page* GetNextPhysPage(struct phys_page* pp);
 size_t GetTotalMemory(void);
 size_t GetFreeMemory(void);
 
+bool IsMemoryRunningLow(void);      /* start thinking about tossing caches */
+bool IsMemoryLow(void);             /* discarding now, toss everything possible */

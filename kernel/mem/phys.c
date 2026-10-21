@@ -59,6 +59,14 @@ void FreeDiscardedPhys(struct phys_page* pp) {
     ++sys_free_pp;
 }
 
+export bool IsMemoryRunningLow(void) {
+    return sys_free_pp <= LOW_MEM_THRESHOLD * 2;
+}
+
+export bool IsMemoryLow(void) {
+    return sys_free_pp <= LOW_MEM_THRESHOLD;
+}
+
 export size_t AllocPhys(bool pin) {
     struct phys_page* curr = GetFirstPhysPage();
     while (curr != NULL) {

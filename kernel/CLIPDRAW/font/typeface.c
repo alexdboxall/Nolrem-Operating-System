@@ -144,7 +144,6 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
     return fn;
 }
 
-
 #define ADV_OMF(off, failret)  OmfAdvance(&tf->omf, off); if (tf->omf.error) {return failret;} 
 #define JUMP_OMF(pos, failret) OmfJump(&tf->omf, pos); if (tf->omf.error) {return failret;} 
 #define FAIL_ERR(failret)      if (tf->omf.error) {return failret;} 
@@ -272,7 +271,6 @@ static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
     return c;
 }
 
-
 static bool AdvanceToGlyphData(struct font* fn, uint32_t c) {
     uint32_t index = GetGlyphIndex(fn, c);
     if (c == BAD_GLYPH_CHAR) {
@@ -299,6 +297,66 @@ struct glyph_data {
     uint32_t absolute_advance_to_bitmap;
     bool error;
 };
+
+export pageable uint8_t* ScaleGlyphData(uint8_t* glyph, int old_w, int old_h, int new_w, int new_h) {
+    int new_chunks = (new_w + 7) >> 3;
+    uint8_t* new_glyph = AllocHeap(new_chunks * new_h);
+    uint8_t* out = new_glyph;
+    int c, k, dy;
+
+    if (old_w <= 0 || old_h <= 0 || new_w <= 0 || new_h <= 0) {
+        for (k = new_chunks * new_h; k > 0; k--) *out++ = 0;
+        return new_glyph;
+    }
+
+    int x_den = new_w << 1;
+    int x_q   = (old_w << 1) / x_den;
+    int x_r   = (old_w << 1) % x_den;
+    int x_sx  = old_w / x_den;
+    int x_rem = old_w % x_den;
+
+    int y_den = new_h << 1;
+    int y_q   = (old_h << 1) / y_den;
+    int y_r   = (old_h << 1) % y_den;
+    int y_sy0 = old_h / y_den; 
+    int y_rem0 = old_h % y_den;
+
+    for (c = 0; c < new_chunks; c++) {
+        uint32_t xo[8];
+        uint8_t xs[8]; 
+        int n = new_w - (c << 3);
+        if (n > 8) n = 8;
+
+        for (k = 0; k < n; k++) {
+            xo[k] = (uint32_t)(x_sx >> 3) * (uint32_t)old_h;
+            xs[k] = (uint8_t)(7 - (x_sx & 7));
+            x_sx  += x_q;
+            x_rem += x_r;
+            if (x_rem >= x_den) { x_rem -= x_den; x_sx++; }
+        }
+
+        int sy = y_sy0, rem = y_rem0, prev_sy = -1;
+        uint32_t b = 0;
+
+        for (dy = 0; dy < new_h; dy++) {
+            if (sy != prev_sy) { 
+                b = 0;
+                for (k = 0; k < n; k++) {
+                    b = (b << 1) | ((glyph[xo[k] + sy] >> xs[k]) & 1);
+                }
+                b <<= (8 - n); 
+                prev_sy = sy;
+            }
+            *out++ = (uint8_t) b;
+
+            sy  += y_q;
+            rem += y_r;
+            if (rem >= y_den) { rem -= y_den; sy++; }
+        }
+    }
+
+    return new_glyph;
+}
 
 export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
     struct glyph_data data;
@@ -344,4 +402,7 @@ static void CleanupFont(void* _fn) {
 void CdInitTypefaceSubsystem(void) {
     RegisterUserObjectType(UOBJ_TYPEFACE, CleanupTypeface);
     RegisterUserObjectType(UOBJ_FONT, CleanupFont);
+
+    extern void InitScaledGlyphCache();
+    InitScaledGlyphCache();
 }

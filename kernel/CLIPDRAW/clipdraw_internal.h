@@ -84,6 +84,8 @@ void CdInitDcSubsystem(void);
 void CdInitMouseSubsystem(void);
 void CdInitTypefaceSubsystem(void);
 
+void PurgeScaledGlyphCacheIfNeeded(void);
+
 void CdRemoveMouse(int x, int y);
 void CdDrawMouse(int x, int y);
 void CdStartVideoUpdate(int x1, int y1, int x2, int y2); 

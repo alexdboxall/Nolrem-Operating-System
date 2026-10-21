@@ -25,6 +25,37 @@
 #include <machine/x86.h>
 
 
+/* DUMMY!!! */
+void play_sound(uint32_t frequency) {
+    if (frequency == 0) return;
+
+    // The PIT internal oscillator runs at exactly 1193180 Hz
+    uint32_t divisor = 1193180 / frequency;
+
+    // 1. Configure PIT Channel 2 (Port 0x43)
+    // 0xB6 = 10110110b: Channel 2, Access low/high byte, Mode 3 (Square Wave), Binary
+    outb(0x43, 0xB6);
+
+    // 2. Set the frequency divisor (Port 0x42)
+    outb(0x42, (uint8_t)(divisor & 0xFF));        // Low byte
+    outb(0x42, (uint8_t)((divisor >> 8) & 0xFF)); // High byte
+
+    // 3. Connect Channel 2 output to the speaker and turn it on (Port 0x61)
+    uint8_t speaker_state = inb(0x61);
+    
+    // Bit 0: Connects PIT Channel 2 to the speaker gate
+    // Bit 1: Enables physical speaker data output
+    if ((speaker_state & 3) != 3) {
+        outb(0x61, speaker_state | 3);
+    }
+}
+
+void nosound(void) {
+    uint8_t speaker_state = inb(0x61) & 0xFC;
+    outb(0x61, speaker_state);
+}
+
+
 /*
  * Geometry of a 1.44MB floppy.
  */
@@ -231,9 +262,11 @@ static void FloppyMotor(struct floppy_data* flp, bool on) {
     if (on) {
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_ON);
         if (!flp->motor_on) {
+            play_sound(55);
             SleepMilli(MOTOR_SPINUP_MS);
         }
     } else {
+        nosound();
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_OFF);
     }
     flp->motor_on = on;
@@ -309,6 +342,7 @@ static int FloppySenseInterrupt(struct floppy_data* flp, int* st0, int* cyl) {
  * to see if we ended up at the right cylinder.
  */
 static int FloppyStep(struct floppy_data* flp, const uint8_t* cmd, int length, int target_cylinder) {
+    play_sound(99);
     for (int attempt = 0; attempt < 5; ++attempt) {
         int st0 = -1;
         int cyl = -1;
@@ -327,6 +361,7 @@ static int FloppyStep(struct floppy_data* flp, const uint8_t* cmd, int length, i
          */
         if ((st0 & (ST0_IC | ST0_EC)) == 0 && (st0 & ST0_SE) && cyl == target_cylinder) {
             SleepMilli(HEAD_SETTLE_MS);
+            play_sound(55);
             return 0;
         }
     }
@@ -486,6 +521,7 @@ static void FloppyDmaInit(struct floppy_data* flp, size_t length, bool write) {
  * Returns EROFS if the disk is write protected, EIO for any other failure.
  */
 static int FloppyTransferRun(struct floppy_data* flp, bool write, int cylinder, int head, int sector, int count) {
+    play_sound(99);
     const uint8_t cmd[] = {
         (write ? CMD_WRITE : CMD_READ) | CMD_FLAG_MFM,  /* No multi-track: we never cross a track. */
         head << 2,                  /* Head and drive 0. */
@@ -504,6 +540,7 @@ static int FloppyTransferRun(struct floppy_data* flp, bool write, int cylinder, 
     FloppyIrqArm();
 
     int error = FloppyCommand(flp, cmd, sizeof(cmd));
+
     if (error == 0) error = FloppyIrqWait(flp, IRQ_TIMEOUT_READ_MS);
     if (error == 0) error = FloppyResult(flp, res, sizeof(res));
     if (error != 0) return EIO;
@@ -519,6 +556,8 @@ static int FloppyTransferRun(struct floppy_data* flp, bool write, int cylinder, 
     if (res[1] & ST1_ERRORS) return EIO;
     if (res[2] & ST2_ERRORS) return EIO;
     if (res[6] != 2) return EIO;
+
+    play_sound(55);
 
     return 0;
 }

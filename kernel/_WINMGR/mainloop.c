@@ -180,6 +180,42 @@ static bool HandleMouse(int mx, int my, int click_bits) {
         CdDrawMouse(mouse_x, mouse_y);
     }
 
+    /* Cursor changing. We don't perform this if dragging/resizing in order to
+     * lock the cursor as it currently is (otherwise it'd reset to normal). */
+    if (moved && !dragging_win && !resizing_win) {
+        /* TODO: this should get deepest child, not toplevel */
+        WmLock();
+        struct window* deepest_child = WmGetToplevelAtPoint(mouse_x, mouse_y, false);
+        if (deepest_child != NULL) {
+            LogPrintf("deepest_child != NULL!\n");
+            struct point pt;
+            pt.x = mouse_x - deepest_child->global_offset_cached.x;
+            pt.y = mouse_y - deepest_child->global_offset_cached.y;
+            WmUnlock();
+            // SKETCHY - TODO: hold the lock and post to queue instead of direct call
+            WmCallWinProc(deepest_child, (struct msg) {
+                .win = deepest_child,
+                .type = WM_SETCURSOR,
+                .point_arg1 = pt
+            });
+            WmLock();
+        } else {
+            /* Not over any normal window - i.e. it's over the desktop. */
+            WmUnlock();
+            struct point pt;
+            pt.x = mouse_x;
+            pt.y = mouse_y;
+            // SKETCHY - TODO: hold the lock and post to queue instead of direct call
+            WmCallWinProc(WmGetDesktop(), (struct msg) {
+                .win = WmGetDesktop(),
+                .type = WM_SETCURSOR,
+                .point_arg1 = pt
+            });
+            WmLock();
+        }
+        WmUnlock();
+    }
+
     prev_mouse_buttons = mouse_buttons;
     mouse_buttons = click_bits;
 
@@ -326,16 +362,12 @@ _Noreturn void WmMainloop(void) {
         ProcessMessage(msg);
 
         if (anything_happened) {
-            PurgeScaledGlyphCacheIfNeeded();
             anything_happened = false;      
-
             RepaintIfNeeded(WmGetDesktop());
             RepaintIfNeeded(win);
             RepaintIfNeeded(win2);
             RepaintIfNeeded(win3);
         }
-
-
 
         {
             size_t kb_free = GetFreeMemory() / 1024;

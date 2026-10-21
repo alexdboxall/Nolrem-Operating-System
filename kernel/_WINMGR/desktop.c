@@ -23,22 +23,16 @@ int DesktopWinProc(struct window* win, struct msg msg) {
         return -1;
     }
     switch (msg.type) {
+    case WM_SETCURSOR:
+        CdSetStandardCursor(CURSOR_NORMAL);
+        return 0;
+
     case WM_PAINT: {
         struct dc* dc = WmBeginPaint(win);
         if (desktop_bitmap == NULL) {
             desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, wattle_bmp, 640, 480);
         }
         CdPaintBitmap(dc, desktop_bitmap, (struct point) {.x = 0, .y = 0});
-
-        // TODO: probably need struct compat_bitmap to be a real object with ref
-        //       stuff
-
-        //PlotBMP16(wattle_bmp, 0, 0, dc);
-        /*CdPaintRectWithBrush(dc, 
-            win->local_win_bound.x, win->local_win_bound.y,
-            win->local_win_bound.w, win->local_win_bound.h,
-            desktop_brush
-        );*/
         WmEndPaint(win, dc);
         return 0;
     }

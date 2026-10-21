@@ -349,6 +349,7 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_MOUSEUP              5
 #define WM_HITTEST              6  
 #define WM_TOPLEVEL_MOUSEDOWN   7
+#define WM_SETCURSOR            8
 
 #define HIT_TOP_BORDER      (1 << 0)
 #define HIT_LEFT_BORDER     (1 << 1)
@@ -369,3 +370,19 @@ typedef int (*winproc_t)(struct window* self, struct msg msg);
 struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, uint8_t* bmp);
 struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, uint8_t* bmp, int w, int h);
 int CdPaintBitmap(struct dc* dc, struct compat_bitmap* bitmap, struct point dest);
+
+
+
+/* Cursors */
+
+#define CURSOR_NORMAL   0
+#define CURSOR_TEXT     1
+#define CURSOR_WAIT     2
+#define CURSOR_TLDR     3
+#define CURSOR_VERT     4
+#define CURSOR_HORZ     5
+#define CURSOR_HAND     6
+#define CURSOR_TRDL     7
+
+int CdSetCursor(uint8_t* cursor_file_data, size_t file_length, size_t cursor_index);
+int CdSetStandardCursor(int index);

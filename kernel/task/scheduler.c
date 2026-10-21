@@ -275,21 +275,12 @@ void SwitchToThread(struct thread* thr) {
         }
     }
 
-    if (current_thread == thr) {
-        return;
-    }
-    LogPrintf("Switching 0x%X -> 0x%X\n", current_thread, thr);
-
     struct thread* old_thr = current_thread;
     current_thread = thr;
     current_thread->state = THREAD_STATE_RUNNING;
     current_thread->next_ready = NULL;
 
     last_task_switch_time = GetTimeSinceBoot();
-    LogPrintf("last_task_switch_time A: %d, %d\n",
-        (uint32_t) last_task_switch_time,
-        (uint32_t) (last_task_switch_time >> 32)
-    );
     /* TODO: set the VAS */
 
     //LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);

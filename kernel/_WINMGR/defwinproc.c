@@ -222,6 +222,39 @@ static int HandleToplevelMousedown(struct window* win, struct msg msg) {
     return retv;
 }
 
+static int HandleSetCursor(struct window* win, struct msg msg) {
+    /* 
+     * WM_SETCURSOR message goes to most nested child possible. Often they'll
+     * just default win proc it up to the parent, and through the chain until
+     * the toplevel says 'normal' or such.
+     */
+    WmLock();
+    if (win->parent == WmGetDesktop() || win->parent == NULL) {
+        int hit = HandleHitTest(win, msg.point_arg1);
+        if ((hit & HIT_RIGHT_BORDER) && (hit & HIT_BOTTOM_BORDER)) {
+            CdSetStandardCursor(CURSOR_TLDR);
+        } else if ((hit & HIT_LEFT_BORDER) && (hit & HIT_TOP_BORDER)) {
+            CdSetStandardCursor(CURSOR_TLDR);
+        } else if ((hit & HIT_RIGHT_BORDER) && (hit & HIT_TOP_BORDER)) {
+            CdSetStandardCursor(CURSOR_TRDL);
+        } else if ((hit & HIT_LEFT_BORDER) && (hit & HIT_BOTTOM_BORDER)) {
+            CdSetStandardCursor(CURSOR_TRDL);
+        } else if ((hit & HIT_RIGHT_BORDER) || (hit & HIT_LEFT_BORDER)) {
+            CdSetStandardCursor(CURSOR_HORZ);
+        } else if ((hit & HIT_TOP_BORDER) || (hit & HIT_BOTTOM_BORDER)) {
+            CdSetStandardCursor(CURSOR_VERT);
+        } else {
+            CdSetStandardCursor(CURSOR_NORMAL);
+        }
+        WmUnlock();
+        return 0;
+    }
+    // TODO: post to message queue a WM_SETCURSOR message for the parent
+    // might need to fiddle with the coords?
+    WmUnlock();
+    return 0;
+}
+
 export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
     switch (msg.type) {
     case WM_PAINT:
@@ -237,6 +270,9 @@ export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
 
     case WM_TOPLEVEL_MOUSEDOWN:
         return HandleToplevelMousedown(win, msg);
+
+    case WM_SETCURSOR:
+        return HandleSetCursor(win, msg);
 
     default:
         return -1;

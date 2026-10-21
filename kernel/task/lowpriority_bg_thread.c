@@ -34,8 +34,11 @@ void LowPriorityBackgroundThread(void*) {
 
         bool low_mem = IsMemoryRunningLow();
 
-        /* If idle for 300ms sec or more, start getting some zeroed out pages ready */
-        if (time_running_for_ns >= MS_TO_NS(300) && !low_mem) {
+        /* If idle for 50ms sec or more, start getting some zeroed out pages ready */
+        if (low_mem && spare_frame != 0) {
+            // Probably free it entirely. then spare_frame = 0
+        }
+        if (time_running_for_ns >= MS_TO_NS(50) && !low_mem) {
             if (spare_frame == 0) {
                 spare_frame = AllocPhys(true);
     
@@ -54,9 +57,9 @@ void LowPriorityBackgroundThread(void*) {
             }
         }
 
-        /* If idle for 2 sec or more, toss out any empty pages in the heap, unless we're starting to run
+        /* If idle for 0.5 sec or more, toss out any empty pages in the heap, unless we're starting to run
          * low on memory, in which case we'll do it quicker */
-        if (time_running_for_ns >= (low_mem ? MS_TO_NS(500) : MS_TO_NS(2000))) {
+        if (time_running_for_ns >= (low_mem ? MS_TO_NS(100) : MS_TO_NS(500))) {
             if (!done_heap_purge) KePurgeFreeAreasFromHeap();
             done_heap_purge = true;
         } else {

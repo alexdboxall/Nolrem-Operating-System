@@ -51,6 +51,12 @@ export size_t KeGetAllocationSize(void* ptr) {
     return GetAllocationSizeEx(&kernel_heap, ptr);
 }
 
+export void KePurgeFreeAreasFromHeap(void) {
+    AcquireSpinlock(&heap_lock);
+    PurgeFreeAreasFromHeapEx(&kernel_heap);
+    ReleaseSpinlock(&heap_lock);
+}
+
 export void* KeReallocHeap(void* ptr, size_t new_size) {
     if (ptr == NULL) {
         return KeAllocHeap(new_size);

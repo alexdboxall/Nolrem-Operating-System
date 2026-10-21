@@ -8,6 +8,7 @@ void FreeHeap(void* ptr);
 void* ReallocHeap(void* ptr, size_t new_size);
 size_t GetAllocationSize(void* ptr);
 size_t GetHeapAllocatedAmount(void);
+void KePurgeFreeAreasFromHeap(void);
 
 void InitBootstrapHeap(void);
 

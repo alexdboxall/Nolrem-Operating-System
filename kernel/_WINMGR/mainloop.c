@@ -224,6 +224,7 @@ struct window* win3;
 static void ProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
+        KePurgeFreeAreasFromHeap();
         DiscardPage();
         break;
 

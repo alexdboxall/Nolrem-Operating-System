@@ -32,26 +32,31 @@ void LowPriorityBackgroundThread(void*) {
         /* How long the idle task has been running for uninterrupted */
         uint64_t time_running_for_ns = (GetTimeSinceBoot() - last_task_switch_time);
 
-        /* We've been idle for 50ms or more, can start doing more interesting things. */
-        if (spare_frame == 0) {
-            spare_frame = AllocPhys(true);
+        bool low_mem = IsMemoryRunningLow();
 
-        } else if (!is_zeroed) {
-            ZeroPhysPage(spare_frame);
-            is_zeroed = true;
-
-        } else {
-            bool provided = ProvideZeroedPhys(spare_frame);
-            if (provided) {
-                spare_frame = 0;
-                is_zeroed = false;
+        /* If idle for 300ms sec or more, start getting some zeroed out pages ready */
+        if (time_running_for_ns >= MS_TO_NS(300) && !low_mem) {
+            if (spare_frame == 0) {
+                spare_frame = AllocPhys(true);
+    
+            } else if (!is_zeroed) {
+                ZeroPhysPage(spare_frame);
+                is_zeroed = true;
+    
             } else {
-                /* We'll try again next time around. */
+                bool provided = ProvideZeroedPhys(spare_frame);
+                if (provided) {
+                    spare_frame = 0;
+                    is_zeroed = false;
+                } else {
+                    /* We'll try again next time around. */
+                }
             }
         }
 
-        if (time_running_for_ns > MS_TO_NS(150)) {
-            /* If we've been idle a good length of time, we can do more expensive operations */
+        /* If idle for 2 sec or more, toss out any empty pages in the heap, unless we're starting to run
+         * low on memory, in which case we'll do it quicker */
+        if (time_running_for_ns >= (low_mem ? MS_TO_NS(500) : MS_TO_NS(2000))) {
             if (!done_heap_purge) KePurgeFreeAreasFromHeap();
             done_heap_purge = true;
         } else {

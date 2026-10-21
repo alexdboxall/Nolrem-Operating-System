@@ -437,7 +437,9 @@ static userexec struct block* AllocateBlock(
     }
 }
 
-export userexec void PurgeFreeAreasFromHeap(struct heap* heap) {
+export userexec void PurgeFreeAreasFromHeapEx(struct heap* heap) {
+    if (heap->return_memory == NULL) return;
+    
     struct block** head_list = GetHeap(heap);
 
     /* Only look at the largest list class. */
@@ -455,8 +457,9 @@ restart:
 
             size_t start_addr = (size_t) left_fencepost;
             size_t length = ((size_t) right_fencepost) + MIN_REQ_SIZE - start_addr;
-            // TODO: heap->return_memory(start_addr, length);
+            heap->return_memory((void*) start_addr, length);
             goto restart;
+            
         } else {
             block = block->next;
         }

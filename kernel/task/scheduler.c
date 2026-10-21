@@ -37,6 +37,9 @@ static bool sched_init = false;
 static struct msg defer_msg;
 static bool has_defer_msg = 0;
 
+/* Used so the low priority bg task can be more aggro when it's been running for a while */
+uint64_t last_task_switch_time = 0;
+
 bool IsSchedulingInitialised(void) {
     return sched_init;
 }
@@ -276,6 +279,8 @@ void SwitchToThread(struct thread* thr) {
     current_thread = thr;
     current_thread->state = THREAD_STATE_RUNNING;
     current_thread->next_ready = NULL;
+
+    last_task_switch_time = GetTimeSinceBoot();
     /* TODO: set the VAS */
 
     //LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);

@@ -8,28 +8,17 @@
 #include <vmm.h>
 
 #define ALIGN       (sizeof(size_t))    // must be power of 2
-#define BOOTSTRAP_HEAP_SIZE (1024 * 16)
 
-static uint8_t bootstrap_heap[BOOTSTRAP_HEAP_SIZE];
-static size_t bootstrap_heap_index = 0;
+static uint8_t bootstrap_heap[PAGE_SIZE];
+static bool given_bootstrap_heap = false;
 static struct spinlock heap_lock;
-
 static struct heap kernel_heap;
-
-static void* AllocBootstrapHeap(size_t bytes) {
-    if (bootstrap_heap_index + bytes > BOOTSTRAP_HEAP_SIZE) {
-        return NULL;
-    }
-
-    void* retv = bootstrap_heap + bootstrap_heap_index;
-    bootstrap_heap_index += bytes;
-    return retv;
-}
 
 export void* KeAllocHeap(size_t bytes) {
     if (bytes == 0) {
         return NULL;
     }
+    LogPrintf("AllocHeap...\n");
     AcquireSpinlock(&heap_lock);
     bytes = (bytes + ALIGN - 1) & ~(ALIGN - 1);
     void* retv = AllocHeapEx(&kernel_heap, bytes);
@@ -52,6 +41,7 @@ export size_t KeGetAllocationSize(void* ptr) {
 }
 
 export void KePurgeFreeAreasFromHeap(void) {
+    LogPrintf("KePurgeFreeAreasFromHeap\n");
     AcquireSpinlock(&heap_lock);
     PurgeFreeAreasFromHeapEx(&kernel_heap);
     ReleaseSpinlock(&heap_lock);
@@ -90,24 +80,33 @@ export void KeFreeHeap(void* ptr) {
 }
 
 void KernelHeapReturnMemory(void* ptr, size_t size) {
+    LogPrintf("Returning memory ptr=0x%X size=0x%X\n", ptr, size);
+    if ((uintptr_t) ptr == (uintptr_t) bootstrap_heap) {
+        LogPrintf("Can't return bootstrap heap!\n");
+        return;
+    }
     size_t addr = (size_t) ptr;
     if ((addr & (PAGE_SIZE - 1)) != 0) {
+        LogPrintf("BAD! 1\n");
         return;
     }
     if ((size & (PAGE_SIZE - 1)) != 0) {
+        LogPrintf("BAD! 2\n");
         return;
     }
     FreeMemory(ptr, size);
+    LogPrintf("Returned memory.\n");
 }
 
 void* KernelHeapRequestMemory(size_t* size) {
-    *size = (*size + 1023) & ~1023;
-    void* retv = AllocBootstrapHeap(*size);
-    if (retv != NULL) {
-        return retv;
+    if (!given_bootstrap_heap) {
+        given_bootstrap_heap = true;
+        *size = sizeof(bootstrap_heap);
+        return bootstrap_heap;
     }
-    retv = AllocAnonMemory(*size, VP_WRITE);
+    void* retv = AllocAnonMemory(*size, VP_WRITE);
     *size = (*size + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1));
+    LogPrintf("KernelHeapRequestMemory: giving memory ptr=0x%X size=0x%X\n", retv, *size);
     return retv;
 }
 

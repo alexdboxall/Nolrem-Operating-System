@@ -60,6 +60,7 @@ export _Noreturn void InitKernelResidentPortion(void) {
 export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     InitLog();
     InitBootstrapHeap();
+    InitVmm();
     InitCpuTable();
     InitKernelVirtArena();
     InitTimer();
@@ -75,7 +76,6 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
      * InitPhys ends by reclaiming the RAM used behind `boot_info`. */
     boot_info = NULL;
 
-    InitVmm();
     InitSem();
     InitThread();
     CreateInitialVas();

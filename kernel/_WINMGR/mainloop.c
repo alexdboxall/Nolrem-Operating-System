@@ -5,6 +5,7 @@
 #include <mutex.h>
 #include <msgbox.h>
 #include <vfs.h>
+#include <timer.h>
 #include <string.h>
 #include <spinlock.h>
 #include <arch.h>
@@ -269,6 +270,7 @@ static void TestDiskRead(void*) {
     DerefObject(f);
 
     while (true) {
+        SleepMilli(100000);
         Schedule();
     }
 }
@@ -306,7 +308,16 @@ _Noreturn void WmMainloop(void) {
         .type = WM_PAINT
     });
 
+    void* things[100];
+    for (int i = 0; i < 100; ++i) {
+        things[i] = AllocHeap(1000);
+    }
+    for (int i = 0; i < 100; ++i) {
+        FreeHeap(things[i]);
+    }
+
     CreateThread(GetKernelVas(), TestDiskRead, NULL);
+
 
     size_t prev_kb_free = 0;
     while (true) {

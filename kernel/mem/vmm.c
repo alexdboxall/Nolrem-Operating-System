@@ -52,6 +52,7 @@ void* VmmSpecialHeapGetMemory(size_t* bytes) {
         used_vmm_bootstrap_page = true;
         *bytes = sizeof(vmm_heap_bootstrap_page);
         return vmm_heap_bootstrap_page;
+
     } else {
         size_t virt = AllocVirt(*bytes);
         size_t pages = (*bytes + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -457,7 +458,7 @@ void InitVmm(void) {
     RegisterObjectType(OBJTYPE_VAS, CleanupVas);
     RegisterObjectType(OBJTYPE_PAGE_VIRT, CleanupVirtPage);
     InitSpinlock(&vmm_heap_lock);
-    InitHeapEx(&vmm_special_heap, VmmSpecialHeapGetMemory);
+    InitHeapEx(&vmm_special_heap, VmmSpecialHeapGetMemory, NULL);
 }
 
 /* Caller must hold pp->lock. */

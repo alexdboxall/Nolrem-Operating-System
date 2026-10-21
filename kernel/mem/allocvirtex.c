@@ -3,6 +3,7 @@
 #include <arch.h>
 #include <allocvirt.h>
 #include <heap.h>
+#include <vmm.h>
 
 /* 
  * FreeVirtEx USES THE HEAP! (TO ALLOCATE!)
@@ -10,7 +11,7 @@
  * PAGE FAULT HANDLING!) IF YOU'RE ON THE 'FAULT PATH'!
  * 
  * Note that if you're in the 'file backed page fault' path, you're not on the
- * critical path - it's the AllocHeap chain (anon pages) that can't use this.
+ * critical path - it's the AllocVmmHeap chain (anon pages) that can't use this.
  */
 struct virt_range {
     size_t start_addr;
@@ -19,7 +20,7 @@ struct virt_range {
 };
  
 export void InitVirtArena(struct virt_arena* va, size_t start, size_t bytes) {
-    va->free_list_head = AllocHeap(sizeof(struct virt_range));
+    va->free_list_head = AllocVmmHeap(sizeof(struct virt_range));
     va->free_list_head->start_addr = start;
     va->free_list_head->pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     va->free_list_head->next = NULL;
@@ -45,7 +46,7 @@ export size_t AllocVirtEx(struct virt_arena* va, size_t bytes) {
                     va->free_list_head = curr->next;
                 }
                 ReleaseSpinlock(&va->lock);
-                FreeHeap(curr);
+                FreeVmmHeap(curr);
                 return retv;
 
             } else {
@@ -83,7 +84,7 @@ export void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes) {
         prev->pages += pages + curr->pages;
         prev->next = curr->next;
         ReleaseSpinlock(&va->lock);
-        FreeHeap(curr);
+        FreeVmmHeap(curr);
         return;
     }
 
@@ -100,7 +101,7 @@ export void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes) {
         return;
     }
 
-    struct virt_range* node = AllocHeap(sizeof(struct virt_range));
+    struct virt_range* node = AllocVmmHeap(sizeof(struct virt_range));
     node->start_addr = start_addr;
     node->pages = pages;
     node->next = curr;

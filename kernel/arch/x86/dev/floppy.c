@@ -27,32 +27,21 @@
 
 /* DUMMY!!! */
 void play_sound(uint32_t frequency) {
-    if (frequency == 0) return;
-
-    // The PIT internal oscillator runs at exactly 1193180 Hz
+    (void) frequency;
+    /*if (frequency == 0) return;
     uint32_t divisor = 1193180 / frequency;
-
-    // 1. Configure PIT Channel 2 (Port 0x43)
-    // 0xB6 = 10110110b: Channel 2, Access low/high byte, Mode 3 (Square Wave), Binary
     outb(0x43, 0xB6);
-
-    // 2. Set the frequency divisor (Port 0x42)
     outb(0x42, (uint8_t)(divisor & 0xFF));        // Low byte
     outb(0x42, (uint8_t)((divisor >> 8) & 0xFF)); // High byte
-
-    // 3. Connect Channel 2 output to the speaker and turn it on (Port 0x61)
     uint8_t speaker_state = inb(0x61);
-    
-    // Bit 0: Connects PIT Channel 2 to the speaker gate
-    // Bit 1: Enables physical speaker data output
     if ((speaker_state & 3) != 3) {
         outb(0x61, speaker_state | 3);
-    }
+    }*/
 }
 
 void nosound(void) {
-    uint8_t speaker_state = inb(0x61) & 0xFC;
-    outb(0x61, speaker_state);
+    //uint8_t speaker_state = inb(0x61) & 0xFC;
+    //outb(0x61, speaker_state);
 }
 
 

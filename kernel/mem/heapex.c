@@ -203,6 +203,14 @@ static userexec bool IsFencepost(struct block* block) {
     return block->size & 2;
 }
 
+/**
+ * Given a block, returns its total size, including metadata. This takes into 
+ * account the flags on the size field and removes them from the return value. 
+ */
+static userexec size_t GetSize(struct block* block) {
+    return block->size & ~7;
+}
+
 static userexec bool DoesFreeBlockSpanEntireChunk(struct block* block) {
     if (IsAllocated(block)) {
         return false;
@@ -218,13 +226,6 @@ static userexec struct block** GetHeap(struct heap* heap) {
     return heap->_head_block;
 }
 
-/**
- * Given a block, returns its total size, including metadata. This takes into 
- * account the flags on the size field and removes them from the return value. 
- */
-static userexec size_t GetSize(struct block* block) {
-    return block->size & ~7;
-}
 
 /**
  * Sets the *total* size of a given block. This does not do any checking, so the

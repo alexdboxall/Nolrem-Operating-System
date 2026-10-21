@@ -118,3 +118,7 @@ void ZeroPhysPage(size_t phys);
 struct phys_page* DiscardPage(void);
 
 void MarkPageableSegmentsDiscardable(void);
+
+
+void* AllocVmmHeap(size_t bytes);
+void FreeVmmHeap(void* ptr);

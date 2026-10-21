@@ -26,8 +26,8 @@ void LowPriorityBackgroundThread(void*) {
         }
 
         /* As we don't yet have a way to pre-empt, manually switch. */
-        Schedule();
         ArchIdle();
+        Schedule();
 
         /* How long the idle task has been running for uninterrupted */
         uint64_t time_running_for_ns = (GetTimeSinceBoot() - last_task_switch_time);
@@ -36,12 +36,13 @@ void LowPriorityBackgroundThread(void*) {
 
         /* If idle for 50ms sec or more, start getting some zeroed out pages ready */
         if (low_mem && spare_frame != 0) {
-            // Probably free it entirely. then spare_frame = 0
+            // Probably free it entirely. then spare_frame = 0 and is_zeroed = false
         }
         if (time_running_for_ns >= MS_TO_NS(50) && !low_mem) {
             if (spare_frame == 0) {
                 spare_frame = AllocPhys(true);
-    
+                is_zeroed = false;
+                
             } else if (!is_zeroed) {
                 ZeroPhysPage(spare_frame);
                 is_zeroed = true;

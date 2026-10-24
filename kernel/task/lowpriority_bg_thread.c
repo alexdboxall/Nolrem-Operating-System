@@ -8,6 +8,7 @@
 #include <vmm.h>
 #include <heap.h>
 #include <timer.h>
+#include <vfs.h>
 #include <panic.h>
 
 extern volatile uint64_t last_task_switch_time;
@@ -19,6 +20,7 @@ void LowPriorityBackgroundThread(void*) {
     size_t spare_frame = 0;
     bool is_zeroed = false;
     bool done_heap_purge = false;
+    bool done_vnode_purge = false;
 
     while (true) {
         if (!ArchAreInterruptsEnabled()) {
@@ -31,7 +33,7 @@ void LowPriorityBackgroundThread(void*) {
 
         /* How long the idle task has been running for uninterrupted */
         uint64_t time_running_for_ns = (GetTimeSinceBoot() - last_task_switch_time);
-        
+
         bool low_mem = IsMemoryRunningLow();
 
         /* If idle for 50ms sec or more, start getting some zeroed out pages ready */
@@ -65,6 +67,13 @@ void LowPriorityBackgroundThread(void*) {
             done_heap_purge = true;
         } else {
             done_heap_purge = false;
+        }
+
+        if (time_running_for_ns >= (low_mem ? MS_TO_NS(300) : MS_TO_NS(3000))) {
+            if (!done_vnode_purge) PurgeOldVnodes();
+            done_vnode_purge = true;
+        } else {
+            done_vnode_purge = false;
         }
     }
 }

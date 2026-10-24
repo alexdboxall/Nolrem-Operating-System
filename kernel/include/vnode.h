@@ -9,6 +9,12 @@
 
 struct vnode;
 
+struct vnode_tree_link {
+    struct vnode* left;
+    struct vnode* right;
+    int8_t height;
+};
+
 /*
 * Operations which can be performed on an abstract file. They may be left NULL,
 * in this case, a default return value is supplied.
@@ -98,6 +104,8 @@ struct vnode {
     void* data;
     struct stat stat;
 
+    struct vnode_tree_link tree;
+    
     /*
      * O_NONBLOCK
      */

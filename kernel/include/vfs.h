@@ -22,3 +22,13 @@ int RemoveFileOrDirectory(const char* path, bool rmdir);
 int SetWorkingDirectory(struct vnode* node);
 
 int NextDevId(void);
+
+struct vnode* TryFindAndReferenceExistingVnode(ino_t id, dev_t dev);
+int RegisterNewVnode(struct vnode* node);
+void PurgeOldVnodes(void);
+
+// TODO: how do we remove vnodes from the table? race between removing from table
+// after ref count = 0 and someone looking up a vnode in the table
+// or actually could make the table keep a ref... and have it keep recently closed
+// and then have bg thread cleanup thread could sometimes lock the tree and clear out
+// refcount = 1 (i.e. only the table) nodes

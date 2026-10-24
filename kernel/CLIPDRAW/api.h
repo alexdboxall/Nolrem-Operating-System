@@ -384,5 +384,15 @@ int CdPaintBitmap(struct dc* dc, struct compat_bitmap* bitmap, struct point dest
 #define CURSOR_HAND     6
 #define CURSOR_TRDL     7
 
-int CdSetCursor(uint8_t* cursor_file_data, size_t file_length, size_t cursor_index);
+struct cursor* CdCreateCursor(void* file_data, size_t length);
+int CdSetCursor(struct cursor* cur, size_t cursor_index);
 int CdSetStandardCursor(int index);
+
+
+
+/* Carets */
+
+int CdClaimCaret(struct window* win, int width, int height);
+void CdShowCaret(struct window* win);
+void CdHideCaret(struct window* win);
+void CdMoveCaret(struct window* win, int x, int y);

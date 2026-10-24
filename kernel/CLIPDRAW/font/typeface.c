@@ -5,53 +5,6 @@
 #include "../api.h"
 #include "../clipdraw_internal.h"
 
-
-/*
-struct typeface_file_header {
-    char signature[3];
-    uint8_t version;
-    uint8_t num_fonts;
-    char name[27];
-    struct {
-        font_style_id style;
-        uint32_t file_offset;
-        uint32_t font_length;
-    } font_entries[];
-};
-
-struct font_file_header {
-    uint32_t min_char;
-    uint32_t num_chars;
-    uint16_t fixed_width;
-    uint16_t avg_advance;
-    uint16_t ascend_px;
-    uint16_t height_px;
-    uint8_t is_large_font; 
-    uint8_t is_32bit_glyph_offsets; 
-    uint32_t gap_table_offset;
-    uint32_t kern_table_offset;
-    uint32_t glyph_table_offset;
-};
-
-Glyph table:
-    uint16/32_t offsets[];
-    // where the offsets are also relative to `glyph_table_offset`
-
-Glyph data:
-    uint8/16_t bitmap_width;
-    uint8/16_t advance;
-    uint8_t glyph[];
-
-Gap data:
-    uint32_t num_gaps;
-    struct {
-        uint8/16/32_t if;
-        uint8/16/32_t then;
-    } gaps[];
-
-*/
-
-
 export pageable struct typeface* CdOpenTypeface(const char* file) {
     struct typeface* tf = AllocHeap(sizeof(struct typeface));
     if (tf == NULL) {
@@ -61,6 +14,7 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
 
     int res = OpenAndMapFile(file, &tf->omf);
     if (res != 0) {
+        FreeHeap(tf);
         return NULL;
     }
 
@@ -69,8 +23,6 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
     uint8_t sig3 = OmfRead8AndAdvance(&tf->omf);
     uint8_t ver  = OmfRead8AndAdvance(&tf->omf);
     if (sig1 != 'T' || sig2 != 'Y' || sig3 != 'P' || ver != 0x00) {
-        /* Omf will also be closed at the cleanup, but Omf is fine to 
-         * double close*/
         goto fail_after_open;
     }
 
@@ -82,7 +34,8 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
     return tf;
 
 fail_after_open:
-    OmfClose(&tf->omf);
+    /* CleanupTypeface closes the Omf and frees tf. */
+    DerefObject(tf);
     return NULL;
 }
 
@@ -100,14 +53,17 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
 
     fn->tf = tf;
     fn->requested_style = style;
+    fn->index = 0;
     fn->underlying_style = CdGetTypefaceClosestStyle(tf, style, &fn->index);
 
-    OmfAdvance(&tf->omf, 32 + fn->index * 12);
+    /* Both of these are absolute positions in the file, so they are jumps,
+     * not advances from wherever the cursor happens to be. */
+    OmfJump(&tf->omf, 32 + fn->index * 12);
     font_style_id underlying_again = OmfRead32AndAdvanceLE(&tf->omf);
     fn->file_offset = OmfRead32AndAdvanceLE(&tf->omf);
     fn->font_length = OmfRead32AndAdvanceLE(&tf->omf);
 
-    OmfAdvance(&tf->omf, fn->file_offset);
+    OmfJump(&tf->omf, fn->file_offset);
     fn->min_char = OmfRead32AndAdvanceLE(&tf->omf);
     fn->num_chars = OmfRead32AndAdvanceLE(&tf->omf);
     fn->fixed_width = OmfRead16AndAdvanceLE(&tf->omf);
@@ -169,7 +125,7 @@ export pageable int CdGetTypefaceName(struct typeface* tf, char* out_buffer, siz
 }
 
 export pageable font_style_id CdEnumerateTypefaceStyle(struct typeface* tf, int index) {
-    if (tf == NULL || index >= 256 || index < 0) {
+    if (tf == NULL || index < 0 || index >= (int)tf->num_fonts) {
         return INVALID_FONT_STYLE;
     }
     JUMP_OMF(32 + index * 12, INVALID_FONT_STYLE);
@@ -179,6 +135,9 @@ export pageable font_style_id CdEnumerateTypefaceStyle(struct typeface* tf, int 
 }
 
 export pageable font_style_id CdGetTypefaceClosestStyle(struct typeface* tf, font_style_id style, int* best_index) {
+    if (best_index != NULL) {
+        *best_index = 0;
+    }
     if (tf == NULL || tf->num_fonts == 0) {
         return INVALID_FONT_STYLE;
     }
@@ -190,20 +149,23 @@ export pageable font_style_id CdGetTypefaceClosestStyle(struct typeface* tf, fon
     font_style_id best = INVALID_FONT_STYLE;
     uint32_t best_penalty = UINT32_MAX;
 
-    if (best_index != NULL) {
-        *best_index = 0;
-    }
-
     JUMP_OMF(32, INVALID_FONT_STYLE);
     for (int i = 0; i < tf->num_fonts; ++i) {
-        font_style_id val = OmfRead32AndAdvanceLE(&tf->omf);
+        font_style_id val = OmfRead32LE(&tf->omf);
         FAIL_ERR(INVALID_FONT_STYLE);
+        /* Entries are 12 bytes (style, file_offset, font_length), so step 
+         * over the other two fields to reach the next style. */
+        ADV_OMF(12, INVALID_FONT_STYLE);
 
+        /* Size dominates. Prefer larger over smaller, since shrinking
+         * a bitmap loses less than stretching it. */
         int size = GetFontStylePointsIn20ths(val);
         uint32_t size_penalty = (size >= want_size)
             ? (uint32_t)(size - want_size)
             : (uint32_t)(want_size - size) * 2;
 
+        /* Bold next (a faked bold changes glyph widths), then italic
+         * (a faked italic is just a shear). */
         uint32_t bold_penalty   = (IsFontStyleBold(val)   != want_bold)   ? 1 : 0;
         uint32_t italic_penalty = (IsFontStyleItalic(val) != want_italic) ? 1 : 0;
         uint32_t penalty = (size_penalty << 2) | (bold_penalty << 1) | italic_penalty;
@@ -231,13 +193,15 @@ export pageable bool CdCheckTypefaceForStyle(struct typeface* tf, font_style_id 
 static uint32_t ReadAndAdvanceCodePointSize(struct font* fn) {
     if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
         return OmfRead8AndAdvance(&fn->tf->omf);
-    } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
+    } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
         return OmfRead16AndAdvanceLE(&fn->tf->omf);
     } else {
         return OmfRead32AndAdvanceLE(&fn->tf->omf);
     }
 }
 
+/* Maps a code point to an index into the glyph table, or BAD_GLYPH_CHAR if the
+ * font has no glyph for it. */
 static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
     if (c < fn->min_char) {
         return BAD_GLYPH_CHAR;
@@ -245,27 +209,35 @@ static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
     c -= fn->min_char;
     if (fn->gap_table_offset != 0) {
         OmfJump(&fn->tf->omf, fn->file_offset + fn->gap_table_offset);
-        int num_gaps = OmfRead32AndAdvanceLE(&fn->tf->omf);
+        uint32_t num_gaps = OmfRead32AndAdvanceLE(&fn->tf->omf);
         if (fn->tf->omf.error) {
             return BAD_GLYPH_CHAR;
         }
-        for (int i = 0; i < num_gaps; ++i) {
+        for (uint32_t i = 0; i < num_gaps; ++i) {
             uint32_t if_this = ReadAndAdvanceCodePointSize(fn);
             uint32_t then_sub = ReadAndAdvanceCodePointSize(fn);
             if (fn->tf->omf.error) {
                 return BAD_GLYPH_CHAR;
             }
+            if (then_sub > if_this) {
+                /* Corrupt: the gap would start before the first code point. */
+                return BAD_GLYPH_CHAR;
+            }
             if (c >= if_this) {
-                if (c < then_sub) {
-                    return BAD_GLYPH_CHAR;
-                }
+                /* Past this gap: close up the space it leaves. */
                 c -= then_sub;
             } else {
+                /* Before this gap. If we're inside it, there's no glyph. The
+                 * gap occupies [if_this - then_sub, if_this) in the running
+                 * value. Entries are sorted, so either way we're done. */
+                if (c >= if_this - then_sub) {
+                    return BAD_GLYPH_CHAR;
+                }
                 break;
             }
         }
     }
-    if (c > fn->num_chars) {
+    if (c >= fn->num_chars) {
         return BAD_GLYPH_CHAR;
     }
     return c;
@@ -273,18 +245,22 @@ static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
 
 static bool AdvanceToGlyphData(struct font* fn, uint32_t c) {
     uint32_t index = GetGlyphIndex(fn, c);
-    if (c == BAD_GLYPH_CHAR) {
+    if (index == BAD_GLYPH_CHAR) {
         return false;
     }
+    uint32_t table_pos = fn->file_offset + fn->glyph_table_offset;
     OmfJump(&fn->tf->omf, 
-        fn->file_offset 
-        + fn->glyph_table_offset
-        + (fn->is_32bit_glyph_offsets ? 4 : 2) * index);
-    uint32_t pos = fn->file_offset + fn->glyph_table_offset;
+        table_pos + (fn->is_32bit_glyph_offsets ? 4 : 2) * index);
+
+    /* Offsets in the glyph table are relative to the start of the table. */
+    uint32_t pos = table_pos;
     if (fn->is_32bit_glyph_offsets) {
         pos += OmfRead32LE(&fn->tf->omf);
     } else {
         pos += OmfRead16LE(&fn->tf->omf);
+    }
+    if (fn->tf->omf.error) {
+        return false;
     }
     OmfJump(&fn->tf->omf, pos);
     return !fn->tf->omf.error;
@@ -299,12 +275,20 @@ struct glyph_data {
 };
 
 export pageable uint8_t* ScaleGlyphData(uint8_t* glyph, int old_w, int old_h, int new_w, int new_h) {
-    int new_chunks = (new_w + 7) >> 3;
-    uint8_t* new_glyph = AllocHeap(new_chunks * new_h);
-    uint8_t* out = new_glyph;
     int c, k, dy;
 
-    if (old_w <= 0 || old_h <= 0 || new_w <= 0 || new_h <= 0) {
+    if (new_w <= 0 || new_h <= 0) {
+        return NULL;
+    }
+
+    int new_chunks = (new_w + 7) >> 3;
+    uint8_t* new_glyph = AllocHeap(new_chunks * new_h);
+    if (new_glyph == NULL) {
+        return NULL;
+    }
+    uint8_t* out = new_glyph;
+
+    if (glyph == NULL || old_w <= 0 || old_h <= 0) {
         for (k = new_chunks * new_h; k > 0; k--) *out++ = 0;
         return new_glyph;
     }
@@ -360,7 +344,16 @@ export pageable uint8_t* ScaleGlyphData(uint8_t* glyph, int old_w, int old_h, in
 
 export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
     struct glyph_data data;
+    data.width_px = 0;
+    data.height_px = 0;
+    data.advance = 0;
+    data.absolute_advance_to_bitmap = 0;
     data.error = false;
+
+    if (fn == NULL) {
+        data.error = true;
+        return data;
+    }
     data.height_px = fn->height_px;
     
     bool ok = AdvanceToGlyphData(fn, c);

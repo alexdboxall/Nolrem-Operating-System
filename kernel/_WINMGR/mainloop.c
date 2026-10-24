@@ -186,7 +186,7 @@ static bool HandleMouse(int mx, int my, int click_bits) {
         /* TODO: this should get deepest child, not toplevel */
         WmLock();
         struct window* deepest_child = WmGetToplevelAtPoint(mouse_x, mouse_y, false);
-        if (deepest_child != NULL) {
+        if (deepest_child != NULL && WmGetForegroundWindow() == deepest_child) {
             LogPrintf("deepest_child != NULL!\n");
             struct point pt;
             pt.x = mouse_x - deepest_child->global_offset_cached.x;
@@ -265,6 +265,7 @@ static void ProcessMessage(struct msg msg) {
     case SYSMSG_LOWMEMORY:
         DiscardPage();
         PurgeScaledGlyphCacheIfNeeded();
+        PurgeOldVnodes();
         KePurgeFreeAreasFromHeap();
         break;
 

@@ -525,68 +525,67 @@ static void DiscardVirt(struct phys_page* pp, struct virt_page* vp) {
 }
 
 /*
+ * Clock hand: resumes where the last reclaim stopped. Racy updates between
+ * concurrent reclaimers are harmless - the worst case is both start at the
+ * same page and the second blocks on pp->lock and then fails the recheck.
+ */
+static struct phys_page* clock_hand = NULL;
+
+#define LRU_REFERENCED 0x8000
+
+/*
  * Discards a physical page if possible. If so, it will return the phys_page
  * object, with the critical section already held. If not, it will return NULL.
  *
- * TODO: this is deliberately the dumb version - it unmaps every candidate page
- * in the system on every reclaim attempt, just to sample LRU. Wants replacing
- * with a resuming clock hand that stops at the first acceptable page.
+ * Second-chance clock: the accessed bit harvested by EnterCriticalVirt()
+ * lands in LRU_REFERENCED. A referenced page has the bit cleared and is
+ * skipped; an unreferenced one is the victim. Two full sweeps are enough to
+ * either find a victim or conclude there isn't one.
  */
 static struct phys_page* FindDiscardPage(void) {
-    struct phys_page* best = NULL;
-    uint16_t min_lru = 0xFFFF;
+    struct phys_page* curr = clock_hand != NULL ? clock_hand : GetFirstPhysPage();
+    int wraps = 0;
 
-    /*
-     * Pass 1: age and sample. Exactly one page is held at a time and it is
-     * always released before moving on. The old version kept 'chosen' locked
-     * for the remainder of the scan while acquiring later pages, which gave two
-     * concurrent reclaimers a textbook ABBA deadlock.
-     */
-    for (struct phys_page* curr = GetFirstPhysPage(); curr != NULL; curr = GetNextPhysPage(curr)) {
-        /* Cheap pre-filter. State can change before we take the critical
-         * section, but we're only ruling pages out, so it can't hurt. */
-        AcquireSpinlock(&curr->lock);
-        bool candidate = curr->wired == 0
-                      && (curr->origin != NULL && curr->origin->is_file)
-                      && (curr->vas != NULL || curr->chain != NULL);
-        if (candidate) {
-            curr->lru >>= 1;    /* age first; Enter puts the new bit back in */
+    while (curr != NULL) {
+        struct phys_page* pp = curr;
+
+        curr = GetNextPhysPage(pp);
+        if (curr == NULL) {
+            curr = GetFirstPhysPage();
+            if (++wraps > 2) {
+                break;
+            }
         }
-        ReleaseSpinlock(&curr->lock);
 
+        /* Cheap pre-filter under the lock, so we only unmap real candidates. */
+        AcquireSpinlock(&pp->lock);
+        bool candidate = pp->wired == 0
+                      && pp->origin != NULL && pp->origin->is_file
+                      && (pp->vas != NULL || pp->chain != NULL);
+        ReleaseSpinlock(&pp->lock);
         if (!candidate) {
             continue;
         }
 
-        EnterPhysPageCriticalSection(curr);
-        bool usable = curr->wired == 0
-                   && !curr->dirty
-                   && curr->origin != NULL
-                   && curr->origin->is_file;
-        uint16_t lru = curr->lru;
-        LeavePhysPageCriticalSection(curr);
+        EnterPhysPageCriticalSection(pp);   /* harvests accessed/dirty */
+        bool usable = pp->wired == 0
+                   && !pp->dirty
+                   && pp->origin != NULL && pp->origin->is_file
+                   && (pp->vas != NULL || pp->chain != NULL);
 
-        if (usable && lru < min_lru) {
-            min_lru = lru;
-            best = curr;
+        if (usable && !(pp->lru & LRU_REFERENCED)) {
+            clock_hand = curr;
+            return pp;                      /* still held, as DiscardPage expects */
         }
+
+        if (usable) {
+            pp->lru &= ~LRU_REFERENCED;     /* second chance */
+        }
+        LeavePhysPageCriticalSection(pp);
     }
 
-    if (best == NULL) {
-        return NULL;
-    }
-
-    /* Pass 2: re-acquire and revalidate; the world moved while we scanned. */
-    EnterPhysPageCriticalSection(best);
-    if (best->wired
-        || best->dirty
-        || best->origin == NULL
-        || !best->origin->is_file
-        || (best->vas == NULL && best->chain == NULL)) {
-        LeavePhysPageCriticalSection(best);
-        return NULL;
-    }
-    return best;
+    clock_hand = curr;
+    return NULL;
 }
 
 /*

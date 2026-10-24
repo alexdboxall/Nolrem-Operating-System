@@ -28,6 +28,11 @@ static inline uint8_t KeGetObjectType(void* _o) {
     return obj->ref_count >> 27;
 }
 
+static inline int KeGetRefCount(void* _o) {
+    struct obj_header* obj = _o;
+    return obj->ref_count & 0x7FFFFFF;
+}
+
 struct user_obj_header {
     struct obj_header hdr;
     uint8_t user_ref_count;
@@ -40,8 +45,6 @@ void RegisterObjectType(uint8_t type, void(*cleanup_func)(void*));
 void InitObject(void* obj, uint8_t type);
 void RefObject(void* obj);
 void DerefObject(void* obj);
-
-
 
 void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*));
 void InitUserObjectType(void);

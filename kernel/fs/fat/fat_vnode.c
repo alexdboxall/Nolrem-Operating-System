@@ -71,6 +71,11 @@ static int Follow(struct vnode* node, struct vnode** out, const char* name) {
     /*
     * TODO: return existing vnode if someone opens the same file twice...
     */
+    struct vnode* existing = TryFindAndReferenceExistingVnode(info.ino, node->stat.st_dev);
+    if (existing) {
+        *out = existing;
+        return 0;
+    }
 
     struct vnode_data* child_data = AllocHeap(sizeof(struct vnode_data));
     if (child_data == NULL) {
@@ -86,7 +91,7 @@ static int Follow(struct vnode* node, struct vnode** out, const char* name) {
     child_node->data = child_data;
 
     *out = child_node;
-    return 0;
+    return RegisterNewVnode(child_node);
 }
 
 static const struct vnode_operations dev_ops = {

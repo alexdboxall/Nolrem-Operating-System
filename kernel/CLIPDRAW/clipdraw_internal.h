@@ -26,6 +26,7 @@
 #define UOBJ_MAILBOX             17
 #define UOBJ_REGION              18
 #define UOBJ_DC                  19
+#define UOBJ_CURSOR              20
 
 /* INTERNAL ONLY */
 

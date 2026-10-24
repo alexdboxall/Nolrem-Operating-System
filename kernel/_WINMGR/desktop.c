@@ -45,5 +45,5 @@ int DesktopWinProc(struct window* win, struct msg msg) {
 void WmInitDesktopWindowSubsystem() {
     desktop_brush = CdCreateSolidBrush(DESKTOP_COLOUR);
     WmCreateWindowClass(".DESKTOP", DesktopWinProc, CS_ALLCLIENT);
-    desktop_window = WmCreateWindow(NULL, ".DESKTOP", (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
+    desktop_window = WmCreateWindow(NULL, NULL, ".DESKTOP", (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
 }

@@ -183,11 +183,11 @@ static bool HandleMouse(int mx, int my, int click_bits) {
     /* Cursor changing. We don't perform this if dragging/resizing in order to
      * lock the cursor as it currently is (otherwise it'd reset to normal). */
     if (moved && !dragging_win && !resizing_win) {
-        /* TODO: this should get deepest child, not toplevel */
         WmLock();
-        struct window* deepest_child = WmGetToplevelAtPoint(mouse_x, mouse_y, false);
-        if (deepest_child != NULL && WmGetForegroundWindow() == deepest_child) {
-            LogPrintf("deepest_child != NULL!\n");
+        struct window* deepest_child = WmGetDeepestAtPoint(mouse_x, mouse_y, false);
+        if (deepest_child != NULL && (
+            WmGetForegroundWindow() == deepest_child || WmIsAncestor(WmGetForegroundWindow(), deepest_child)
+        )) {
             struct point pt;
             pt.x = mouse_x - deepest_child->global_offset_cached.x;
             pt.y = mouse_y - deepest_child->global_offset_cached.y;
@@ -328,9 +328,9 @@ _Noreturn void WmMainloop(void) {
         .x = 50, .y = 50, .w = 50, .h = 50
     };
 
-    win = WmCreateWindow(WmGetDesktop(), NULL, w1pos, true);
-    win2 = WmCreateWindow(WmGetDesktop(), NULL, w2pos, true);
-    win3 = WmCreateWindow(win2, NULL, w3pos, true);
+    win = WmCreateWindow(NULL, WmGetDesktop(), NULL, w1pos, true);
+    win2 = WmCreateWindow(NULL, WmGetDesktop(), NULL, w2pos, true);
+    win3 = WmCreateWindow(NULL, win2, NULL, w3pos, true);
     
     WmCallWinProc(WmGetDesktop(), (struct msg) {
         .type = WM_PAINT
@@ -354,7 +354,6 @@ _Noreturn void WmMainloop(void) {
     }
 
     CreateThread(GetKernelVas(), TestDiskRead, NULL);
-
 
     size_t prev_kb_free = 0;
     while (true) {

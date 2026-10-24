@@ -27,7 +27,6 @@ void LowPriorityBackgroundThread(void*) {
             Panic(PANIC_FUCK_ME);
         }
 
-        /* As we don't yet have a way to pre-empt, manually switch. */
         ArchIdle();
         Schedule();
 
@@ -36,11 +35,11 @@ void LowPriorityBackgroundThread(void*) {
 
         bool low_mem = IsMemoryRunningLow();
 
-        /* If idle for 50ms sec or more, start getting some zeroed out pages ready */
+        /* If idle for 75ms sec or more, start getting some zeroed out pages ready */
         if (low_mem && spare_frame != 0) {
             // Probably free it entirely. then spare_frame = 0 and is_zeroed = false
         }
-        if (time_running_for_ns >= MS_TO_NS(50) && !low_mem) {
+        if (time_running_for_ns >= MS_TO_NS(75) && !low_mem) {
             if (spare_frame == 0) {
                 spare_frame = AllocPhys(true);
                 is_zeroed = false;
@@ -69,11 +68,17 @@ void LowPriorityBackgroundThread(void*) {
             done_heap_purge = false;
         }
 
-        if (time_running_for_ns >= (low_mem ? MS_TO_NS(300) : MS_TO_NS(3000))) {
+        if (time_running_for_ns >= (low_mem ? MS_TO_NS(300) : MS_TO_NS(2000))) {
             if (!done_vnode_purge) PurgeOldVnodes();
             done_vnode_purge = true;
         } else {
             done_vnode_purge = false;
+        }
+
+        if (time_running_for_ns >= MS_TO_NS(1000)) {
+            ArchIdle();
+            ArchIdle();
+            ArchIdle();
         }
     }
 }

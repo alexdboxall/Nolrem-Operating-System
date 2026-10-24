@@ -248,9 +248,12 @@ static int HandleSetCursor(struct window* win, struct msg msg) {
         }
         WmUnlock();
         return 0;
+
+    } else {
+        // TODO: post to message queue a WM_SETCURSOR message for the parent
+        // might need to fiddle with the coords?
+        CdSetStandardCursor(CURSOR_WAIT);
     }
-    // TODO: post to message queue a WM_SETCURSOR message for the parent
-    // might need to fiddle with the coords?
     WmUnlock();
     return 0;
 }

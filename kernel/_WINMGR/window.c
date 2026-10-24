@@ -299,7 +299,7 @@ export int WmCallWinProc(struct window* win, struct msg msg) {
     return win->winclass->proc(win, msg);
 }
 
-export struct window* WmCreateWindow(struct window* parent, const char* classname, struct rect local_r, bool lock) {
+export struct window* WmCreateWindow(struct app* app, struct window* parent, const char* classname, struct rect local_r, bool lock) {
     struct window_class* wc = WmOpenWindowClass(classname);
     if (wc == NULL) {
         return NULL;
@@ -312,6 +312,8 @@ export struct window* WmCreateWindow(struct window* parent, const char* classnam
 
     anything_happened = true;
 
+    /* TODO: ref the app ?! and make it a USEROBJ */
+    win->app = app;
     win->restore_pos = local_r;
     win->style = 0;
     win->winclass = wc;
@@ -416,6 +418,7 @@ export bool WmCheckIfPaintRequired(struct window* win) {
 extern void WmInitDcCache(void);
 extern void WmInitWindowClassSubsystem();
 extern void WmInitDesktopWindowSubsystem();
+extern void WmInitAppSubsystem();
 
 void WmInit(void) {
     InitSpinlock(&winmgr_lock);
@@ -423,6 +426,7 @@ void WmInit(void) {
     WmInitDcCache();
     WmInitWindowClassSubsystem();
     WmInitDesktopWindowSubsystem();    
+    WmInitAppSubsystem();
 }
 
 export void WmEndPaint(struct window* win, struct dc* dc) {

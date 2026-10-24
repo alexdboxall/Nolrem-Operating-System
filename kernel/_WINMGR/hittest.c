@@ -24,3 +24,19 @@ struct window* WmGetToplevelAtPoint(int x, int y, bool lock) {
     if (lock) WmUnlock();
     return NULL;
 }
+
+struct window* WmGetDeepestAtPoint(int x, int y, bool lock) {
+    if (lock) WmLock();
+    struct window* retv = WmGetDesktop();
+    struct window* win = retv->first_child;
+    while (win) {
+        if (WmIsPointInRect(x, y, WmGetGlobalPosition(win, false))) {
+            retv = win;
+            win = win->first_child;
+            continue;
+        }
+        win = win->next_sibling;
+    }
+    if (lock) WmUnlock();
+    return retv;
+}

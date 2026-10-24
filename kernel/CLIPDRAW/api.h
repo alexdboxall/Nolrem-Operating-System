@@ -350,6 +350,8 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_HITTEST              6  
 #define WM_TOPLEVEL_MOUSEDOWN   7
 #define WM_SETCURSOR            8
+#define WM_KEYDOWN              9
+#define WM_KEYUP                10
 
 #define HIT_TOP_BORDER      (1 << 0)
 #define HIT_LEFT_BORDER     (1 << 1)

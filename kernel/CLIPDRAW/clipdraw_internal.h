@@ -27,6 +27,7 @@
 #define UOBJ_REGION              18
 #define UOBJ_DC                  19
 #define UOBJ_CURSOR              20
+#define UOBJ_APP                 21
 
 /* INTERNAL ONLY */
 

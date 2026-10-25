@@ -279,6 +279,7 @@ static void RepaintIfNeeded(struct window* win) {
     }
 }
 
+/*
 static void TestDiskRead(void*) {
     BeginNewThread();
     struct file* f;
@@ -305,7 +306,7 @@ static void TestDiskRead(void*) {
         SleepMilli(100000);
         Schedule();
     }
-}
+}*/
 
 _Noreturn void WmMainloop(void) {
     SetThreadPriority(GetCurrentThread(), PRIORITY_MAX);
@@ -340,24 +341,19 @@ _Noreturn void WmMainloop(void) {
         .type = WM_PAINT
     });
 
-    void* things[100];
-    for (int i = 0; i < 100; ++i) {
-        things[i] = AllocHeap(1000);
-    }
-    for (int i = 0; i < 100; ++i) {
-        FreeHeap(things[i]);
-    }
-
-    CreateThread(GetKernelVas(), TestDiskRead, NULL);
+    //CreateThread(GetKernelVas(), TestDiskRead, NULL);
 
     size_t prev_kb_free = 0;
     while (true) {
         extern bool anything_happened;
+        LogPrintf("Getting sysmsg...\n");
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
         ProcessMessage(msg);
 
+        LogPrintf("Getting desktop...\n");
         int r = WmAppGetMessage(WmGetDesktop()->app, &msg, true);
         if (r == 0) {
+            LogPrintf("Dispatching desktop...\n");
             WmDispatchMessage(msg);
         }
 

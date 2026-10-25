@@ -47,6 +47,8 @@ struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context)
 uint8_t GetThreadPriority(struct thread* thr);
 void SetThreadPriority(struct thread* thr, uint8_t priority);
 
+size_t GetCurrentThreadKernelStackRemaining(void);
+
 struct thread* GetCurrentThread(void);
 void BlockThread(void);
 void UnblockThread(struct thread* thr, int retv);

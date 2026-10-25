@@ -291,6 +291,10 @@ void MarkPageableSegmentsDiscardable(void) {
 static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
                                         struct file* file, size_t file_offset,
                                         size_t base, size_t phys, bool fixed) {
+
+    if ((!!(flags & VP_WRITE)) && (!!(flags & VP_EXEC))) {
+        return NULL;
+    }
     struct virt_page* vp = AllocVmmHeap(sizeof(struct virt_page));
     if (vp == NULL) {
         return NULL;

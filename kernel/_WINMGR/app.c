@@ -3,6 +3,7 @@
 #include <timer.h>
 #include <heap.h>
 #include <string.h>
+#include <log.h>
 #include <errno.h>
 #include "winmgr_internal.h"
 #include "../CLIPDRAW/api.h"
@@ -90,17 +91,22 @@ static int WmAppFinishGet(struct app* app, struct msg* msg_out, int res) {
 
 static void WmCheckGenerateSynthMessages(struct app* app) {
     /* Win manager must be locked before calling! */
-    
+
     if (app == NULL) {
         return;
     }
     struct window* win = app->win_list_head;
     while (win) {
         if (WmCheckIfPaintRequired(win)) {
+            LogPrintf("Dispatching WM_PAINT (WmCheckGenerateSynthMessages)...\n");
+            WmUnlock();
             WmDispatchMessage((struct msg) {
                 .win = win,
                 .type = WM_PAINT,
             });
+            WmLock();
+            win = app->win_list_head;       /* Restart whole loop as we unlocked*/
+            continue;
         }
         win = win->app_next_win;
     }

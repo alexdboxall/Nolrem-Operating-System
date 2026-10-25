@@ -88,6 +88,7 @@ static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread*
     clot->count = count;
     clot->thr = thr;
     clot->sems = AllocHeap(sizeof(struct sem*) * count);
+    LogPrintf("A..?\n");
     clot->nexts = AllocHeap(sizeof(void*) * count);
     memset(clot->nexts, 0, sizeof(void*) * count);
     memcpy(clot->sems, sems, sizeof(struct sem*) * count);

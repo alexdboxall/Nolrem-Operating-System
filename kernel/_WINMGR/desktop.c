@@ -3,9 +3,8 @@
 #include <heap.h>
 #include <log.h>
 #include <mutex.h>
+#include <omf.h>
 #include "winmgr_internal.h"
-#include "wattle.h"
-
 
 #define DESKTOP_COLOUR 0xFF00C9FF
 
@@ -31,7 +30,10 @@ int DesktopWinProc(struct window* win, struct msg msg) {
     case WM_PAINT: {
         struct dc* dc = WmBeginPaint(win);
         if (desktop_bitmap == NULL) {
-            desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, wattle_bmp, 640, 480);
+            struct open_mapped_file omf;
+            OpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", &omf);
+            desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, omf.ptr, 640, 480);
+            OmfClose(&omf);
         }
         CdPaintBitmap(dc, desktop_bitmap, (struct point) {.x = 0, .y = 0});
         WmEndPaint(win, dc);

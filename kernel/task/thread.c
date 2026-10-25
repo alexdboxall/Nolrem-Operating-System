@@ -10,6 +10,13 @@
 #define KSTACK_SIZE     (1024 * 4)
 #define USTACK_SIZE     (1024 * 16)
 
+export size_t GetCurrentThreadKernelStackRemaining(void) {
+    struct thread* thr = GetCurrentThread();
+    size_t stack_current = (size_t) &thr;
+    size_t stack_bottom = thr->kernel_stack_top - thr->kernel_stack_size;
+    return stack_current - stack_bottom;
+}
+
 export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size) {
     struct thread* thr = AllocHeap(sizeof(struct thread));
     InitObject(thr, OBJTYPE_THREAD);

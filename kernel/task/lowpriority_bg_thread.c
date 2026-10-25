@@ -29,7 +29,7 @@ void LowPriorityBackgroundThread(void*) {
 
         ArchIdle();
         Schedule();
-
+        
         /* How long the idle task has been running for uninterrupted */
         uint64_t time_running_for_ns = (GetTimeSinceBoot() - last_task_switch_time);
 
@@ -39,6 +39,8 @@ void LowPriorityBackgroundThread(void*) {
         if (low_mem && spare_frame != 0) {
             // Probably free it entirely. then spare_frame = 0 and is_zeroed = false
         }
+        (void) is_zeroed;
+#if 1
         if (time_running_for_ns >= MS_TO_NS(75) && !low_mem) {
             if (spare_frame == 0) {
                 spare_frame = AllocPhys(true);
@@ -58,22 +60,29 @@ void LowPriorityBackgroundThread(void*) {
                 }
             }
         }
+#endif
 
         /* If idle for 0.5 sec or more, toss out any empty pages in the heap, unless we're starting to run
-         * low on memory, in which case we'll do it quicker */
+         * low on memory, in which case we'll do it quicker */  
+        (void) done_heap_purge;
+#if 1
         if (time_running_for_ns >= (low_mem ? MS_TO_NS(100) : MS_TO_NS(500))) {
             if (!done_heap_purge) KePurgeFreeAreasFromHeap();
             done_heap_purge = true;
         } else {
             done_heap_purge = false;
         }
+#endif
 
+        (void) done_vnode_purge;
+#if 1
         if (time_running_for_ns >= (low_mem ? MS_TO_NS(300) : MS_TO_NS(2000))) {
             if (!done_vnode_purge) PurgeOldVnodes();
             done_vnode_purge = true;
         } else {
             done_vnode_purge = false;
         }
+#endif
 
         if (time_running_for_ns >= MS_TO_NS(1000)) {
             ArchIdle();

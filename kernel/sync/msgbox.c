@@ -138,6 +138,7 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     int selected_index;
     int res = AcquireSemFromMany(sems, count, timeout, &selected_index);
     if (res != 0) {
+        FreeHeap(sems);
         return res;
     }
     if (box_out != NULL) {

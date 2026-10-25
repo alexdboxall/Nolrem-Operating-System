@@ -320,7 +320,10 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     }
     if (depth > MAX_NESTED_WIN_DEPTH) {
         if (lock) WmUnlock();
-        DerefObject(win);
+        /* Don't deref as the win->winclass not set yet and the cleanup code
+         * would try to free that. */
+        FreeHeap(win);
+        return NULL;
     }
 
     anything_happened = true;
@@ -467,6 +470,7 @@ export struct dc* WmBeginPaint(struct window* win) {
     CdSetTranslation(dc, win->global_offset_cached.x, win->global_offset_cached.y);
 
     if (!(win->winclass->flags & CS_ALLCLIENT)) {
+        LogPrintf("Dispatching WM_NCPAINT...\n");
         WmDispatchMessage((struct msg) {
             .type = WM_NCPAINT,
             .p_arg = dc,

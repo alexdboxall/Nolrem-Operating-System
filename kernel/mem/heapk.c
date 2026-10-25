@@ -25,6 +25,7 @@ export void* KeAllocHeap(size_t bytes) {
     if (retv == NULL) {
         Panic(PANIC_OUT_OF_HEAP);
     }
+    LogPrintf("KeAllocHeap: 0x%X (bytes 0x%X)\n", retv, bytes);
     return retv;
 }
 
@@ -71,6 +72,8 @@ export void KeFreeHeap(void* ptr) {
     // for debugging
     size_t s = KeGetAllocationSize(ptr);
     memset(ptr, 0xCC, s);
+
+    LogPrintf("KeFreeHeap: 0x%X\n", ptr);
 
     AcquireSpinlock(&heap_lock);
     FreeHeapEx(&kernel_heap, ptr);

@@ -191,27 +191,22 @@ static bool HandleMouse(int mx, int my, int click_bits) {
             struct point pt;
             pt.x = mouse_x - deepest_child->global_offset_cached.x;
             pt.y = mouse_y - deepest_child->global_offset_cached.y;
-            WmUnlock();
-            // SKETCHY - TODO: hold the lock and post to queue instead of direct call
-            WmCallWinProc(deepest_child, (struct msg) {
+            WmPostMessage((struct msg) {
                 .win = deepest_child,
                 .type = WM_SETCURSOR,
                 .point_arg1 = pt
             });
-            WmLock();
         } else {
             /* Not over any normal window - i.e. it's over the desktop. */
             WmUnlock();
             struct point pt;
             pt.x = mouse_x;
             pt.y = mouse_y;
-            // SKETCHY - TODO: hold the lock and post to queue instead of direct call
-            WmCallWinProc(WmGetDesktop(), (struct msg) {
+            WmPostMessage((struct msg) {
                 .win = WmGetDesktop(),
                 .type = WM_SETCURSOR,
                 .point_arg1 = pt
             });
-            WmLock();
         }
         WmUnlock();
     }
@@ -360,6 +355,11 @@ _Noreturn void WmMainloop(void) {
         extern bool anything_happened;
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
         ProcessMessage(msg);
+
+        int r = WmAppGetMessage(WmGetDesktop()->app, &msg, true);
+        if (r == 0) {
+            WmDispatchMessage(msg);
+        }
 
         if (anything_happened) {
             anything_happened = false;      

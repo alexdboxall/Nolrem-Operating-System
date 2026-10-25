@@ -37,7 +37,8 @@ export void WmAppRestartCaretBlink(struct app* app, uint64_t blink_duration) {
     app->caret_timeout_time = now + blink_duration;
 }
 
-export int WmPostMessage(struct window* win, struct msg msg) {
+export int WmPostMessage(struct msg msg) {
+    struct window* win = msg.win;
     if (win->app == NULL) {
         return EINVAL;
     }
@@ -52,23 +53,83 @@ export int WmDispatchMessage(struct msg msg) {
     return proc(win, msg);
 }
 
+static void SetModifierIf(struct app* app, int keycode, int compare, bool keydown, int bit) {
+    if (keycode == compare) {
+        if (keydown) app->modifier_state |= bit;
+        else app->modifier_state &= ~bit;
+    }
+}
+
 static void UpdateVirtualKeyState(struct app* app, struct msg* msg) {
     int keycode = msg->i_arg;
     if (keycode < 0 || keycode >= (int) sizeof(app->keystate) * 8) {
         return;
     }
-    if (msg->type == WM_KEYDOWN) {
+    bool keydown = msg->type == WM_KEYDOWN;
+    if (keydown) {
         app->keystate[keycode >> 3] |= 1 << (keycode & 7);
     } else {
         app->keystate[keycode >> 3] &= ~(1 << (keycode & 7));
     }
 
-    // TODO: modifier keys
+    SetModifierIf(app, keycode, KEYCODE_LSHIFT, keydown, MODIFIER_LSHIFT);
+    SetModifierIf(app, keycode, KEYCODE_RSHIFT, keydown, MODIFIER_RSHIFT);
+    SetModifierIf(app, keycode, KEYCODE_LCTRL, keydown, MODIFIER_LCTRL);
+    SetModifierIf(app, keycode, KEYCODE_RCTRL, keydown, MODIFIER_RCTRL);
+    SetModifierIf(app, keycode, KEYCODE_LALT, keydown, MODIFIER_LALT);
+    SetModifierIf(app, keycode, KEYCODE_RALT, keydown, MODIFIER_RALT);
+}
+
+/* Every message handed back to the caller goes through here. */
+static int WmAppFinishGet(struct app* app, struct msg* msg_out, int res) {
+    if (res == 0 && (msg_out->type == WM_KEYDOWN || msg_out->type == WM_KEYUP)) {
+        UpdateVirtualKeyState(app, msg_out);
+    }
+    return res;
+}
+
+static void WmCheckGenerateSynthMessages(struct app* app) {
+    /* Win manager must be locked before calling! */
+    
+    if (app == NULL) {
+        return;
+    }
+    struct window* win = app->win_list_head;
+    while (win) {
+        if (WmCheckIfPaintRequired(win)) {
+            WmDispatchMessage((struct msg) {
+                .win = win,
+                .type = WM_PAINT,
+            });
+        }
+        win = win->app_next_win;
+    }
 }
 
 export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
-    while (true) {
+    /*
+     * First attempt is always non-blocking. If the queue is empty, give the
+     * window manager a chance to synthesise messages (WM_PAINT etc.) and look
+     * again, so anything it generated is returned straight away. WmLock is
+     * held across the peek and the synth call.
+     */
+    WmLock();
+    int res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
+    if (res == EAGAIN) {
+        WmCheckGenerateSynthMessages(app);
+        res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
+    }
+    WmUnlock();
+
+    if (res != EAGAIN) {
+        /* A real message, or a real error. */
+        return WmAppFinishGet(app, msg_out, res);
+    }
+
+    for (;;) {
         uint64_t now = GetTimeSinceBoot();
+        uint64_t timeout = TIMEOUT_INFINITE;
+
         WmLock();
         bool eligible = WmAppCaretEligible(app);
         bool blinking = eligible && now < app->caret_timeout_time;
@@ -78,38 +139,31 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
                 /* Hide it once it reaches timeout. */
                 WmAppInvertCaret(app, now);
             }
-            WmUnlock();
-            return KeGetMessage(app->mbox, msg_out, peek ? TIMEOUT_INSTANT : TIMEOUT_INFINITE);
-
         } else {
-            WmUnlock();
-        }
-
-        uint64_t next_blink = app->timeof_last_caret_invert + WmGetCaretBlinkRate();
-        if (now >= next_blink) {
-            WmAppInvertCaret(app, now);
-            next_blink = now + WmGetCaretBlinkRate();
-        }
-
-        /* Wake for whichever comes first: the next blink, or the end of blinking. */
-        uint64_t deadline = next_blink < app->caret_timeout_time
-                          ? next_blink : app->caret_timeout_time;
-
-        int res = KeGetMessage(app->mbox, msg_out, peek ? TIMEOUT_INSTANT : deadline - now);
-        if ((!peek && res != ETIMEDOUT) || (peek && res != EAGAIN)) {
-            /* We got a real message or an actual error, return either of those
-             * to the user. 
-             */
-            if (msg_out->type == WM_KEYDOWN || msg_out->type == WM_KEYUP) {
-                UpdateVirtualKeyState(app, msg_out);
+            uint64_t next_blink = app->timeof_last_caret_invert + WmGetCaretBlinkRate();
+            if (now >= next_blink) {
+                WmAppInvertCaret(app, now);
+                next_blink = now + WmGetCaretBlinkRate();
             }
-            return res;
+
+            /* Wake for whichever comes first: the next blink, or the end of blinking. */
+            uint64_t deadline = next_blink < app->caret_timeout_time
+                              ? next_blink : app->caret_timeout_time;
+            timeout = deadline - now;
+        }
+        WmUnlock();
+
+        if (peek) {
+            /* Nothing there, and a peek never blocks. */
+            return EAGAIN;
         }
 
-        /* 
-         * No message received yet, but we woke to handle the caret, so handle
-         * that and wait again for the message.
-         */
+        res = KeGetMessage(app->mbox, msg_out, timeout);
+        if (res != ETIMEDOUT) {
+            return WmAppFinishGet(app, msg_out, res);
+        }
+
+        /* Woke only for the caret; go round again and wait for a message. */
     }
 }
 
@@ -141,6 +195,7 @@ struct app* WmCreateApp(void) {
     app->caret_timeout_time = 0;
     app->timeof_last_caret_invert = 0;
     app->modifier_state = 0;
+    app->win_list_head = NULL;
     app->mbox = CreateMessageBox(sizeof(struct msg), APP_QUEUE_SIZE);
     memset(app->keystate, 0, sizeof(app->keystate));
     return app;

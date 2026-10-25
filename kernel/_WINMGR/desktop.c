@@ -11,6 +11,7 @@
 
 static struct window* desktop_window;
 static struct brush* desktop_brush;
+static struct app* desktop_app;
 
 export struct window* WmGetDesktop(void) {
     return desktop_window;
@@ -43,7 +44,8 @@ int DesktopWinProc(struct window* win, struct msg msg) {
 }
 
 void WmInitDesktopWindowSubsystem() {
+    desktop_app = WmCreateApp();
     desktop_brush = CdCreateSolidBrush(DESKTOP_COLOUR);
     WmCreateWindowClass(".DESKTOP", DesktopWinProc, CS_ALLCLIENT);
-    desktop_window = WmCreateWindow(NULL, NULL, ".DESKTOP", (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
+    desktop_window = WmCreateWindow(desktop_app, NULL, ".DESKTOP", (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
 }

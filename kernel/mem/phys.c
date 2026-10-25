@@ -79,6 +79,7 @@ export size_t AllocPhys(bool pin) {
             curr->allocated = 1;
             curr->wired = pin;
             if (sys_free_pp <= LOW_MEM_THRESHOLD) {
+                LogPrintf("Sending low memory...\n");
                 PostMessageIrq((struct msg) {
                     .type = SYSMSG_LOWMEMORY
                 });
@@ -90,6 +91,7 @@ export size_t AllocPhys(bool pin) {
         ReleaseSpinlock(&curr->lock);
         curr = GetNextPhysPage(curr);
     }
+    LogPrintf("Could not alloc phys!\n");
     return 0;
 }
 

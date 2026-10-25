@@ -23,6 +23,7 @@ struct app {
     struct size caret_size;
     uint8_t keystate[256 / 8];
     uint8_t modifier_state;
+    struct window* win_list_head;
 };
 
 struct window_class {
@@ -53,6 +54,7 @@ struct window {
     struct window* next_sibling;
     struct window* first_child;
     struct window* parent;
+    struct window* app_next_win;
 
     struct window_class* winclass;
 
@@ -68,8 +70,10 @@ struct app;
 
 struct dc* WmGetDC(void);
 int WmReturnDC(struct dc* dc);
+struct app* WmCreateApp(void);
+int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek);
 struct dc* WmBeginPaint(struct window* win);
-int WmPostMessage(struct window* win, struct msg msg);
+int WmPostMessage(struct msg msg);
 void WmEndPaint(struct window* win, struct dc* dc);
 void WmChangePosition(struct window* win, struct rect local_r, bool lock);
 struct window* WmCreateWindow(struct app* app, struct window* parent, const char* classname, struct rect local_r, bool lock);
@@ -97,3 +101,4 @@ extern bool wm_mainloop_started;
 bool WmCheckIfPaintRequired(struct window* win);
 bool DoesWindowShowBorder(struct window* win);
 bool WmIsAncestor(struct window* potential_ancestor, struct window* reference);
+int WmDispatchMessage(struct msg msg);

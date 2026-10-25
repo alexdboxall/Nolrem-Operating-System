@@ -6,6 +6,8 @@
 #include <kgfx.h>
 #include "winmgr_internal.h"
 
+#define MAX_NESTED_WIN_DEPTH 6
+
 static struct spinlock winmgr_lock;
 static struct window* foreground_window = NULL;
 
@@ -310,9 +312,26 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
 
     if (lock) WmLock();
 
+    struct window* par = parent;
+    int depth = 0;
+    while (par != NULL) {
+        par = par->parent;
+        ++depth;
+    }
+    if (depth > MAX_NESTED_WIN_DEPTH) {
+        if (lock) WmUnlock();
+        DerefObject(win);
+    }
+
     anything_happened = true;
 
-    /* TODO: ref the app ?! and make it a USEROBJ */
+    /* Link into the app's window list. */
+    if (app != NULL) {
+        win->app_next_win = app->win_list_head;
+        app->win_list_head = win;
+        RefObject(app);
+    }
+   
     win->app = app;
     win->restore_pos = local_r;
     win->style = 0;
@@ -448,7 +467,7 @@ export struct dc* WmBeginPaint(struct window* win) {
     CdSetTranslation(dc, win->global_offset_cached.x, win->global_offset_cached.y);
 
     if (!(win->winclass->flags & CS_ALLCLIENT)) {
-        WmCallWinProc(win, (struct msg) {
+        WmDispatchMessage((struct msg) {
             .type = WM_NCPAINT,
             .p_arg = dc,
             .win = win,

@@ -22,7 +22,7 @@ struct app {
     struct point caret_location;
     struct size caret_size;
     uint8_t keystate[256 / 8];
-    uint8_t modifier_state;
+    uint16_t modifier_state;
     struct window* win_list_head;
 };
 

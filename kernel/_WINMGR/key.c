@@ -8,7 +8,7 @@ export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
 	bool ctrl = !!(modifiers & MODIFIER_LCTRL) || !!(modifiers & MODIFIER_RCTRL);
 	bool alt = !!(modifiers & MODIFIER_LALT) || !!(modifiers & MODIFIER_RALT);
 	bool numlock = modifiers & MODIFIER_NUMLOCK;
-	bool capslock = modifiers & MODIFIER_CAPSLOCK;
+	bool caps = modifiers & MODIFIER_CAPSLOCK;
 	if (alt || ctrl) {
 		return 0;
 	}
@@ -39,6 +39,7 @@ export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
 		case KEYCODE_TAB: return '\t';
 		case KEYCODE_ESCAPE: return '\x1B';
 		case KEYCODE_SPACE: return ' ';
+		case KEYCODE_BACKSPACE: return '\b';
 	}
 	
 	if (key >= 'A' && key <= 'Z') {

@@ -8,19 +8,7 @@
 #include <keycodes.h>
 
 static const char set1_map_lower_norm[] = 
-    "  1234567890-=  qwertyuiop[]  asdfghjkl;'` \\zxcvbnm,./ *       "
-    "        789-456+1230.                                           ";
-
-static const char set1_map_upper_norm[] = 
-    "  !@#$%^&*()_+  QWERTYUIOP{}  ASDFGHJKL:\"~ |ZXCVBNM<>? *       "
-    "        789-456+1230.                                           ";
-
-static const char set1_map_lower_caps[] = 
     "  1234567890-=  QWERTYUIOP[]  ASDFGHJKL;'` \\ZXCVBNM,./ *       "
-    "        789-456+1230.                                           ";
-
-static const char set1_map_upper_caps[] = 
-    "  !@#$%^&*()_+  qwertyuiop{}  asdfghjkl:\"~ |zxcvbnm<>? *       "
     "        789-456+1230.                                           ";
 
 #define SET1_ENTER          0x1C
@@ -40,8 +28,6 @@ static const char set1_map_upper_caps[] =
 
 static bool release_mode = false;
 static bool control_held = false;
-static bool shift_held = false;
-static bool shift_r_held = false;
 static bool caps_lock_on = false;
 static bool extended = false;
 
@@ -51,13 +37,8 @@ static void Ps2KeyboardSetLEDs(void) {
     Ps2DeviceWrite(data, false);
 }
 
-static uint8_t TranslateCharacter(uint8_t scancode, bool shift) {
-    static const char* set1_tables[] = {
-        set1_map_lower_norm, set1_map_upper_norm, 
-        set1_map_lower_caps, set1_map_upper_caps, 
-    };  
-    const char* table = set1_tables[shift + caps_lock_on * 2];
-    return table[scancode];
+static uint8_t TranslateCharacter(uint8_t scancode) {
+    return set1_map_lower_norm[scancode];
 }
 
 static void SendKeystrokeConsole(char c) {
@@ -122,7 +103,7 @@ static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
             break;
         default:
             if (scancode < strlen(set1_map_lower_norm)) {
-                c = TranslateCharacter(scancode, shift_held ^ shift_r_held);
+                c = TranslateCharacter(scancode);
             }
         }
     }

@@ -33,10 +33,17 @@
 #define KEYCODE_NUMPAD_9        0x99
 #define KEYCODE_NUMPAD_MUL      0x9A
 #define KEYCODE_NUMPAD_ADD      0x9B
-#define KEYCODE_NUMPAD_SEP      0x9C
+#define KEYCODE_NUMPAD_DOT      0x9C
 #define KEYCODE_NUMPAD_SUB      0x9D
 #define KEYCODE_NUMPAD_DIV      0x9E
 #define KEYCODE_NUMPAD_ENTER    0x9F
+
+#define KEYCODE_INSERT			    0xB0
+#define KEYCODE_END				      0xB1
+#define KEYCODE_PAGEUP			    0xB2
+#define KEYCODE_PAGEDOWN		    0xB3
+#define KEYCODE_HOME			      0xB4
+#define KEYCODE_DEL				      0xB5
 
 #define KEYCODE_F1              0xA1
 #define KEYCODE_F2              0xA2
@@ -61,3 +68,4 @@
 #define MODIFIER_RALT           32
 #define MODIFIER_CAPSLOCK       64
 #define MODIFIER_NUMLOCK        128
+#define MODIFIER_SCROLLLOCK     256

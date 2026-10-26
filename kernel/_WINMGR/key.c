@@ -3,7 +3,7 @@
 #include <keycodes.h>
 
 /* Raw keycode to ASCII */
-export char WmTranslateKey(uint8_t key, uint8_t modifiers) {
+export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
 	bool shift = !!(modifiers & MODIFIER_LSHIFT) || !!(modifiers & MODIFIER_RSHIFT);
 	bool ctrl = !!(modifiers & MODIFIER_LCTRL) || !!(modifiers & MODIFIER_RCTRL);
 	bool alt = !!(modifiers & MODIFIER_LALT) || !!(modifiers & MODIFIER_RALT);

@@ -6,6 +6,7 @@
 #define KEYCODE_BACKSPACE       8   //'\b'
 #define KEYCODE_TAB             9   //'\t'
 #define KEYCODE_ESCAPE          27  // '\x1B'
+#define KEYCODE_SPACE           ' '
 #define KEYCODE_LEFT_ARROW      128
 #define KEYCODE_RIGHT_ARROW     129
 #define KEYCODE_UP_ARROW        130

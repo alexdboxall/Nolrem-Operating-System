@@ -2,16 +2,9 @@
 #include <stdbool.h>
 #include <keycodes.h>
 
-/* Raw keycode to ASCII */
-export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
-	bool shift = !!(modifiers & MODIFIER_LSHIFT) || !!(modifiers & MODIFIER_RSHIFT);
-	bool ctrl = !!(modifiers & MODIFIER_LCTRL) || !!(modifiers & MODIFIER_RCTRL);
-	bool alt = !!(modifiers & MODIFIER_LALT) || !!(modifiers & MODIFIER_RALT);
+/* Raw keycode to a different keycode */
+export uint8_t WmTranslateNumpad(uint8_t key, uint16_t modifiers) {
 	bool numlock = modifiers & MODIFIER_NUMLOCK;
-	bool caps = modifiers & MODIFIER_CAPSLOCK;
-	if (alt || ctrl) {
-		return 0;
-	}
 	if (key >= KEYCODE_NUMPAD_0 && key <= KEYCODE_NUMPAD_9) {
 		if (numlock) return key - KEYCODE_NUMPAD_0 + '0';
 		else {
@@ -30,11 +23,40 @@ export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
 		}
 	} 
 	switch (key) {
+		/* TODO: *, +, -, / are pre-shifted! */
 		case KEYCODE_NUMPAD_DOT: return numlock ? '.' : KEYCODE_DEL;
 		case KEYCODE_NUMPAD_MUL: return '*';
 		case KEYCODE_NUMPAD_ADD: return '+';
 		case KEYCODE_NUMPAD_SUB: return '-';
 		case KEYCODE_NUMPAD_DIV: return '/';
+	}
+	return key;
+}
+
+/* Raw keycode to ASCII */
+export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
+	bool shift = !!(modifiers & MODIFIER_LSHIFT) || !!(modifiers & MODIFIER_RSHIFT);
+	bool ctrl = !!(modifiers & MODIFIER_LCTRL) || !!(modifiers & MODIFIER_RCTRL);
+	bool alt = !!(modifiers & MODIFIER_LALT) || !!(modifiers & MODIFIER_RALT);
+	bool numlock = modifiers & MODIFIER_NUMLOCK;
+	bool caps = modifiers & MODIFIER_CAPSLOCK;
+	if (alt || ctrl) {
+		return 0;
+	}
+	if (key >= KEYCODE_NUMPAD_0 && key <= KEYCODE_NUMPAD_9) {
+		if (numlock) return key - KEYCODE_NUMPAD_0 + '0';
+		else return 0;
+	} 
+	switch (key) {
+		case KEYCODE_NUMPAD_DOT: return numlock ? '.' : 0;
+		case KEYCODE_NUMPAD_MUL: return '*';
+		case KEYCODE_NUMPAD_ADD: return '+';
+		case KEYCODE_NUMPAD_SUB: return '-';
+		case KEYCODE_NUMPAD_DIV: return '/';
+		case KEYCODE_NUMPAD_ENTER: return '\n';
+	}
+
+	switch (key) {
 		case KEYCODE_ENTER: return '\n';
 		case KEYCODE_TAB: return '\t';
 		case KEYCODE_ESCAPE: return '\x1B';
@@ -51,7 +73,7 @@ export char WmTranslateKey(uint8_t key, uint16_t modifiers) {
 	}
 	if (!shift) return key;
 	if (shift && key >= '0' && key <= '9') {
-		char lookup[] = ")!@#$%^&*(";
+		static const char lookup[] = ")!@#$%^&*(";
 		return lookup[key - '0'];
 	}
 

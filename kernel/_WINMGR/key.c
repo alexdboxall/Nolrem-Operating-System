@@ -23,12 +23,12 @@ export uint8_t WmTranslateNumpad(uint8_t key, uint16_t modifiers) {
 		}
 	} 
 	switch (key) {
-		/* TODO: *, +, -, / are pre-shifted! */
 		case KEYCODE_NUMPAD_DOT: return numlock ? '.' : KEYCODE_DEL;
 		case KEYCODE_NUMPAD_MUL: return '*';
 		case KEYCODE_NUMPAD_ADD: return '+';
 		case KEYCODE_NUMPAD_SUB: return '-';
 		case KEYCODE_NUMPAD_DIV: return '/';
+		case KEYCODE_NUMPAD_ENTER: return '\n';
 	}
 	return key;
 }

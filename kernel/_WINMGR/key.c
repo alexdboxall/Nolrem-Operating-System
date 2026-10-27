@@ -24,11 +24,11 @@ export uint8_t WmTranslateNumpad(uint8_t key, uint16_t modifiers) {
 	} 
 	switch (key) {
 		case KEYCODE_NUMPAD_DOT: return numlock ? '.' : KEYCODE_DEL;
-		case KEYCODE_NUMPAD_MUL: return '*';
-		case KEYCODE_NUMPAD_ADD: return '+';
+		case KEYCODE_NUMPAD_MUL: return '*';  /* not a true keycode actually - but WmTranslateKey passes it through ok */
+		case KEYCODE_NUMPAD_ADD: return '+';  /* not a true keycode actually - but WmTranslateKey passes it through ok */
 		case KEYCODE_NUMPAD_SUB: return '-';
 		case KEYCODE_NUMPAD_DIV: return '/';
-		case KEYCODE_NUMPAD_ENTER: return '\n';
+		case KEYCODE_NUMPAD_ENTER: return KEYCODE_ENTER;
 	}
 	return key;
 }

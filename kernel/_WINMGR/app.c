@@ -79,6 +79,16 @@ static void UpdateVirtualKeyState(struct app* app, struct msg* msg) {
     SetModifierIf(app, keycode, KEYCODE_RCTRL, keydown, MODIFIER_RCTRL);
     SetModifierIf(app, keycode, KEYCODE_LALT, keydown, MODIFIER_LALT);
     SetModifierIf(app, keycode, KEYCODE_RALT, keydown, MODIFIER_RALT);
+
+    if (keydown && keycode == KEYCODE_CAPSLOCK) {
+        app->modifier_state ^= MODIFIER_CAPSLOCK;
+        
+    } else if (keydown && keycode == KEYCODE_NUMLOCK) {
+        app->modifier_state ^= MODIFIER_NUMLOCK;
+        
+    } else if (keydown && keycode == KEYCODE_SCROLLLOCK) {
+        app->modifier_state ^= MODIFIER_SCROLLLOCK;
+    }
 }
 
 /* Every message handed back to the caller goes through here. */

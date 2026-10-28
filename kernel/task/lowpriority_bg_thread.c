@@ -84,10 +84,8 @@ void LowPriorityBackgroundThread(void*) {
         }
 #endif
 
-        LogPrintf("%d KB free!\n", GetFreeMemory() / 1024);
-
         if (time_running_for_ns >= MS_TO_NS(5000)) {
-            if (/*low_mem &&*/ !out_of_discards) {
+            if (low_mem && !out_of_discards) {
                 struct phys_page* retv = DiscardPage();
                 out_of_discards = retv == NULL;
             }

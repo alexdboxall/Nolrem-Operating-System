@@ -805,7 +805,7 @@ retry:
         if (origin->phys == 0) {
             size_t frame;
             if (origin->is_file) {
-                frame = AllocPhys(true);
+                frame = AllocPhys(true);    /* unpinned manually see later newpp->wired = 0*/
             } else {
                 frame = AllocZeroedPhys();
             }
@@ -840,7 +840,7 @@ retry:
             newpp->origin = origin;
             RefObject(origin);
             newpp->dirty = 0;
-            newpp->wired = 0;
+            newpp->wired = 0;               /* manually unwire */
             newpp->lru = 0xFFFF;            /* fresh: don't reclaim immediately */
             ReleaseSpinlock(&newpp->lock);
 

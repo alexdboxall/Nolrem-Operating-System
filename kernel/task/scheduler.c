@@ -34,7 +34,6 @@ static struct thread* ready_list_head = NULL;
 static struct thread* ready_list_tail = NULL;
 static struct thread* current_thread = NULL;
 static bool sched_init = false;
-static struct msg defer_msg;
 static bool has_defer_msg = 0;
 
 /* Used so the low priority bg task can be more aggro when it's been running for a while */
@@ -135,8 +134,49 @@ export void ReleaseScheduler(void) {
     ReleaseIrqPrevent();
 }
 
+
+#define QUEUE_SIZE 32
+#define QUEUE_MASK (QUEUE_SIZE - 1)
+
+struct msg irq_msg_queue[QUEUE_SIZE];
+atomic_uint_fast32_t irq_head = 0;
+atomic_uint_fast32_t irq_tail = 0;
+
+static int EnqueueIrqMessage(struct msg msg) {
+    uint32_t head = atomic_load_explicit(&irq_head, memory_order_relaxed);
+    while (true) {
+        uint32_t tail = atomic_load_explicit(&irq_tail, memory_order_acquire);
+        if ((head - tail) >= QUEUE_SIZE) {
+            return ENOBUFS;
+        }
+        if (atomic_compare_exchange_weak_explicit(&irq_head, &head, head + 1, 
+                                                 memory_order_release, 
+                                                 memory_order_relaxed)) {
+            irq_msg_queue[head & QUEUE_MASK] = msg;
+            return 0;
+        }
+    }
+}
+
+static int DequeueIrqMessage(struct msg* msg_out) {
+    uint32_t tail = atomic_load_explicit(&irq_tail, memory_order_relaxed);
+    
+    while (true) {
+        uint32_t head = atomic_load_explicit(&irq_head, memory_order_acquire);
+        if (tail == head) {
+            return EAGAIN;
+        }
+        if (atomic_compare_exchange_weak_explicit(&irq_tail, &tail, tail + 1, 
+                                                 memory_order_release, 
+                                                 memory_order_relaxed)) {
+            *msg_out = irq_msg_queue[tail & QUEUE_MASK];
+            return 0;
+        }
+    }
+}
+
 export void PostMessageIrq(struct msg msg) {
-    defer_msg = msg;
+    EnqueueIrqMessage(msg);
     has_defer_msg = true;
 }
 
@@ -148,20 +188,23 @@ void ProcessIrqPostMessage(void) {
     if (has_defer_msg) {
         AcquireScheduler();
         has_defer_msg = false;
-        if (defer_msg.type == SYSMSG_MOUSEEVENT && has_prev_mouse_msg) {
-            KeTryReplaceOrAdd(
-                sysbox, 
-                (const void*) &prev_mouse_msg,
-                (const void*) &defer_msg, 
-                TIMEOUT_INFINITE
-            );
-            
-        } else {
-            KePostMessage(sysbox, &defer_msg, TIMEOUT_INFINITE);
-        }
-        if (defer_msg.type == SYSMSG_MOUSEEVENT) {
-            prev_mouse_msg = defer_msg;
-            has_prev_mouse_msg = true;
+        struct msg defer_msg;
+        while (DequeueIrqMessage(&defer_msg) == 0) {
+            if (defer_msg.type == SYSMSG_MOUSEEVENT && has_prev_mouse_msg) {
+                KeTryReplaceOrAdd(
+                    sysbox, 
+                    (const void*) &prev_mouse_msg,
+                    (const void*) &defer_msg, 
+                    TIMEOUT_INFINITE
+                );
+                
+            } else {
+                KePostMessage(sysbox, &defer_msg, TIMEOUT_INFINITE);
+            }
+            if (defer_msg.type == SYSMSG_MOUSEEVENT) {
+                prev_mouse_msg = defer_msg;
+                has_prev_mouse_msg = true;
+            }
         }
         ReleaseScheduler();
     }

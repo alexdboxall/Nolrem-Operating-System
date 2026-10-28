@@ -28,7 +28,7 @@
 /* DUMMY!!! */
 void play_sound(uint32_t frequency) {
     (void) frequency;
-    /*if (frequency == 0) return;
+    if (frequency == 0) return;
     uint32_t divisor = 1193180 / frequency;
     outb(0x43, 0xB6);
     outb(0x42, (uint8_t)(divisor & 0xFF));        // Low byte
@@ -36,12 +36,12 @@ void play_sound(uint32_t frequency) {
     uint8_t speaker_state = inb(0x61);
     if ((speaker_state & 3) != 3) {
         outb(0x61, speaker_state | 3);
-    }*/
+    }
 }
 
 void nosound(void) {
-    //uint8_t speaker_state = inb(0x61) & 0xFC;
-    //outb(0x61, speaker_state);
+    uint8_t speaker_state = inb(0x61) & 0xFC;
+    outb(0x61, speaker_state);
 }
 
 

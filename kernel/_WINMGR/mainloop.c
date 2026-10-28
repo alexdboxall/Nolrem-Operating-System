@@ -259,6 +259,7 @@ static void ProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
         DiscardPage();
+        DiscardPage();
         PurgeScaledGlyphCacheIfNeeded();
         PurgeOldVnodes();
         KePurgeFreeAreasFromHeap();
@@ -359,7 +360,6 @@ _Noreturn void WmMainloop(void) {
 
         if (anything_happened) {
             anything_happened = false;      
-            RepaintIfNeeded(WmGetDesktop());
             RepaintIfNeeded(win);
             RepaintIfNeeded(win2);
             RepaintIfNeeded(win3);

@@ -25,7 +25,8 @@
 #define VMM_MAX_FAULT_RETRIES   100
 
 static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
-                                            size_t base, size_t phys, bool fixed);
+                                            const struct virt_loader* loader,
+                                            size_t phys, bool fixed);
 
 void LockVas(struct vas* vas) {
     AcquireMutex(vas->lock, TIMEOUT_INFINITE);
@@ -35,11 +36,11 @@ void UnlockVas(struct vas* vas) {
     ReleaseMutex(vas->lock);
 }
 
-/* 
+/*
  * Use the VMM heap for anything that needs to be done at 'AllocHeap' time.
  * i.e. everything EXCEPT for allocating new VAS, and allocating new VA.
  * (Which are done at process allocation, not memory request time).
- * 
+ *
  * So use VMM heap for: virt_page, page_origin, links/chains, mappings
  */
 struct heap vmm_special_heap;
@@ -57,7 +58,7 @@ void* VmmSpecialHeapGetMemory(size_t* bytes) {
         size_t virt = AllocVirt(*bytes);
         size_t pages = (*bytes + PAGE_SIZE - 1) / PAGE_SIZE;
         for (size_t i = 0; i < pages; ++i) {
-            ArchMapKernelPageDirectly(AllocPhys(true), virt + i * PAGE_SIZE); 
+            ArchMapKernelPageDirectly(AllocPhys(true), virt + i * PAGE_SIZE);
         }
         *bytes = pages * PAGE_SIZE;
         return (void*) virt;
@@ -197,8 +198,13 @@ void CreateInitialVas(void) {
     virt_initialised = true;
 }
 
+/*
+ * 'loader' is copied into the origin (file pages only) and may be NULL, which
+ * gives a zeroed loader, i.e. the default read and no unmap hook.
+ */
 static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
-                                            size_t base, size_t phys, bool fixed) {
+                                            const struct virt_loader* loader,
+                                            size_t phys, bool fixed) {
 
     struct page_origin* po = AllocVmmHeap(
         file == NULL ? SIZEOF_PAGE_ORIGIN_ANON : SIZEOF_PAGE_ORIGIN_FILE
@@ -214,7 +220,11 @@ static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offse
     if (po->is_file) {
         po->file = file;
         po->file_offset = file_offset;
-        po->rebase_page = base;
+        if (loader != NULL) {
+            po->loader = *loader;
+        } else {
+            memset(&po->loader, 0, sizeof(po->loader));
+        }
         RefObject(file);
     }
     return po;
@@ -244,7 +254,7 @@ static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys
     LogPrintf("Page VIRT=0x%X, PHYS=0x%X is now discardable.\n", existing_virt, existing_phys);
     RefObject(vp);
     RefObject(vas);
-    pp->origin = CreatePageOrigin(file, file_offset, 0, existing_phys, false);
+    pp->origin = CreatePageOrigin(file, file_offset, NULL, existing_phys, false);
     LogPrintf("Origin set!\n");
     LockVas(vp->vas);
     struct virt_page** slot = GetVirtualPageSlot(vas, existing_virt, true);
@@ -290,7 +300,8 @@ void MarkPageableSegmentsDiscardable(void) {
  */
 static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
                                         struct file* file, size_t file_offset,
-                                        size_t base, size_t phys, bool fixed) {
+                                        const struct virt_loader* loader,
+                                        size_t phys, bool fixed) {
 
     if ((!!(flags & VP_WRITE)) && (!!(flags & VP_EXEC))) {
         return NULL;
@@ -300,7 +311,7 @@ static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
         return NULL;
     }
 
-    struct page_origin* po = CreatePageOrigin(file, file_offset, base, phys, fixed);
+    struct page_origin* po = CreatePageOrigin(file, file_offset, loader, phys, fixed);
     if (po == NULL) {
         FreeVmmHeap(vp);
         return NULL;
@@ -363,7 +374,8 @@ static void UnwindVirtPages(struct vas* vas, size_t base, size_t count) {
  * a NULL lookup.
  */
 static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys,
-                              size_t bytes, int flags, size_t reloc_base, bool fixed) {
+                              size_t bytes, int flags,
+                              const struct virt_loader* loader, bool fixed) {
     if (bytes == 0) {
         return NULL;
     }
@@ -383,7 +395,7 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
             flags,
             file,
             file != NULL ? file_offset + i * PAGE_SIZE : 0,
-            reloc_base,
+            loader,
             phys != 0 ? phys + i * PAGE_SIZE : 0,
             fixed
         );
@@ -398,16 +410,16 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
 }
 
 export void* AllocFixedMemory(size_t phys, size_t bytes, int flags) {
-    return AllocMemoryRange(NULL, 0, phys, bytes, flags, 0, true);
+    return AllocMemoryRange(NULL, 0, phys, bytes, flags, NULL, true);
 }
 
 export void* AllocAnonMemory(size_t bytes, int flags) {
-    return AllocMemoryRange(NULL, 0, 0, bytes, flags, 0, false);
+    return AllocMemoryRange(NULL, 0, 0, bytes, flags, NULL, false);
 }
 
 export void* AllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
-                             int flags, size_t reloc_base) {
-    return AllocMemoryRange(file, file_offset, 0, bytes, flags, reloc_base, false);
+                             int flags, const struct virt_loader* loader) {
+    return AllocMemoryRange(file, file_offset, 0, bytes, flags, loader, false);
 }
 
 static void SynchroniseVirt(struct virt_page* vp) {
@@ -650,27 +662,71 @@ static bool HandleFixedFault(struct vas* vas, size_t virt, struct page_origin* o
     return true;
 }
 
-static int ReadOriginIntoFrame(struct page_origin* origin, size_t frame) {
+/*
+ * Temporary kernel mapping of a physical frame, for loaders. Unlike
+ * ArchGetTemporaryPage() this doesn't pin us to a CPU, so it is safe to block
+ * (e.g. on file IO) while the mapping is held.
+ */
+void* VmmMapFrame(size_t frame) {
     size_t virt = AllocVirt(PAGE_SIZE);
     if (virt == 0) {
-        return ENOMEM;
+        return NULL;
     }
     ArchMapKernelPageDirectly(frame, virt);
+    return (void*) virt;
+}
+
+void VmmUnmapFrame(void* virt) {
+    ArchReleaseTemporaryPage((size_t) virt);
+    FreeVirt((size_t) virt, PAGE_SIZE);
+}
+
+/*
+ * The default reloader: zero the frame, then read one page from the file at
+ * the origin's offset. Signature matches virt_loader::reload_func so custom
+ * loaders can chain to it and then post-process the frame.
+ */
+int VmmDefaultReload(size_t frame, struct virt_loader* vr, struct page_origin* po) {
+    (void) vr;
+
+    void* virt = VmmMapFrame(frame);
+    if (virt == NULL) {
+        return ENOMEM;
+    }
 
     /* Account for short reads (file size doesn't align to PAGE_SIZE). */
-    memset((void*) virt, 0, PAGE_SIZE);
-    
+    memset(virt, 0, PAGE_SIZE);
+
     struct aio aio;
-    struct transfer tr = CreateKernelTransfer((void*) virt, PAGE_SIZE, origin->file_offset, TRANSFER_READ);
-    CreateIO(&aio, origin->file, tr, NULL, NULL);
+    struct transfer tr = CreateKernelTransfer(virt, PAGE_SIZE, po->file_offset, TRANSFER_READ);
+    CreateIO(&aio, po->file, tr, NULL, NULL);
     int res = ReadFile(&aio);
     if (res == 0) {
         res = WaitIO(&aio, TIMEOUT_INFINITE);
     }
-    ArchReleaseTemporaryPage(virt);
-    FreeVirt(virt, PAGE_SIZE);
-    
+    VmmUnmapFrame(virt);
+
     return res;
+}
+
+/* Only call on file origins. May block; called under origin->mtx. */
+static int LoadOriginIntoFrame(struct page_origin* origin, size_t frame) {
+    if (origin->loader.reload_func != NULL) {
+        return origin->loader.reload_func(frame, &origin->loader, origin);
+    }
+    return VmmDefaultReload(frame, &origin->loader, origin);
+}
+
+/*
+ * The frame has been detached from 'origin' and is about to be freed, but its
+ * contents are still intact. The is_file check is load-bearing: anon origins
+ * are allocated without the trailing file fields, so touching ->loader on one
+ * would read off the end of the allocation.
+ */
+static void UnloadOriginFromFrame(struct page_origin* origin, size_t frame) {
+    if (origin->is_file && origin->loader.unmap_func != NULL) {
+        origin->loader.unmap_func(frame, &origin->loader, origin);
+    }
 }
 
 void HandlePageFault(size_t virt, int fault_flags) {
@@ -764,16 +820,18 @@ retry:
              * Fill the frame BEFORE publishing origin->phys. Nothing can reach
              * it until then, so this needs no frame lock and no other thread
              * can observe it half-initialised.
+             *
+             * File frames come from AllocPhys(), which does not zero, so the
+             * loader (default or custom) must initialise the entire page.
              */
             if (origin->is_file) {
-                int res = ReadOriginIntoFrame(origin, frame);
+                int res = LoadOriginIntoFrame(origin, frame);
                 if (res != 0) {
                     /* free 'frame' here */
                     ReleaseMutex(&origin->mtx);
                     DerefObject(origin);
                     Panic(PANIC_PAGE_FAULT_IN_NON_PAGED_AREA);  /* TODO: SIGBUS / kill process */
                 }
-                /* TODO: apply origin->rebase_page relocations */
             }
 
             struct phys_page* newpp = GetPhysPage(frame);
@@ -878,8 +936,12 @@ struct phys_page* DiscardPage(void) {
         FreeVmmHeap(curr);
         curr = next;
     }
+
+    /* pp->lock (a spinlock) is held here, so an unmap_func must not block. */
+    UnloadOriginFromFrame(pp->origin, GetPhysAddr(pp));
+
     DerefObject(pp->origin);
-    FreeDiscardedPhys(pp);    
+    FreeDiscardedPhys(pp);
     ReleaseSpinlock(&pp->lock);
     return pp;
 }
@@ -989,7 +1051,7 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
             continue;
         }
 
-        assert(pp->wired == 0);
+        assert(pp->wired == 0);             /* freeing memory someone still has wired */
         assert(vp->busy == 1);              /* ours, from the Enter above */
 
         /*
@@ -1013,7 +1075,8 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
              * map the frame.
              *
              * (Dirty file-backed contents are simply dropped: there is no
-             * write-back path anywhere in the VMM yet.)
+             * write-back path anywhere in the VMM yet. A loader's unmap_func
+             * is the place to add one for its own pages.)
              */
             dead_origin = pp->origin;
             assert(dead_origin != NULL && dead_origin->phys == phys);
@@ -1024,6 +1087,12 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
 
         /* Everything below runs with no phys_page / vas lock held. */
         if (dead_origin != NULL) {
+            /*
+             * The frame is detached but not yet freed, so its contents are
+             * still valid for the loader. A new fault on this origin may
+             * already be loading a different frame concurrently.
+             */
+            UnloadOriginFromFrame(dead_origin, phys);
             FreeDiscardedPhys(GetPhysPage(phys));
             DerefObject(dead_origin);       /* the phys_page's reference */
         }
@@ -1035,6 +1104,122 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
         DerefObject(vp);                    /* the slot's reference */
         DerefObject(vp);                    /* ours, taken above - frees the vp */
         return;
+    }
+}
+
+/*
+ * Wires one page: faults it in if needed, then bumps the wire count on its
+ * frame under pp->lock. FindDiscardPage() rechecks 'wired' under that same
+ * lock, so once the increment lands the frame can't be discarded.
+ *
+ * Fixed pages (MMIO etc.) are never discarded, so they only need faulting in.
+ */
+static int WireVirtPage(struct vas* vas, size_t virt) {
+    int retries = 0;
+
+    for (;;) {
+        if (++retries > VMM_MAX_FAULT_RETRIES) {
+            Panic(PANIC_VMM_LIVELOCK);
+        }
+
+        LockVas(vas);
+        struct virt_page* vp = GetVirtualPageFromVirt(vas, virt);
+        if (vp == NULL) {
+            UnlockVas(vas);
+            return EFAULT;
+        }
+        if (vp->present && vp->fixed) {
+            UnlockVas(vas);
+            return 0;
+        }
+        if (!vp->present || vp->busy > 0) {
+            /* Not resident (load it) or mid-critical-section (this backs off
+             * and yields). Either way, go round again afterwards. */
+            UnlockVas(vas);
+            HandlePageFault(virt, 0);
+            continue;
+        }
+
+        /* Present: phys outer / vas inner, so drop the vas lock, take the
+         * frame, and revalidate - same dance as ReleaseVirtPage(). */
+        size_t phys = vp->phys;
+        RefObject(vp);
+        UnlockVas(vas);
+
+        struct phys_page* pp = GetPhysPage(phys);
+        AcquireSpinlock(&pp->lock);
+        LockVas(vas);
+
+        if (GetVirtualPageFromVirt(vas, virt) != vp || !vp->present || vp->phys != phys) {
+            /* Discarded (or discarded and refaulted) while we were waiting. */
+            UnlockVas(vas);
+            ReleaseSpinlock(&pp->lock);
+            DerefObject(vp);
+            continue;
+        }
+
+        assert(pp->wired != 0xFFFF);        /* overflow */
+        pp->wired++;
+        UnlockVas(vas);
+        ReleaseSpinlock(&pp->lock);
+        DerefObject(vp);
+        return 0;
+    }
+}
+
+/* The page must currently be wired by the caller, so it can't have moved. */
+static void UnwireVirtPage(struct vas* vas, size_t virt) {
+    LockVas(vas);
+    struct virt_page* vp = GetVirtualPageFromVirt(vas, virt);
+    assert(vp != NULL && vp->present);      /* unwire without a matching wire */
+    if (vp == NULL || !vp->present || vp->fixed) {
+        UnlockVas(vas);
+        return;
+    }
+    size_t phys = vp->phys;
+    UnlockVas(vas);
+
+    struct phys_page* pp = GetPhysPage(phys);
+    AcquireSpinlock(&pp->lock);
+    assert(pp->wired > 0);                  /* underflow */
+    if (pp->wired > 0) {
+        pp->wired--;
+    }
+    ReleaseSpinlock(&pp->lock);
+}
+
+export int WireVirt(void* ptr, size_t bytes) {
+    if (ptr == NULL || bytes == 0) {
+        return EINVAL;
+    }
+
+    struct vas* vas = GetCurrentVas();
+    size_t first = ((size_t) ptr) / PAGE_SIZE;
+    size_t last  = (((size_t) ptr) + bytes - 1) / PAGE_SIZE;
+
+    for (size_t pg = first; pg <= last; ++pg) {
+        int res = WireVirtPage(vas, pg * PAGE_SIZE);
+        if (res != 0) {
+            for (size_t done = first; done < pg; ++done) {
+                UnwireVirtPage(vas, done * PAGE_SIZE);
+            }
+            return res;
+        }
+    }
+    return 0;
+}
+
+export void UnwireVirt(void* ptr, size_t bytes) {
+    if (ptr == NULL || bytes == 0) {
+        return;
+    }
+
+    struct vas* vas = GetCurrentVas();
+    size_t first = ((size_t) ptr) / PAGE_SIZE;
+    size_t last  = (((size_t) ptr) + bytes - 1) / PAGE_SIZE;
+
+    for (size_t pg = first; pg <= last; ++pg) {
+        UnwireVirtPage(vas, pg * PAGE_SIZE);
     }
 }
 

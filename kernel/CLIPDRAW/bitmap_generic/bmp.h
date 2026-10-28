@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BMP_H
+#define BMP_H
 
 // ---------------------------------------------------------------------
 // Generic Windows BMP reading routines, shared between drivers.
@@ -167,3 +168,38 @@ const uint8_t* BmpRowCursorNext(bmp_row_cursor_t* cursor);
 // Releases whatever BmpRowCursorInit() allocated. Safe to call
 // unconditionally.
 void BmpRowCursorFree(bmp_row_cursor_t* cursor);
+
+// ---------------------------------------------------------------------
+// Checkpointing - lets a cursor be resumed later near a specific row
+// instead of always starting over from the beginning. Only meaningful
+// for RLE sources: decoding row N there always means decoding
+// everything before it, so a caller that expects to revisit the same
+// image's rows more than once (e.g. regenerating a discarded page of
+// something built from this BMP) can save a checkpoint while it
+// happens to be walking forward anyway, and resume near it later
+// instead of re-walking from row 0 every time. For a non-RLE source
+// there's nothing to save - BmpRowCursorNext() is already O(1)
+// regardless of row, so a checkpoint for one is just the zeroed
+// starting state and resuming from it costs nothing extra anyway.
+// ---------------------------------------------------------------------
+typedef struct {
+    size_t rle_pos;
+    int    rle_x, rle_y;
+    int    finished;
+    int    next_row; // which row BmpRowCursorNext() will return first after resuming
+} bmp_row_checkpoint_t;
+
+// Captures `cursor`'s current state into `checkpoint`. Call this
+// between BmpRowCursorNext() calls - it captures "about to produce
+// cursor->next_row", not whatever row was just returned.
+void BmpRowCursorSaveCheckpoint(const bmp_row_cursor_t* cursor, bmp_row_checkpoint_t* checkpoint);
+
+// Initializes `cursor` the same way BmpRowCursorInit() does (same
+// allocation, same cost), but resumes decoding from a previously saved
+// checkpoint instead of the start of the stream - the next
+// BmpRowCursorNext() call returns checkpoint->next_row. Returns 1 on
+// success, 0 on allocation failure.
+int BmpRowCursorResume(const bmp_info_t* info, const bmp_row_checkpoint_t* checkpoint,
+                        bmp_row_cursor_t* cursor);
+
+#endif // BMP_H

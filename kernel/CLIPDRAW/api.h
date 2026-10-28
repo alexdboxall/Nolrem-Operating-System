@@ -369,8 +369,9 @@ struct window;
 typedef int (*winproc_t)(struct window* self, struct msg msg);
 
 /* Bitmap functions. */
-struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, uint8_t* bmp);
-struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, uint8_t* bmp, int w, int h);
+struct file;
+struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, struct file* bmp);
+struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, struct file* bmp, int w, int h);
 int CdPaintBitmap(struct dc* dc, struct compat_bitmap* bitmap, struct point dest);
 
 

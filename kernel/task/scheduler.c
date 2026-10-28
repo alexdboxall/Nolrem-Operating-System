@@ -3,6 +3,7 @@
 #include <thread.h>
 #include <spinlock.h>
 #include <vmm.h>
+#include <errno.h>
 #include <arch.h>
 #include <panic.h>
 #include <log.h>

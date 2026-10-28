@@ -47,6 +47,8 @@ void InitVgaPalette(void);
 void VGADrawGlyph(struct graphics_driver*, int x, int y, struct rect bound, uint32_t col,
     int glyph_w_px, int glyph_h, uint8_t* glyph_col_maj_order);
     
+struct file;
+
 void VgaInvertRect(struct graphics_driver*, int x1, int y1, int x2, int y2, bool half);
 void VgaScrollRect(struct graphics_driver*, int x_start, int y_start, int x_end, int y_end, int delta_y);
 void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour);
@@ -55,7 +57,7 @@ void VgaPutBrushRect(struct graphics_driver*, int x1, int y1, int x2, int y2, ui
 void VgaPenLine(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour, int thickness, uint8_t* pattern, int pat_width, int pat_height);
 void VGADrawMouse(struct graphics_driver*, int x, int y, const uint32_t* black, const uint32_t* white, void* _restore_buffer, int width, int height);
 void VGARemoveMouse(struct graphics_driver*, int x, int y, void* _restore_buffer, int width, int height);
-struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, uint8_t* bmp_file_data,
+struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, struct file* file,
                                                  int target_w, int target_h);
 void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
                     struct rect src, struct point dest);

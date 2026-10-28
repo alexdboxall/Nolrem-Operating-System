@@ -38,6 +38,6 @@ struct graphics_driver {
     void (*pen_line)(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour, int thickness, uint8_t* pattern, int pat_width, int pat_height, bool inv_instead);
     void (*draw_mouse)(struct graphics_driver*, int x, int y, const uint32_t* black, const uint32_t* white, void* restore_buffer, int width, int height);
     void (*remove_mouse)(struct graphics_driver*, int x, int y, void* _restore_buffer, int width, int height);
-    struct compat_bitmap* (*create_compatible_bitmap)(struct graphics_driver*, uint8_t* bmp_data, int target_width, int target_height);
+    struct compat_bitmap* (*create_compatible_bitmap)(struct graphics_driver*, struct file* bmp_data, int target_width, int target_height);
     void (*blit_compatible_bitmap)(struct graphics_driver*, struct compat_bitmap* bmp, struct rect src, struct point dst);
 };

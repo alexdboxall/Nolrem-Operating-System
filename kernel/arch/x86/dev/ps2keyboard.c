@@ -87,12 +87,13 @@ static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
             c = KEYCODE_ESCAPE;
             break;
         case SET1_SHIFT:
-            shift_held = !release_mode;
+            c = KEYCODE_LSHIFT;
             break;
         case SET1_SHIFT_R:
-            shift_r_held = !release_mode;
+            c = KEYCODE_RSHIFT;
             break;
         case SET1_CTRL:
+            c = KEYCODE_LCTRL;
             control_held = !release_mode;
             break;
         case SET1_CAPS_LOCK:

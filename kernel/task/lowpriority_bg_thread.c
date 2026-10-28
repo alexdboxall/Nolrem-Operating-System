@@ -21,7 +21,7 @@ void LowPriorityBackgroundThread(void*) {
     bool is_zeroed = false;
     bool done_heap_purge = false;
     bool done_vnode_purge = false;
-
+    bool out_of_discards = false;
     while (true) {
         if (!ArchAreInterruptsEnabled()) {
             Panic(PANIC_FUCK_ME);
@@ -84,10 +84,18 @@ void LowPriorityBackgroundThread(void*) {
         }
 #endif
 
-        if (time_running_for_ns >= MS_TO_NS(1000)) {
+        LogPrintf("%d KB free!\n", GetFreeMemory() / 1024);
+
+        if (time_running_for_ns >= MS_TO_NS(5000)) {
+            if (/*low_mem &&*/ !out_of_discards) {
+                struct phys_page* retv = DiscardPage();
+                out_of_discards = retv == NULL;
+            }
             ArchIdle();
             ArchIdle();
             ArchIdle();
+        } else {
+            out_of_discards = false;
         }
     }
 }

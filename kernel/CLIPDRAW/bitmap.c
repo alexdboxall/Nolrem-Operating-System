@@ -6,12 +6,12 @@
 #include <errno.h>
 #include "clipdraw_internal.h"
 
-export struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, uint8_t* bmp, int w, int h) {
+export struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, struct file* bmp, int w, int h) {
     struct graphics_driver* drv = GetOutputDriver(dc);
     return drv->create_compatible_bitmap(drv, bmp, w, h);
 }
 
-export struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, uint8_t* bmp) {
+export struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, struct file* bmp) {
     return CdCreateCompatibleBitmapStretched(dc, bmp, -1, -1);
 }
 

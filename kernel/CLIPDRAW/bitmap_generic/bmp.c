@@ -1,12 +1,11 @@
 #include "bmp.h"
-#include "../api.h"
+#include "../api.h" // AllocHeap / FreeHeap - adjust the path if this lands elsewhere
 #include <string.h>
 
 static uint32_t ReadU32LE(const uint8_t* p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
            ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
-
 static uint16_t ReadU16LE(const uint8_t* p) {
     return (uint16_t)(p[0] | (p[1] << 8));
 }
@@ -327,4 +326,30 @@ void BmpRowCursorFree(bmp_row_cursor_t* cursor) {
         FreeHeap(cursor->row_buffer);
         cursor->row_buffer = NULL;
     }
+}
+
+void BmpRowCursorSaveCheckpoint(const bmp_row_cursor_t* cursor, bmp_row_checkpoint_t* checkpoint) {
+    checkpoint->rle_pos   = cursor->rle_pos;
+    checkpoint->rle_x     = cursor->rle_x;
+    checkpoint->rle_y     = cursor->rle_y;
+    checkpoint->finished  = cursor->finished;
+    checkpoint->next_row  = cursor->next_row;
+}
+
+int BmpRowCursorResume(const bmp_info_t* info, const bmp_row_checkpoint_t* checkpoint,
+                        bmp_row_cursor_t* cursor) {
+    if (!BmpRowCursorInit(info, cursor)) return 0;
+
+    // Only an RLE cursor carries resumable state (row_buffer != NULL
+    // is how BmpRowCursorNext() already tells the two apart) - for
+    // anything else, the fresh init above is already exactly right and
+    // there's nothing here to overwrite.
+    if (cursor->row_buffer) {
+        cursor->rle_pos  = checkpoint->rle_pos;
+        cursor->rle_x    = checkpoint->rle_x;
+        cursor->rle_y    = checkpoint->rle_y;
+        cursor->finished = checkpoint->finished;
+        cursor->next_row = checkpoint->next_row;
+    }
+    return 1;
 }

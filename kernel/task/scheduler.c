@@ -134,44 +134,75 @@ export void ReleaseScheduler(void) {
     ReleaseIrqPrevent();
 }
 
+struct msg irq_msg_queue[32];
 
-#define QUEUE_SIZE 32
-#define QUEUE_MASK (QUEUE_SIZE - 1)
-
-struct msg irq_msg_queue[QUEUE_SIZE];
-atomic_uint_fast32_t irq_head = 0;
-atomic_uint_fast32_t irq_tail = 0;
+// Both bitmaps start at 0 (all slots free, no slots filled)
+_Atomic uint32_t irq_msg_claimed = 0;
+_Atomic uint32_t irq_msg_filled = 0;
 
 static int EnqueueIrqMessage(struct msg msg) {
-    uint32_t head = atomic_load_explicit(&irq_head, memory_order_relaxed);
+    uint32_t current = atomic_load_explicit(&irq_msg_claimed, memory_order_relaxed);
+    
     while (true) {
-        uint32_t tail = atomic_load_explicit(&irq_tail, memory_order_acquire);
-        if ((head - tail) >= QUEUE_SIZE) {
-            return ENOBUFS;
+        if (current == UINT32_MAX) {
+            return ENOBUFS; // Queue completely full
         }
-        if (atomic_compare_exchange_weak_explicit(&irq_head, &head, head + 1, 
-                                                 memory_order_release, 
+        
+        // Find the first zero bit (free slot)
+        int bit_index = __builtin_ctz(~current);
+        if (bit_index >= 32) return ENOBUFS; // Safety boundary check
+        
+        uint32_t desired = current | (1U << bit_index);
+        
+        // Attempt to atomically claim/reserve this specific bit
+        if (atomic_compare_exchange_weak_explicit(&irq_msg_claimed, &current, desired,
+                                                 memory_order_relaxed,
                                                  memory_order_relaxed)) {
-            irq_msg_queue[head & QUEUE_MASK] = msg;
+            // 1. We successfully claimed slot 'bit_index'. Nobody else can touch it.
+            irq_msg_queue[bit_index] = msg;
+            
+            // 2. Safely publish to consumers that data is ready.
+            // memory_order_release ensures the payload write finishes BEFORE the bit flips.
+            atomic_fetch_or_explicit(&irq_msg_filled, (1U << bit_index), memory_order_release);
             return 0;
         }
+        // If CAS failed, 'current' is automatically updated with the new snapshot; loop tries again.
     }
 }
 
 static int DequeueIrqMessage(struct msg* msg_out) {
-    uint32_t tail = atomic_load_explicit(&irq_tail, memory_order_relaxed);
+    if (msg_out == NULL) {
+        return EINVAL;
+    }
+    
+    uint32_t current = atomic_load_explicit(&irq_msg_filled, memory_order_relaxed);
     
     while (true) {
-        uint32_t head = atomic_load_explicit(&irq_head, memory_order_acquire);
-        if (tail == head) {
-            return EAGAIN;
+        if (current == 0) {
+            return EAGAIN; // Queue completely empty
         }
-        if (atomic_compare_exchange_weak_explicit(&irq_tail, &tail, tail + 1, 
-                                                 memory_order_release, 
+        
+        // Find the first set bit (available slot)
+        // Note: Using ctz (Count Trailing Zeros) to match the producer's order.
+        int bit_index = __builtin_ctz(current);
+        if (bit_index >= 32) return EAGAIN;
+        
+        uint32_t desired = current & ~(1U << bit_index);
+        
+        // Attempt to atomically claim this filled slot for reading
+        // memory_order_acquire ensures we don't read the array until we successfully win this bit
+        if (atomic_compare_exchange_weak_explicit(&irq_msg_filled, &current, desired,
+                                                 memory_order_acquire,
                                                  memory_order_relaxed)) {
-            *msg_out = irq_msg_queue[tail & QUEUE_MASK];
+            // 1. We successfully claimed this filled slot. Copy data out.
+            *msg_out = irq_msg_queue[bit_index];
+            
+            // 2. Free up the slot in the 'claimed' bitmap so producers can reuse it.
+            // memory_order_release ensures the read finishes BEFORE the slot is re-opened.
+            atomic_fetch_and_explicit(&irq_msg_claimed, ~(1U << bit_index), memory_order_release);
             return 0;
         }
+        // If CAS failed, someone else grabbed this message; 'current' updates, loop retries.
     }
 }
 

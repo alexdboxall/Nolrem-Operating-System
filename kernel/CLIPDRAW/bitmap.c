@@ -17,17 +17,21 @@ export struct compat_bitmap* CdCreateCompatibleBitmap(struct dc* dc, struct file
 
 struct context {
     struct dc* dc;
-    struct point dest;
+    struct point dest;       // Top-left destination corner on the DC
+    struct rect src_rect;    // The sub-rectangle within the bitmap to paint
     struct compat_bitmap* bmp;
 };
 
-static int PaintBitmapCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
+static int PaintBitmapPartialCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
     struct context* ctxt = _ctxt;
     struct rect src;
+    
+    // Calculate how much the current clipped rectangle (r) is offset 
+    // from the starting destination point, and apply that same offset to src_rect
+    src.x = ctxt->src_rect.x + (r.x - ctxt->dest.x);
+    src.y = ctxt->src_rect.y + (r.y - ctxt->dest.y);
     src.w = r.w;
     src.h = r.h;
-    src.x = r.x - ctxt->dest.x;
-    src.y = r.y - ctxt->dest.y;
 
     struct point dest;
     dest.x = r.x;
@@ -38,26 +42,35 @@ static int PaintBitmapCallback(struct rect r, void* _ctxt, int rv, bool* cancel)
     return rv;
 }
 
-export int CdPaintBitmap(struct dc* dc, struct compat_bitmap* bitmap, struct point dest) {
+export int CdPaintBitmapPartial(struct dc* dc, struct compat_bitmap* bitmap, struct point dest, struct rect src_rect) {
     struct context ctxt;
     ctxt.dc = dc;
     ctxt.dest = dest;
+    ctxt.src_rect = src_rect;
     ctxt.bmp = bitmap;
 
+    // The bounding box in the destination DC matches the width and height of the source rectangle
     struct rect r;
     r.x = dest.x;
     r.y = dest.y;
-    r.w = bitmap->width;
-    r.h = bitmap->height;
+    r.w = src_rect.w;
+    r.h = src_rect.h;
+
     struct region rrgn = CdCreateRectRegionIndirect(r);
     struct region clipped = CdIntersectWithClipRegion(dc, rrgn);
     CdFreeRegion(rrgn);
-    int retv = IterateRegion(
-        clipped, 
-        PaintBitmapCallback,
-        &ctxt,
-        0
-    );
+
+    int retv = IterateRegion(clipped, PaintBitmapPartialCallback, &ctxt, 0);
     CdFreeRegion(clipped);
+
     return retv;
+}
+
+export int CdPaintBitmap(struct dc* dc, struct compat_bitmap* bitmap, struct point dest) {
+    return CdPaintBitmapPartial(dc, bitmap, dest, (struct rect) {
+        .x = 0, 
+        .y = 0, 
+        .w = bitmap->width, 
+        .h = bitmap->height
+    });
 }

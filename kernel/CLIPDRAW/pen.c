@@ -7,6 +7,9 @@
 
 static void CleanupPen(void* _pn) { 
     struct pen* pn = _pn;
+    if (pn == NULL) {
+        return;
+    }
     FreeHeap(pn);
 }
 
@@ -17,6 +20,9 @@ export struct pen* CdCreateCustomPen(colour_t colour, int width, int height, uin
         return NULL;
     }
     struct pen* pn = AllocHeap(sizeof(struct pen));
+    if (pn == NULL) {
+        return NULL;
+    }
     InitUserObject(pn, UOBJ_PEN);
     pn->col = colour;
     pn->is_custom = true;
@@ -31,6 +37,9 @@ export struct pen* CdCreateCustomPen(colour_t colour, int width, int height, uin
 
 export struct pen* CdCopyPen(struct pen* pen) {
     struct pen* pn = AllocHeap(sizeof(struct pen));
+    if (pn == NULL) {
+        return NULL;
+    }
     LockUserObject(pen);
     memcpy(pn, pen, sizeof(struct pen));
     UnlockUserObject(pen);

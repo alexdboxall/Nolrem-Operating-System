@@ -5,6 +5,7 @@
 
 #include "dynamic_array.h"
 
+/* TODO: AllocHeap failure safety */
 struct dynamic_array CreateDynamicArray(int data_size, int initial_allocation) {
     struct dynamic_array da;
     if (initial_allocation < 1) {

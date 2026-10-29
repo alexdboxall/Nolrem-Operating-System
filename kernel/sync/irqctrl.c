@@ -11,22 +11,22 @@ void AcquireIrqPrevent(void) {
     if (cpu->irq_disable_counter++ == 0) {
         cpu->saved_interrupt_enabled = were_irqs_on;
     }
-#ifndef NDEBUG
+//#ifndef NDEBUG
     if (cpu->irq_disable_counter == 0) {
         LogPrintf("irq_disable_counter was -1\n");
         Panic(PANIC_FUCK_ME);
     }
-#endif
+//#endif
 }
 
 void ReleaseIrqPrevent(void) {
     struct cpu_data* cpu = GetCpu();
-#ifndef NDEBUG
+//#ifndef NDEBUG
     if (cpu->irq_disable_counter == 0) {
         LogPrintf("irq_disable_counter will be -1\n");
         Panic(PANIC_FUCK_ME);
     }
-#endif
+//#endif
     if (--cpu->irq_disable_counter == 0) {
         if (cpu->saved_interrupt_enabled) {
             ArchEnableInterrupts();

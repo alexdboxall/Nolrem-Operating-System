@@ -3,41 +3,113 @@
 #include <limits.h>
 #include <log.h>
 #include <heap.h>
+#include <errno.h>
 
 #include "dynamic_array.h"
 #include "api.h"
 #include "region_internal.h"
 #include "clipdraw_internal.h"
 
-static void ExpandToFit(struct region* rgn, int extra_bytes) {
-    rgn->used_length += extra_bytes;
-    while (rgn->used_length >= rgn->allocated_length) {
-        bool power2 = ((rgn->allocated_length) & (rgn->allocated_length << 1)) == 0;
-        if (rgn->allocated_length < 512) {
-            rgn->allocated_length *= 2;
-        } else if (power2) {
-            rgn->allocated_length += rgn->allocated_length >> 1;
-        } else {
-            rgn->allocated_length /= 3;
-            rgn->allocated_length *= 4;
-        }
-        rgn->data = ReallocHeap(rgn->data, rgn->allocated_length);
-    }
+struct region CdBadRegion(void) {
+    return (struct region) {.data = NULL, .allocated_length = SIZE_MAX, .used_length = SIZE_MAX};
 }
 
-void BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt) {
+export bool CdIsRegionBad(struct region rgn) {
+    return rgn.data == NULL && rgn.allocated_length == SIZE_MAX && rgn.used_length == SIZE_MAX;
+}
+
+export bool CdIsRegionEmpty(struct region rgn) {
+    return rgn.data == NULL || ((struct region_data*) rgn.data)->num_bands == 0;
+}
+
+static int ExpandToFit(struct region* rgn, int extra_bytes) {
+    size_t new_used = rgn->used_length + extra_bytes;
+    size_t new_alloc = rgn->allocated_length;
+
+    while (new_used >= new_alloc) {
+        bool power2 = ((new_alloc) & (new_alloc << 1)) == 0;
+        if (new_alloc < 512) {
+            new_alloc *= 2;
+        } else if (power2) {
+            new_alloc += new_alloc >> 1;
+        } else {
+            new_alloc /= 3;
+            new_alloc *= 4;
+        }
+    }
+
+    if (new_alloc != rgn->allocated_length) {
+        void* new_data = ReallocHeap(rgn->data, new_alloc);
+        if (new_data == NULL) {
+            return ENOMEM;
+        }
+        rgn->data = new_data;
+        rgn->allocated_length = new_alloc;
+    }
+
+    rgn->used_length = new_used;
+    return 0;
+}
+
+int BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt) {
+    ctxt->prev_y1 = y0;
+    ctxt->current_points = NULL;
+
     rgn->used_length = sizeof(struct region_data);
     rgn->allocated_length = 32;
     rgn->data = AllocHeap(rgn->allocated_length);
+    if (rgn->data == NULL) {
+        rgn->used_length = 0;
+        rgn->allocated_length = 0;
+        return ENOMEM;
+    }
     
     struct region_data* data = rgn->data;
     data->num_bands = 0;
     data->trans_x = 0;
     data->trans_y = 0;
 
-    ctxt->prev_y1 = y0;
-    ctxt->current_points = NULL;
+    return 0;
 }
+
+/*
+ * Throws away a half-built region: call this if AddScanline or FinishRegion
+ * fails (or if you decide to give up on a build for any other reason). Frees
+ * everything the builder owns and leaves `rgn` as NULL/0. Safe to call on a
+ * builder whose BuildNewRegion failed.
+ */
+void AbortNewRegion(struct region* rgn, struct region_build_context* ctxt) {
+    if (ctxt->current_points != NULL) {
+        FreeHeap(ctxt->current_points);
+        ctxt->current_points = NULL;
+    }
+    if (rgn->data != NULL) {
+        FreeHeap(rgn->data);
+        rgn->data = NULL;
+    }
+    rgn->allocated_length = 0;
+    rgn->used_length = 0;
+}
+
+int FinishRegion(struct region* rgn, struct region_build_context* ctxt) {
+    int err = AddScanline(rgn, ctxt, -1, NULL, false);
+    if (err != 0) {
+        return err;
+    }
+    if (rgn->data == NULL) {
+        rgn->allocated_length = 0;
+        rgn->used_length = 0;
+        return 0;
+    }
+    if (((struct region_data*) rgn->data)->num_bands == 0) {
+        FreeHeap(rgn->data);
+        rgn->data = NULL;
+        rgn->allocated_length = 0;
+        rgn->used_length = 0;
+    }
+    return 0;
+}
+
 
 /*
  * This should be the only function ever used to generate regions. We need
@@ -45,7 +117,7 @@ void BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context*
  * representation. This includes choosing the right encoding mode at all cases
  * (e.g. if you can use small/compact mode, you must!).
  */
-void AddScanline(
+int AddScanline(
     struct region* rgn,
     struct region_build_context* ctxt,
     int num_spans,
@@ -74,20 +146,25 @@ void AddScanline(
 
         if (num_spans == -1) {
             /* You've made the empty region! */
-            return;
+            return 0;
         }
 
         if (num_spans == 0) {
             ctxt->prev_y1++;
-            return;
+            return 0;
+        }
+
+        int16_t* new_points = AllocHeap(new_span_bytes);
+        if (new_points == NULL) {
+            return ENOMEM;
         }
 
         ctxt->count0x7F = 0;
         ctxt->current_spans = num_spans;
-        ctxt->current_points = AllocHeap(new_span_bytes);
+        ctxt->current_points = new_points;
         ctxt->current_height = 1;
         memcpy(ctxt->current_points, x_points, new_span_bytes);
-        return;
+        return 0;
     }
 
     if (ctxt->current_spans == num_spans) {
@@ -99,7 +176,7 @@ void AddScanline(
              */
             if (ctxt->current_height < 32000) {
                 ctxt->current_height++;
-                return;
+                return 0;
             } else {
                 /* 
                  * Fall through and pretend it is different.
@@ -186,16 +263,20 @@ void AddScanline(
                 /* Same as the previous small output! */
 
                 if (ctxt->count0x7F == 0) {
+                    if (ExpandToFit(rgn, 1) != 0) {
+                        return ENOMEM;
+                    }
                     ctxt->count0x7F = 1;
 
-                    ExpandToFit(rgn, 1);
                     uint8_t* ptr = ((struct region_data*) rgn->data)->band_data;
                     ptr[ctxt->current_ptr++] = 0x7F;
 
                 } else if (ctxt->count0x7F == 1) {
+                    if (ExpandToFit(rgn, 1) != 0) {
+                        return ENOMEM;
+                    }
                     ctxt->count0x7F++;
 
-                    ExpandToFit(rgn, 1);
                     uint8_t* ptr = ((struct region_data*) rgn->data)->band_data;
                     ptr[ctxt->current_ptr - 1] = 0x7E;
                     ptr[ctxt->current_ptr++] = (uint8_t) (ctxt->count0x7F - 2);
@@ -211,7 +292,9 @@ void AddScanline(
                 }
             
             } else {
-                ExpandToFit(rgn, 1 + ctxt->current_spans);
+                if (ExpandToFit(rgn, 1 + ctxt->current_spans) != 0) {
+                    return ENOMEM;
+                }
             
                 uint8_t* ptr = ((struct region_data*) rgn->data)->band_data;
                 memcpy(ptr + ctxt->current_ptr, small_output, small_ptr);
@@ -259,7 +342,9 @@ regular_mode:
                 }
             }
 
-            ExpandToFit(rgn, 3 + ctxt->current_spans * (compact_spans ? 2 : 4) + (compact_spans ? 1 : 0));
+            if (ExpandToFit(rgn, 3 + ctxt->current_spans * (compact_spans ? 2 : 4) + (compact_spans ? 1 : 0)) != 0) {
+                return ENOMEM;
+            }
             ptr = ((struct region_data*) rgn->data)->band_data;
 
             ptr[ctxt->current_ptr++] = 0x80 | (compact_spans ? 0x20 : 0) | (ctxt->current_spans & 0x1F);
@@ -271,7 +356,9 @@ regular_mode:
         } else {
             /* Full regular mode */
 
-            ExpandToFit(rgn, 6 + ctxt->current_spans * 4);
+            if (ExpandToFit(rgn, 6 + ctxt->current_spans * 4) != 0) {
+                return ENOMEM;
+            }
             ptr = ((struct region_data*) rgn->data)->band_data;
 
             ptr[ctxt->current_ptr++] = 0x80 | 0x40 | (ctxt->current_spans & 0x3F);
@@ -329,24 +416,35 @@ done_encoding:
     ctxt->prev_y1 += ctxt->current_height;
     ctxt->prev_spans = ctxt->current_spans; 
 
+    /*
+     * NULL it straight away, so that if the allocation below fails the builder
+     * doesn't hold a dangling pointer (AbortNewRegion would double free it).
+     */
     FreeHeap(ctxt->current_points);
+    ctxt->current_points = NULL;
 
     /* 
      * Used by FinishRegion to flush out the data.
      */
     if (num_spans == -1) {
-        return;
+        return 0;
     }
 
     /* 
      * Now we mark down the new scanline we're working on.
      */
-    ctxt->current_spans = num_spans;
     // don't allow allocheap(0) - that gives NULL!! and then we go back to
-    // 'this is the first scanline'!
-    ctxt->current_points = AllocHeap(new_span_bytes + 1);
+    // 'this is the first scanline'! (which is also why +1: NULL now means OOM)
+    int16_t* new_points = AllocHeap(new_span_bytes + 1);
+    if (new_points == NULL) {
+        return ENOMEM;
+    }
+
+    ctxt->current_spans = num_spans;
+    ctxt->current_points = new_points;
     ctxt->current_height = 1;
     memcpy(ctxt->current_points, x_points, new_span_bytes);
+    return 0;
 }
 
 struct region_iteration_context {
@@ -382,11 +480,13 @@ struct region_iteration_context {
     bool done;
     uint8_t* prev_small_mode;       // caller must provide as must be stable memory address across calls
                                     // (we have cx.ptr pointing to within it, so can't be on a local frame
-                                    //  to IterateRegion3 like it would be if we kept it in cx)
-                                    // must be 16 bytes long of memory behind it
+                                    //  to IterateRegionCoroutine like it would be if we kept it in cx)
+                                    // must be 16 bytes long of memory behind it, and must outlive the
+                                    // context. A local array in whoever owns the context is perfect:
+                                    // that way creating a context can't fail.
 };
 
-static struct region_iteration_context CreateIterationContext(struct region* rgn) {
+static struct region_iteration_context CreateIterationContext(struct region* rgn, uint8_t* prev_small_mode_buffer) {
     struct region_iteration_context ctxt;
     ctxt.num_repeats = 0;
     ctxt.used0x7E = false;
@@ -394,13 +494,10 @@ static struct region_iteration_context CreateIterationContext(struct region* rgn
     ctxt.j = 0;
     ctxt.done = false;
     ctxt.done_band_callback = false;
-    ctxt.prev_small_mode = AllocHeap(16);
-    ctxt.ptr = ((struct region_data*) rgn->data)->band_data;
+    ctxt.prev_small_mode = prev_small_mode_buffer;
+    /* Empty regions have NULL data; the coroutine marks those as done straight away. */
+    ctxt.ptr = rgn->data != NULL ? ((struct region_data*) rgn->data)->band_data : NULL;
     return ctxt;
-}
-
-static void CloseIterationContext(struct region_iteration_context ctxt) {
-    FreeHeap(ctxt.prev_small_mode);
 }
 
 struct iterate_region_thunk_context {
@@ -431,10 +528,14 @@ int IterateRegion(
         .user_context = context,
         .rect_callback = rect_callback
     };
-    struct region_iteration_context ctxt = CreateIterationContext(&rgn);
-    int result = IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk, NULL);
-    CloseIterationContext(ctxt);
-    return result;
+
+    /* 
+     * This lives in our frame for the whole of the iteration, which is exactly
+     * as stable as the context needs it to be. No allocation, so no failure.
+     */
+    uint8_t prev_small_mode[16];
+    struct region_iteration_context ctxt = CreateIterationContext(&rgn, prev_small_mode);
+    return IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk, NULL);
 }
 
 int IterateRegionCoroutine(
@@ -446,19 +547,20 @@ int IterateRegionCoroutine(
     bool (*rect_callback)(int y0, int y1, int x0, int x1, int* retv, void* context),        /* as above */
     struct dc* scale_dc     /* NULL is okay - means no special scaling */
 ) {
-    struct region_data* data = rgn.data;
-    int trans_x = data->trans_x;
-    int trans_y = data->trans_y;
-    int num_bands = data->num_bands;
-
     if (ctxt->done) {
         return retv;
     }
 
-    if (num_bands == 0) {
+    /* Canonical empty region (or a bad one): nothing to iterate, and no data to read. */
+    if (CdIsRegionBad(rgn) || CdIsRegionEmpty(rgn)) {
         ctxt->done = true;
         return retv;
     }
+
+    struct region_data* data = rgn.data;
+    int trans_x = data->trans_x;
+    int trans_y = data->trans_y;
+    int num_bands = data->num_bands;
 
     /*
     Hmm I'm a bit concerned about how much dereferencing will be going on.
@@ -641,14 +743,35 @@ int IterateRegionCoroutine(
 }
 
 struct region CdCopyRegion(struct region rgn) {
+    /* Copying a bad region gives a bad region. */
+    if (CdIsRegionBad(rgn)) {
+        return CdBadRegion();
+    }
+
+    /* Copying an empty region (NULL data, 0 length) must not memcpy NULL. */
+    if (CdIsRegionEmpty(rgn)) {
+        return CdEmptyRegion();
+    }
+
     struct region new_rgn = rgn;
     new_rgn.data = AllocHeap(rgn.allocated_length);
+    if (new_rgn.data == NULL) {
+        return CdBadRegion();
+    }
     memcpy(new_rgn.data, rgn.data, rgn.allocated_length);
     return new_rgn;
 }
 
 export void CdFreeRegion(struct region rgn) {
-    FreeHeap(rgn.data);
+    /* Bad regions own no storage. */
+    if (CdIsRegionBad(rgn)) {
+        return;
+    }
+
+    /* Empty regions own no storage. */
+    if (rgn.data != NULL) {
+        FreeHeap(rgn.data);
+    }
 }
 
 
@@ -696,11 +819,25 @@ static bool CheckRegionCondition(int mode, bool a, bool b) {
 }
 
 export struct region CdGetRegionCombinationEx(int mode, struct region a, struct region b, struct dc* scale_dc) { 
-    struct region_data* a_data = a.data;
-    struct region_data* b_data = b.data;
+    /* A bad input poisons the output. */
+    if (CdIsRegionBad(a) || CdIsRegionBad(b)) {
+        return CdBadRegion();
+    }
 
-    bool a_empty = a_data->num_bands == 0;
-    bool b_empty = b_data->num_bands == 0;
+    bool a_empty = CdIsRegionEmpty(a);
+    bool b_empty = CdIsRegionEmpty(b);
+
+    /*
+     * Empty regions have NULL data, so these may only be dereferenced when the
+     * corresponding region is non-empty. Use these instead of a_data/b_data
+     * wherever the region might be empty.
+     */
+    struct region_data* a_data = a_empty ? NULL : (struct region_data*) a.data;
+    struct region_data* b_data = b_empty ? NULL : (struct region_data*) b.data;
+    int a_num_bands = a_empty ? 0 : a_data->num_bands;
+    int b_num_bands = b_empty ? 0 : b_data->num_bands;
+    int a_trans_y   = a_empty ? 0 : a_data->trans_y;
+    int b_trans_y   = b_empty ? 0 : b_data->trans_y;
 
     if (a_empty || b_empty) {
         switch (mode) {
@@ -731,17 +868,39 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         }
     }
 
+    /*
+     * Everything that owns memory, or that the failure path needs, is declared
+     * and NULL-initialised up front, so that `goto fail` is safe from anywhere
+     * below. (Pointers are set back to NULL after being freed on the normal
+     * path, so that the failure path never double frees.)
+     */
+    int16_t* y_edges = NULL;
+    int16_t* a_x_points = NULL;
+    int16_t* b_x_points = NULL;
+    int16_t* out_spans = NULL;
+    struct region_build_context build_context = {0};
+    struct region out_rgn = {0};
+
+    /* Backing storage for the iteration contexts. See CreateIterationContext. */
+    uint8_t a_small_mode[16];
+    uint8_t b_small_mode[16];
+    struct region_iteration_context a_ctxt;
+    struct region_iteration_context b_ctxt;
+
     /* 
      * Get, in order, all the Y edges across both regions where something 
      * 'happens'. We do this by merging in the lowest values we see into 
      * the list.
      */
-    int allocated = MAX(a_data->num_bands, b_data->num_bands) + 8;
+    int allocated = MAX(a_num_bands, b_num_bands) + 8;
     int num_edges = 0;
-    int16_t* y_edges = AllocHeap(allocated * sizeof(int16_t));
+    y_edges = AllocHeap(allocated * sizeof(int16_t));
+    if (y_edges == NULL) {
+        goto fail;
+    }
 
-    struct region_iteration_context a_ctxt = CreateIterationContext(&a);
-    struct region_iteration_context b_ctxt = CreateIterationContext(&b);
+    a_ctxt = CreateIterationContext(&a, a_small_mode);
+    b_ctxt = CreateIterationContext(&b, b_small_mode);
 
     int16_t a_edges_buffer[2];
     int16_t b_edges_buffer[2];
@@ -752,8 +911,13 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
 
     while (!a_ctxt.done || !b_ctxt.done) {
         while (num_edges + 2 >= allocated) {
-            allocated *= 2;
-            y_edges = ReallocHeap(y_edges, allocated * sizeof(int16_t));
+            int new_allocated = allocated * 2;
+            int16_t* grown = ReallocHeap(y_edges, new_allocated * sizeof(int16_t));
+            if (grown == NULL) {
+                goto fail;      /* y_edges is still the old, valid block */
+            }
+            y_edges = grown;
+            allocated = new_allocated;
         }
 
         if (num_a_edges_buffer == 0 && !a_ctxt.done) {
@@ -808,12 +972,9 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
             a_edges_buffer[0] = a_edges_buffer[1];
         }
     }
-    
-    CloseIterationContext(a_ctxt);
-    CloseIterationContext(b_ctxt);
 
-    a_ctxt = CreateIterationContext(&a);
-    b_ctxt = CreateIterationContext(&b);
+    a_ctxt = CreateIterationContext(&a, a_small_mode);
+    b_ctxt = CreateIterationContext(&b, b_small_mode);
 
     /* 
      * For each adjacent pair of Y edges, find the corresponding band in both
@@ -821,9 +982,9 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
      * them to the output region.
      */
 
-    struct region_build_context build_context;
-    struct region out_rgn;
-    BuildNewRegion(&out_rgn, y_edges[0], &build_context);
+    if (BuildNewRegion(&out_rgn, y_edges[0], &build_context) != 0) {
+        goto fail;
+    }
 
     /* 
      * Clear off the initial band callbacks, we don't need them. The y0, y1
@@ -840,10 +1001,8 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
     int b_y0 = INT16_MIN - 1;
     int b_y1 = INT16_MIN - 1;
 
-    int16_t* a_x_points = NULL;
-    int16_t* b_x_points = NULL;
-    int num_a_x_spans;
-    int num_b_x_spans;
+    int num_a_x_spans = 0;
+    int num_b_x_spans = 0;
 
     for (int j = 0; j < num_edges - 1; ++j) {
         int16_t y0 = y_edges[j];
@@ -855,13 +1014,17 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
              * from the initial priming of the pump, or from the previous
              * loop iteration. 
              */
-            a_y0 = a_ctxt.scaled_y0 + a_data->trans_y;
-            a_y1 = a_ctxt.scaled_y1 + a_data->trans_y;
+            a_y0 = a_ctxt.scaled_y0 + a_trans_y;
+            a_y1 = a_ctxt.scaled_y1 + a_trans_y;
             num_a_x_spans = 0;
             if (a_x_points != NULL) {
                 FreeHeap(a_x_points);
+                a_x_points = NULL;
             }
             a_x_points = AllocHeap(a_ctxt.num_spans * 2 * sizeof(int16_t));
+            if (a_x_points == NULL) {
+                goto fail;
+            }
 
             while (true) {
                 /* 
@@ -884,13 +1047,17 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
             }
         }
         while (!b_ctxt.done && b_y1 <= y0) {
-            b_y0 = b_ctxt.scaled_y0 + b_data->trans_y;
-            b_y1 = b_ctxt.scaled_y1 + b_data->trans_y;
+            b_y0 = b_ctxt.scaled_y0 + b_trans_y;
+            b_y1 = b_ctxt.scaled_y1 + b_trans_y;
             num_b_x_spans = 0;
             if (b_x_points != NULL) {
                 FreeHeap(b_x_points);
+                b_x_points = NULL;
             }
             b_x_points = AllocHeap(b_ctxt.num_spans * 2 * sizeof(int16_t));
+            if (b_x_points == NULL) {
+                goto fail;
+            }
 
             while (true) {
                 int16_t x[2];
@@ -935,7 +1102,15 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         int a_limit = a_has_data ? num_a_x_spans * 2 : 0;
         int b_limit = b_has_data ? num_b_x_spans * 2 : 0;
 
-        int16_t* out_spans = AllocHeap(sizeof(int16_t) * (a_limit + b_limit));
+        /*
+         * The +1 matters: when neither region has data in this slice (a gap
+         * between bands) a_limit + b_limit is 0, and AllocHeap(0) gives NULL,
+         * which we'd now mistake for running out of memory.
+         */
+        out_spans = AllocHeap(sizeof(int16_t) * (a_limit + b_limit + 1));
+        if (out_spans == NULL) {
+            goto fail;
+        }
 
         int out_count = 0;
         bool active_a = false;
@@ -977,36 +1152,44 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         }
 
         for (int i = 0; i < (y1 - y0); ++i) {
-            AddScanline(&out_rgn, &build_context, out_count / 2, out_spans, i != 0);
+            if (AddScanline(&out_rgn, &build_context, out_count / 2, out_spans, i != 0) != 0) {
+                goto fail;
+            }
         }
 
         FreeHeap(out_spans);
+        out_spans = NULL;
     }
 
     FreeHeap(y_edges);
+    y_edges = NULL;
 
     if (a_x_points != NULL) {
         FreeHeap(a_x_points);
+        a_x_points = NULL;
     }
     if (b_x_points != NULL) {
         FreeHeap(b_x_points);
+        b_x_points = NULL;
     }
 
-    CloseIterationContext(a_ctxt);
-    CloseIterationContext(b_ctxt);
-
-    FinishRegion(&out_rgn, &build_context);
+    if (FinishRegion(&out_rgn, &build_context) != 0) {
+        goto fail;
+    }
 
     return out_rgn;
+
+fail:
+    if (y_edges != NULL)    FreeHeap(y_edges);
+    if (a_x_points != NULL) FreeHeap(a_x_points);
+    if (b_x_points != NULL) FreeHeap(b_x_points);
+    if (out_spans != NULL)  FreeHeap(out_spans);
+    AbortNewRegion(&out_rgn, &build_context);
+    return CdBadRegion();
 }
 
 export struct region CdGetRegionCombination(int mode, struct region a, struct region b) {
     return CdGetRegionCombinationEx(mode, a, b, NULL);
-}
-
-export bool CdIsRegionEmpty(struct region rgn) {
-    struct region_data* data = rgn.data;
-    return data->num_bands == 0;
 }
 
 int IterateRegion(
@@ -1036,7 +1219,8 @@ static int GetRegionBoundsCallback(struct rect r, void* ctxt, int rv, bool* canc
 }
 
 export struct rect CdGetRegionBounds(struct region rgn) {
-    if (CdIsRegionEmpty(rgn)) {
+    /* Bad regions have no bounds, same as empty ones. */
+    if (CdIsRegionBad(rgn) || CdIsRegionEmpty(rgn)) {
         struct rect empty = {0};
         return empty;
     }
@@ -1055,25 +1239,28 @@ export struct rect CdGetRegionBounds(struct region rgn) {
     return r;
 }
 
-
-
 struct region CdEmptyRegion(void) {
+    /* The canonical empty region owns no storage at all. */
     struct region rgn;
-    rgn.allocated_length = sizeof(struct region_data);
-    rgn.used_length = rgn.allocated_length;
-    rgn.data = AllocHeap(rgn.allocated_length);
-
-    struct region_data* data = rgn.data;
-    data->trans_x = 0;
-    data->trans_y = 0;
-    data->num_bands = 0;
-
+    rgn.data = NULL;
+    rgn.allocated_length = 0;
+    rgn.used_length = 0;
     return rgn;
 }
 
 export int CdTranslateRegion(struct region* rgn, int offx, int offy) {
     if (rgn == NULL) {
-        return -1;//TODO: EINVAL;
+        return EINVAL;
+    }
+
+    /* Can't translate a bad region. */
+    if (CdIsRegionBad(*rgn)) {
+        return ENOMEM;
+    }
+
+    /* Translating an empty region is a no-op (and there's no data to write to). */
+    if (rgn->data == NULL) {
+        return 0;
     }
 
     struct region_data* data = rgn->data;
@@ -1099,6 +1286,9 @@ export struct region CdCreateRectRegion(int x, int y, int width, int height) {
     struct region rgn;
     rgn.allocated_length = sizeof(struct region_data) + 10;
     rgn.data = AllocHeap(rgn.allocated_length);
+    if (rgn.data == NULL) {
+        return CdBadRegion();
+    }
     rgn.used_length = rgn.allocated_length;
 
     struct region_data* data = rgn.data;
@@ -1126,8 +1316,16 @@ export struct region CdEverythingRegion(void) {
     return CdCreateRectRegion(INT16_MIN, INT16_MIN, 65535, 65535);
 }
 
-export void CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b) {
+/*
+ * Returns 0 on success. On failure (ENOMEM) `*a` is left untouched and still valid.
+ */
+export int CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b) {
     struct region c = CdGetRegionCombination(mode, *a, b);
+    if (CdIsRegionBad(c)) {
+        return ENOMEM;
+    }
+
     CdFreeRegion(*a);
     *a = c;
+    return 0;
 }

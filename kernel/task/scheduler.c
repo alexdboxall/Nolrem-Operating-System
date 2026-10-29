@@ -227,11 +227,11 @@ void ProcessIrqPostMessage(void) {
                     sysbox, 
                     (const void*) &prev_mouse_msg,
                     (const void*) &defer_msg, 
-                    TIMEOUT_INFINITE
+                    TIMEOUT_INSTANT
                 );
                 
             } else {
-                KePostMessage(sysbox, &defer_msg, TIMEOUT_INFINITE);
+                KePostMessage(sysbox, &defer_msg, TIMEOUT_INSTANT);
             }
             if (defer_msg.type == SYSMSG_MOUSEEVENT) {
                 prev_mouse_msg = defer_msg;
@@ -364,6 +364,7 @@ void SwitchToThread(struct thread* thr) {
     old_thr->saved_interrupt_enabled = cpu->saved_interrupt_enabled;
     cpu->irq_disable_counter         = thr->irq_disable_counter;
     cpu->saved_interrupt_enabled     = thr->saved_interrupt_enabled;
+
     ArchSwitchThread(old_thr, current_thread);
 
     /* NOTHING GOES HERE! We need the tail of the call chain to be as

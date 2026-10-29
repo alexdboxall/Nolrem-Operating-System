@@ -10,6 +10,9 @@
 /* At or below this number of physical pages, we start discarding. */
 #define LOW_MEM_THRESHOLD   16
 
+/* At or below this number of physical pages, we start stop servicing the user. */
+#define CRITICAL_THRESHOLD  12
+
 static struct phys_page* sys_pp_table;
 static _Atomic size_t sys_total_pp;
 static _Atomic size_t sys_free_pp;
@@ -65,6 +68,10 @@ export bool IsMemoryRunningLow(void) {
 
 export bool IsMemoryLow(void) {
     return sys_free_pp <= LOW_MEM_THRESHOLD;
+}
+
+export bool IsOutOfMemory(void) {
+    return sys_free_pp <= CRITICAL_THRESHOLD;
 }
 
 export size_t AllocPhys(bool pin) {

@@ -308,6 +308,9 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     }
     
     struct window* win = AllocHeap(sizeof(struct window));
+    if (win == NULL) {
+        return NULL;
+    }
     InitUserObject(win, UOBJ_WINDOW);
 
     if (lock) WmLock();

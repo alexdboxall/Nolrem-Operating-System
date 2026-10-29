@@ -7,8 +7,13 @@
 
 pageable size_t SysIsPointInRegion(size_t a, size_t x, size_t y, size_t) {
     struct uregion* ua = (struct uregion*) a;
-
+    
+    if (IsOutOfMemory()) {
+        KeSetLastUserError(ENOMEM);
+        return 0;
+    }
     if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 

@@ -38,15 +38,40 @@ void InitMessageBox(void) {
 
 export struct msgbox* CreateMessageBox(size_t message_size, size_t max_count) {
     struct msgbox* mbox = AllocHeap(sizeof(struct msgbox));
+    if (mbox == NULL) {
+        return NULL;
+    }
     InitObject(mbox, OBJTYPE_MSGBOX);
     mbox->message_size = message_size;
     mbox->max_count = max_count;
     mbox->data = AllocHeap(message_size * max_count);
+    if (mbox->data == NULL) {
+        FreeHeap(mbox);
+        return NULL;
+    }
     mbox->start_idx = 0;
     mbox->end_idx = 0;
     mbox->lock = CreateMutex();
+    if (mbox->lock == NULL) {
+        FreeHeap(mbox->data);
+        FreeHeap(mbox);
+        return NULL;
+    }
     mbox->empty_sem = CreateSem(max_count, 0);
+    if (mbox->empty_sem == NULL) {
+        DerefObject(mbox->lock);
+        FreeHeap(mbox->data);
+        FreeHeap(mbox);
+        return NULL;
+    }
     mbox->filled_sem = CreateSem(max_count, max_count);
+    if (mbox->empty_sem == NULL) {
+        DerefObject(mbox->empty_sem);
+        DerefObject(mbox->lock);
+        FreeHeap(mbox->data);
+        FreeHeap(mbox);
+        return NULL;
+    }
     mbox->count = 0;
     return mbox;
 }
@@ -96,7 +121,7 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
     int res;
 
     extern struct msgbox* WmGetSystemMessageBox(void);
-    if (mbox == WmGetSystemMessageBox()) {
+    if (mbox == WmGetSystemMessageBox() && timeout != TIMEOUT_INSTANT) {
         res = AcquireSem(mbox->empty_sem, TIMEOUT_INSTANT);
         if (res != 0) {
             Panic(PANIC_SYSTEM_MESSAGES_FULL);
@@ -123,14 +148,22 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
 }
 
 export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, int64_t timeout, bool remove, int* box_out) {
-    if (msg == NULL || mboxes == NULL) {
+    if (msg == NULL || mboxes == NULL || count <= 0) {
         return EINVAL;
     }
-
-    struct sem** sems = AllocHeap(count * sizeof(struct sem*));
+    struct sem* first_sem_ptr;
+    struct sem** sems;
+    if (count == 1) {
+        sems = &first_sem_ptr;
+    } else {
+        sems = AllocHeap(count * sizeof(struct sem*));
+        if (sems == NULL) {
+            return ENOMEM;
+        }
+    }
     for (int i = 0; i < count; ++i) {
         if (mboxes[i] == NULL) {
-            FreeHeap(sems);
+            if (count > 1) FreeHeap(sems);
             return EINVAL;
         }
         sems[i] = mboxes[i]->filled_sem;
@@ -138,7 +171,7 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     int selected_index;
     int res = AcquireSemFromMany(sems, count, timeout, &selected_index);
     if (res != 0) {
-        FreeHeap(sems);
+        if (count > 1) FreeHeap(sems);
         return res;
     }
     if (box_out != NULL) {
@@ -148,7 +181,7 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     res = AcquireMutex(mbox->lock, TIMEOUT_INFINITE);
     if (res != 0) {
         ReleaseSem(mbox->filled_sem);
-        FreeHeap(sems);
+        if (count > 1) FreeHeap(sems);
         return res;
     }
     memcpy(msg, mbox->data + mbox->start_idx * mbox->message_size, mbox->message_size);
@@ -162,7 +195,7 @@ export int KeGetMessageFromMany(struct msgbox** mboxes, int count, void* msg, in
     } else {
         ReleaseSem(mbox->filled_sem);
     }
-    FreeHeap(sems);
+    if (count > 1) FreeHeap(sems);
     return 0;
 }
 

@@ -204,6 +204,9 @@ export bool WmIsControlHeld(struct app* app) {
 
 struct app* WmCreateApp(void) {
     struct app* app = AllocHeap(sizeof(struct app));
+    if (app == NULL) {
+        return NULL;
+    }
     InitUserObject(app, UOBJ_APP);
     app->caret_inverted = false;
     app->caret_level = 0;
@@ -213,12 +216,19 @@ struct app* WmCreateApp(void) {
     app->modifier_state = 0;
     app->win_list_head = NULL;
     app->mbox = CreateMessageBox(sizeof(struct msg), APP_QUEUE_SIZE);
+    if (app->mbox == NULL) {
+        FreeHeap(app);
+        return NULL;
+    }
     memset(app->keystate, 0, sizeof(app->keystate));
     return app;
 }
 
 static void CleanupApp(void* _app) {
     struct app* app = _app;
+    if (app == NULL) {
+        return;
+    }
     DerefObject(app->mbox);
     FreeHeap(app);
 }

@@ -119,6 +119,10 @@ export int Mount(struct vnode* node, const char* name) {
     }
 
     struct mounted_file* mount = AllocHeap(sizeof(struct mounted_file) + strlen(name) + 1);
+	if (mount == NULL) {
+		ReleaseMutex(mount_list_lock);
+		return ENOMEM;
+	}
 	strcpy(mount->name, name);
     mount->node = CreateFile(node, 0, 0, true, true);
 	mount->next = mounted_file_list;
@@ -475,6 +479,9 @@ static int FileAccess(struct aio* aio, bool write) {
 	io->blockable = !(file->node->flags & O_NONBLOCK);
 
 	struct aio* subaio = AllocHeap(sizeof(struct aio));
+	if (subaio == NULL) {
+		return ENOMEM;
+	}
 	CreateIO(subaio, file->node, *io, FileAccessAsyncCallback, (void*) aio);
 	aio->sub = subaio;
 	return (write ? VnodeWrite : VnodeRead)(subaio);

@@ -28,6 +28,7 @@
 #define UOBJ_DC                  19
 #define UOBJ_CURSOR              20
 #define UOBJ_APP                 21
+#define UOBJ_ICON                 22
 
 /* INTERNAL ONLY */
 
@@ -88,7 +89,7 @@ void CdInitTypefaceSubsystem(void);
 
 void PurgeScaledGlyphCacheIfNeeded(void);
 
-void CdRemoveMouse(int x, int y);
+void CdRemoveMouse();
 void CdDrawMouse(int x, int y);
 void CdStartVideoUpdate(int x1, int y1, int x2, int y2); 
 void CdEndVideoUpdate(int x1, int y1, int x2, int y2);
@@ -231,7 +232,7 @@ bool CdIsOverlappingRegion(struct region a, struct region b);
 bool CdIsSubRegion(struct region super, struct region sub);
 bool CdIsRegionEqual(struct region a, struct region b);
 bool CdIsPointInRegion(struct region rgn, int x, int y);
-void CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b);
+int CdGetRegionCombinationInPlace(int mode, struct region* a, struct region b);
 
 struct region CdCreateEllipseRegion(int x, int y, int width, int height);
 struct region CdCreatePolyPolygonRegion(int* px, int* py, int* counts, int polygons, int mode);

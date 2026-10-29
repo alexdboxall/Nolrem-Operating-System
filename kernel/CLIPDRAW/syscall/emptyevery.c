@@ -9,11 +9,16 @@
 #define TYPE_EVERY  1
 
 pageable size_t SysEmptyOrEveryRegion(size_t type, size_t, size_t, size_t) {
+    if (IsOutOfMemory()) {
+        KeSetLastUserError(ENOMEM);
+        return 0;
+    }
     if (type == TYPE_EMPTY) {
         return (size_t) RegionToUserRegion(CdEmptyRegion());
     } else if (type == TYPE_EVERY) {
         return (size_t) RegionToUserRegion(CdEverythingRegion());
     } else {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 }

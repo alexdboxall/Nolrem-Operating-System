@@ -11,6 +11,7 @@
 pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
     void* uo = (void*) a;
     if (!ValidateUserObjectAndAtomicallyRef(uo, UOBJ_ANYTYPE)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
     if (type == TYPE_REF) {

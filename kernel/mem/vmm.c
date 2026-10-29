@@ -804,12 +804,18 @@ retry:
         AcquireMutex(&origin->mtx, TIMEOUT_INFINITE);
         if (origin->phys == 0) {
             size_t frame;
+            retry_enomem2:
             if (origin->is_file) {
                 frame = AllocPhys(true);    /* unpinned manually see later newpp->wired = 0*/
             } else {
                 frame = AllocZeroedPhys();
             }
             if (frame == 0) {
+                LogPrintf("THE FRAME IS ZERO!\n");
+                int res = WmHardError(ENOMEM);
+                if (res == 0) {
+                    goto retry_enomem2;
+                }
                 ReleaseMutex(&origin->mtx);
                 DerefObject(origin);
                 /* TODO: kill the offending process instead of the machine. */
@@ -825,12 +831,18 @@ retry:
              * loader (default or custom) must initialise the entire page.
              */
             if (origin->is_file) {
+            retry_enomem1:
                 int res = LoadOriginIntoFrame(origin, frame);
                 if (res != 0) {
+                    LogPrintf("LoadOriginIntoFrame didn't have enough memory to complete...\n");
+                    res = WmHardError(ENOMEM);
+                    if (res == 0) {
+                        goto retry_enomem1;
+                    }
                     /* free 'frame' here */
                     ReleaseMutex(&origin->mtx);
                     DerefObject(origin);
-                    Panic(PANIC_PAGE_FAULT_IN_NON_PAGED_AREA);  /* TODO: SIGBUS / kill process */
+                    Panic(PANIC_OUT_OF_MEMORY);  /* TODO: SIGBUS / kill process */
                 }
             }
 

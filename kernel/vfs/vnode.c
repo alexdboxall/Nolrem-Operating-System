@@ -9,6 +9,9 @@
 
 export struct vnode* CreateVnode(struct vnode_operations ops, struct stat st) {
     struct vnode* node = AllocHeap(sizeof(struct vnode));
+    if (node == NULL) {
+        return NULL;
+    }
     InitObject(node, OBJTYPE_VNODE);
     node->data = NULL;
     node->stat = st;
@@ -19,6 +22,9 @@ export struct vnode* CreateVnode(struct vnode_operations ops, struct stat st) {
 
 static void CleanupVnode(void* _node) {
     struct vnode* node = _node;
+    if (node == NULL) {
+        return;
+    }
     if (node->stat.st_nlink == 0 && node->ops.delete != NULL) {
         node->ops.delete(node);
     }

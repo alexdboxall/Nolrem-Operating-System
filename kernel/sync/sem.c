@@ -74,6 +74,9 @@ export void InitStaticSem(struct sem* sem, int max, int initial) {
 
 export struct sem* CreateSem(int max, int initial) {
     struct sem* sem = AllocHeap(sizeof(struct sem));
+    if (sem == NULL) {
+        return NULL;
+    }
     InitStaticSem(sem, max, initial);
     return sem;
 }
@@ -84,12 +87,24 @@ export struct mutex* CreateMutex(void) {
 
 static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread* thr) {
     struct wait_clot* clot = AllocHeap(sizeof(struct wait_clot));
+    if (clot == NULL) {
+        return NULL;
+    }
     InitObject(clot, OBJTYPE_WAITCLOT);
     clot->count = count;
     clot->thr = thr;
     clot->sems = AllocHeap(sizeof(struct sem*) * count);
+    if (clot->sems == NULL) {
+        FreeHeap(clot);
+        return NULL;
+    }
     LogPrintf("A..?\n");
     clot->nexts = AllocHeap(sizeof(void*) * count);
+    if (clot->nexts == NULL) {
+        FreeHeap(clot->sems);
+        FreeHeap(clot);
+        return NULL;
+    }
     memset(clot->nexts, 0, sizeof(void*) * count);
     memcpy(clot->sems, sems, sizeof(struct sem*) * count);
     return clot;
@@ -104,10 +119,13 @@ static int LookupClotIndex(struct wait_clot* clot, struct sem* sem) {
     return -1;
 }
 
-static void AddThreadToSemQueues(struct thread* thr, struct sem** sems, int count) {
+static int AddThreadToSemQueues(struct thread* thr, struct sem** sems, int count) {
     void* to_add;
     if (count > 1) {
         to_add = CreateClot(sems, count, thr);
+        if (to_add == NULL) {
+            return ENOMEM;
+        }
     } else {
         to_add = thr;
     }
@@ -133,6 +151,7 @@ static void AddThreadToSemQueues(struct thread* thr, struct sem** sems, int coun
             sem->waiting_list_start = to_add;
         }
     }
+    return 0;
 }
 
 static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
@@ -249,7 +268,11 @@ export int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int
     }
 
     struct thread* curr_thread = GetCurrentThread();
-    AddThreadToSemQueues(curr_thread, sems, count);
+    int res = AddThreadToSemQueues(curr_thread, sems, count);
+    if (res != 0) {
+        ReleaseScheduler();
+        return res;
+    }
     BlockThread();
     ReleaseScheduler();
     int retv = curr_thread->block_return_val;

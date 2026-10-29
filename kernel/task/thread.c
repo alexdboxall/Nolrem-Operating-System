@@ -17,8 +17,15 @@ export size_t GetCurrentThreadKernelStackRemaining(void) {
     return stack_current - stack_bottom;
 }
 
+export void KeSetLastUserError(int err) {
+    GetCurrentThread()->last_error = err;
+}
+
 export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size) {
     struct thread* thr = AllocHeap(sizeof(struct thread));
+    if (thr == NULL) {
+        return NULL;
+    }
     InitObject(thr, OBJTYPE_THREAD);
 
     thr->vas = vas;
@@ -40,6 +47,10 @@ export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void*
         size_t kernel_stack_bottom;
         if (kstack_size < PAGE_SIZE) {
             kernel_stack_bottom = (size_t) AllocHeap(thr->kernel_stack_size);
+            if (kernel_stack_bottom == 0) {
+                FreeHeap(thr);
+                return NULL;
+            }
         } else {
             kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
         }

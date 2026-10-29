@@ -4,8 +4,10 @@
 #include <string.h>
 #include <heapex.h>
 #include <spinlock.h>
+#include <phys.h>
 #include <arch.h>
 #include <vmm.h>
+#include <scheduler.h>          // IsSchedulingInitialised
 
 #define ALIGN       (sizeof(size_t))    // must be power of 2
 
@@ -19,12 +21,13 @@ export void* KeAllocHeap(size_t bytes) {
         return NULL;
     }
     AcquireSpinlock(&heap_lock);
+    if (IsOutOfMemory() && IsSchedulingInitialised()) {
+        ReleaseSpinlock(&heap_lock);
+        return NULL;
+    }
     bytes = (bytes + ALIGN - 1) & ~(ALIGN - 1);
     void* retv = AllocHeapEx(&kernel_heap, bytes);
     ReleaseSpinlock(&heap_lock);
-    if (retv == NULL) {
-        Panic(PANIC_OUT_OF_HEAP);
-    }
     LogPrintf("KeAllocHeap: 0x%X (bytes 0x%X)\n", retv, bytes);
     return retv;
 }
@@ -58,9 +61,6 @@ export void* KeReallocHeap(void* ptr, size_t new_size) {
     AcquireSpinlock(&heap_lock);
     void* retv = ReallocHeapEx(&kernel_heap, ptr, new_size);
     ReleaseSpinlock(&heap_lock);
-    if (retv == NULL) {
-        Panic(PANIC_OUT_OF_HEAP);
-    }
     return retv;
 }
 

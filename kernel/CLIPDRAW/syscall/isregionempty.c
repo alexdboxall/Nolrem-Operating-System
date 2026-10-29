@@ -9,6 +9,7 @@ pageable size_t SysIsRegionEmpty(size_t a, size_t, size_t, size_t) {
     struct uregion* ua = (struct uregion*) a;
 
     if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 

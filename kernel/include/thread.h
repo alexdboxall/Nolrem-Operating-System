@@ -40,6 +40,8 @@ struct thread {
 
     uint32_t irq_disable_counter;
     bool saved_interrupt_enabled;
+
+    int last_error;
 };
 
 struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size);

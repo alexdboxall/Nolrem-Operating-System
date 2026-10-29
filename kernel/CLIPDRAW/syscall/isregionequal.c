@@ -9,11 +9,17 @@ pageable size_t SysIsRegionEqual(size_t a, size_t b, size_t, size_t) {
     struct uregion* ua = (struct uregion*) a;
     struct uregion* ub = (struct uregion*) b;
 
+    if (IsOutOfMemory()) {
+        KeSetLastUserError(ENOMEM);
+        return 0;
+    }
     if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
     if (!ValidateUserObjectAndAtomicallyRef(ub, UOBJ_REGION)) {
         DerefObject(ua);
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 

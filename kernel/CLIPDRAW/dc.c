@@ -131,6 +131,9 @@ export void* CdGetGraphicsObject(struct dc* dc, int type) {
 
 void CleanupDc(void* _dc) {
     struct dc* dc = _dc;
+    if (dc == NULL) {
+        return;
+    }
     DerefObject(dc->brush);
     DerefObject(dc->pen);
     FreeHeap(dc);
@@ -142,6 +145,9 @@ void CdInitDcSubsystem(void) {
 
 export struct dc* CdCreateDc(void) {
     struct dc* dc = AllocHeap(sizeof(struct dc));
+    if (dc == NULL) {
+        return NULL;
+    }
     InitUserObject(dc, UOBJ_DC);
     dc->drv = GetKernelGraphicsDriver();    
     dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);

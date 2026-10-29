@@ -5,6 +5,7 @@
 #include <vfs.h>
 #include <errno.h>
 #include <string.h>
+#include "../../bitmap_generic/bmp.h"
 #include "vga16bmp.h"
 
 // ---------------------------------------------------------------------
@@ -230,7 +231,7 @@ static void BuildReloadIndex(compat_bitmap_storage_t* storage, const bmp_info_t*
     }
 
     bmp_row_cursor_t cursor;
-    if (!BmpRowCursorInit(info, &cursor)) {
+    if (BmpRowCursorInit(info, &cursor) != 0) {
         FreeHeap(page_native_row_lo);
         FreeHeap(reload->state);
         FreeHeap(reload);
@@ -245,7 +246,7 @@ static void BuildReloadIndex(compat_bitmap_storage_t* storage, const bmp_info_t*
                 BmpRowCursorSaveCheckpoint(&cursor, &reload->state[i]);
             }
         }
-        if (!BmpRowCursorNext(&cursor)) break; // shouldn't happen - defensive only
+        if (BmpRowCursorNext(&cursor) == NULL) break; // shouldn't happen - defensive only
     }
 
     BmpRowCursorFree(&cursor);
@@ -315,10 +316,10 @@ static void RegenRleFragment(const bmp_info_t* info, const compat_bitmap_reload_
     bmp_row_cursor_t cursor;
     int start_row = 0;
     if (best) {
-        if (!BmpRowCursorResume(info, best, &cursor)) return;
+        if (BmpRowCursorResume(info, best, &cursor) != 0) return;
         start_row = best->next_row;
     } else {
-        if (!BmpRowCursorInit(info, &cursor)) return;
+        if (BmpRowCursorInit(info, &cursor) != 0) return;
     }
 
     dither_cache_t cache;
@@ -377,7 +378,7 @@ static void RegenerateCore(uint8_t* file_data, int target_width, int target_heig
     if (target_width <= 0 || target_height <= 0) return;
 
     bmp_info_t info;
-    if (!BmpParse(file_data, &info)) return;
+    if (BmpParse(file_data, &info) != 0) return;
 
     int plane_stride;
     size_t plane_size, total_len;
@@ -427,6 +428,7 @@ static int BitmapReload(size_t frame, struct virt_loader* vr, struct page_origin
     compat_bitmap_storage_t* storage = (compat_bitmap_storage_t*)vr->context_p;
     if (!storage || !po->is_file) return EINVAL;
 
+    LogPrintf("BitmapReload...\n");
     size_t offset = po->file_offset;
     size_t size = 0;
     if (offset < storage->total_len) {
@@ -435,13 +437,17 @@ static int BitmapReload(size_t frame, struct virt_loader* vr, struct page_origin
     }
 
     uint8_t* out = (uint8_t*)VmmMapFrame(frame);
-    if (!out) return ENOMEM;
-
+    if (!out) {
+        LogPrintf("..!\n");
+        return ENOMEM;
+    }
+    
     memset(out, 0, PAGE_SIZE); // RegenerateCore only clears `size` bytes
     RegenerateCore(storage->src, storage->width, storage->height, storage->reload,
                    offset, size, out);
 
     VmmUnmapFrame(out);
+    LogPrintf("BitmapReload done...\n");
     return 0;
 }
 
@@ -508,7 +514,7 @@ struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, struct 
     if (!src) return NULL;
 
     bmp_info_t info;
-    if (!BmpParse(src, &info)) {
+    if (BmpParse(src, &info) != 0) {
         FreeMemory(src, src_size);
         return NULL;
     }

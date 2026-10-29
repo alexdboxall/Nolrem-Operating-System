@@ -11,6 +11,9 @@ static struct window_class* classes;
 
 export struct window_class* WmCreateWindowClass(const char* name, winproc_t proc, int flags) {
     struct window_class* wc = AllocHeap(sizeof(struct window_class) + strlen(name) + 1);
+    if (wc == NULL) {
+        return NULL;
+    }
     InitUserObject(wc, UOBJ_WINDOW_CLASS);
 
     strcpy(wc->name, name);

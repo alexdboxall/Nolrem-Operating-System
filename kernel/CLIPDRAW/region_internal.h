@@ -30,8 +30,8 @@ struct region_build_context {
     int count0x7F;
 };
 
-void BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt);
-void AddScanline(
+int BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt);
+int AddScanline(
     struct region* rgn,
     struct region_build_context* ctxt,
     int num_spans,
@@ -39,6 +39,4 @@ void AddScanline(
     bool known_to_be_same_as_prev
 );
 
-static inline void FinishRegion(struct region* rgn, struct region_build_context* ctxt) {
-    AddScanline(rgn, ctxt, -1, NULL, false);
-}
+int FinishRegion(struct region* rgn, struct region_build_context* ctxt);

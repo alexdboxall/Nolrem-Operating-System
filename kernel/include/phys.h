@@ -26,3 +26,4 @@ size_t GetFreeMemory(void);
 
 bool IsMemoryRunningLow(void);      /* start thinking about tossing caches */
 bool IsMemoryLow(void);             /* discarding now, toss everything possible */
+bool IsOutOfMemory(void);         /* stop servicing any user allocs */

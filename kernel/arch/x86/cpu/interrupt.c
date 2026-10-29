@@ -67,6 +67,7 @@ void x86HandleInterrupt(struct x86_regs* r) {
     }
     
     if (num >= PIC_IRQ_BASE && num < PIC_IRQ_BASE + 16) {
+        LogPrintf("IRQ %d\n", num - PIC_IRQ_BASE);
         HandleInterrupt(num - PIC_IRQ_BASE, r);
         SendPicEoi(num);
     }

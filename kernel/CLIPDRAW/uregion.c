@@ -5,6 +5,9 @@
 
 static void CleanupUserRegion(void* _ur) {
     struct uregion* ur = _ur;
+    if (ur == NULL) {
+        return;
+    }
     CdFreeRegion(ur->rgn);
     KeFreeHeap(ur);
 }
@@ -13,6 +16,9 @@ static void CleanupUserRegion(void* _ur) {
 // ie. we don't call FreeRegion() on the original region after this
 struct uregion* RegionToUserRegion(struct region rgn) {
     struct uregion* ur = KeAllocHeap(sizeof(struct uregion));
+    if (ur == NULL) {
+        return NULL;
+    }
     InitUserObject(ur, UOBJ_REGION);
     ur->rgn = rgn;
     return ur;

@@ -9,11 +9,17 @@
 
 static void CleanupBrush(void* _br) { 
     struct brush* br = _br;
+    if (br == NULL) {
+        return;
+    }
     FreeHeap(br);
 }
 
 static struct brush* CdCreateBrush(colour_t primary, colour_t secondary, uint8_t* pattern, int type) {
     struct brush* br = AllocHeap(sizeof(struct brush));
+    if (br == NULL) {
+        return NULL;
+    }
     InitUserObject(br, UOBJ_BRUSH);
     br->origin_x = 0;
     br->origin_y = 0;
@@ -26,6 +32,9 @@ static struct brush* CdCreateBrush(colour_t primary, colour_t secondary, uint8_t
 
 export struct brush* CdCopyBrush(struct brush* old_br) {
     struct brush* br = AllocHeap(sizeof(struct brush));
+    if (br == NULL) {
+        return NULL;
+    }
     InitUserObject(br, UOBJ_BRUSH);
     LockUserObject(old_br);
     br->origin_x = old_br->origin_x;

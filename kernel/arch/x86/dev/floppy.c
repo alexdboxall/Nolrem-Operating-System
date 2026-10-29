@@ -740,6 +740,7 @@ void FloppyDriverThread(void* _flp) {
     }
 }
 
+/* TODO: checking AllocHeap for NULL, proper free of the virt on error */
 void InitFloppy(void) {
     if (!DetectFloppy()) {
         return;

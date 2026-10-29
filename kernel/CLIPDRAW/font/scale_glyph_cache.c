@@ -91,6 +91,10 @@ export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_
     AcquireSpinlock(&lock);
     if (scaled_font_cache == NULL) {
         scaled_font_cache = AllocHeap(sizeof(struct glyph_cache_entry) * NUM_CACHED_GLYPHS);
+        if (scaled_font_cache == NULL) {
+            ReleaseSpinlock(&lock);
+            return;
+        }
         memset(scaled_font_cache, 0, NUM_CACHED_GLYPHS);
     }
     for (int i = 0; i < NUM_CACHED_GLYPHS; ++i) {
@@ -122,6 +126,10 @@ export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_
             ++num_cached;
         }
         scaled_font_cache[lowest_index].data = AllocHeap(size);
+        if (scaled_font_cache[lowest_index].data == NULL) {
+            ReleaseSpinlock(&lock);
+            return;
+        }
         memcpy(scaled_font_cache[lowest_index].data, bitmap, size);
         scaled_font_cache[lowest_index].lru = 0xFFFF;
         scaled_font_cache[lowest_index].ascii = c; 

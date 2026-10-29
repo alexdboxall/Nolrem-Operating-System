@@ -7,8 +7,13 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysGetRegionBounds(size_t rect_ptr, size_t rgn, size_t, size_t) {
+    if (IsOutOfMemory()) {
+        KeSetLastUserError(ENOMEM);
+        return 0;
+    }
     struct uregion* ua = (struct uregion*) rgn;
     if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
     struct rect rect = CdGetRegionBounds(ua->rgn);
@@ -25,6 +30,7 @@ export pageableuserexec struct rect GetRegionBounds(region_t rgn) {
         return r;
     } else {
         struct rect r2 = {0};
+        KeSetLastUserError(res);
         return r2; 
     }
 }

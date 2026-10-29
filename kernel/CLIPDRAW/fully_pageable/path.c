@@ -17,7 +17,13 @@ struct path_entry {
 export pageable struct path CdCreatePath(int start_x, int start_y) {
     struct dynamic_array* data = AllocHeap(sizeof(struct dynamic_array));
     struct dynamic_array* count_data = AllocHeap(sizeof(struct dynamic_array));
-
+    if (data == NULL || count_data == NULL) {
+        if (data != NULL) FreeHeap(data);
+        if (count_data != NULL) FreeHeap(count_data);
+        return (struct path) {
+            .data = NULL,
+        };
+    };
     *data = CreateDynamicArray(sizeof(struct path_entry), 8);
     *count_data = CreateDynamicArray(sizeof(int), 4);
 
@@ -43,6 +49,9 @@ export pageable void CdSetPathTransform(
     int scale_x_16_16, int scale_y_16_16, 
     int trans_x, int trans_y
 ) {
+    if (p == NULL || p->data == NULL) {
+        return;
+    }
     p->scale_x_16_16 = scale_x_16_16;
     p->scale_y_16_16 = scale_y_16_16;
     p->trans_x = trans_x;
@@ -50,12 +59,16 @@ export pageable void CdSetPathTransform(
 }
 
 export pageable void CdLiftPath(struct path* p, int start_x, int start_y) {
+    if (p == NULL || p->data == NULL) {
+        return;
+    }
+
     /* 
      * Must take the count now, otherwise the DrawPath() will cause the current
      * shape to have 1 too many, and the 'new' shape to have 1 too few.
      */
+    
     int count = p->num_points_total - p->count_total_so_far;
-
     CdDrawPath(p, start_x, start_y);
     InsertDynamicArray((struct dynamic_array*) p->count_data, &count);
     p->count_total_so_far = p->num_points_total;
@@ -71,14 +84,30 @@ static pageable int Transform(int64_t pos, int scale_16_16, int trans) {
 
 export pageable struct region CdClosePath(struct path p, int mode) {
     struct region rgn;
+
+    if (p.data == NULL) {
+        return CdEmptyRegion();
+    }
         
     if (p.num_points_total < 3) {
         rgn = CdEmptyRegion();
 
     } else {
         int* xs = AllocHeap(p.num_points_total * sizeof(int));
+        if (xs == NULL) {
+            goto nomem;
+        }
         int* ys = AllocHeap(p.num_points_total * sizeof(int));
+        if (ys == NULL) {
+            FreeHeap(xs);
+            goto nomem;
+        }
         int* counts = AllocHeap(p.polygons * sizeof(int));
+        if (counts == NULL) {
+            FreeHeap(ys);
+            FreeHeap(xs);
+            goto nomem;
+        }
         int* c_arr = DA_GET_ARRAY(*((struct dynamic_array*) p.count_data));
         int i = 0;
         for (; i < p.polygons - 1; ++i) {
@@ -106,6 +135,7 @@ export pageable struct region CdClosePath(struct path p, int mode) {
         FreeHeap(counts);
     }
 
+nomem:
     /* Clear the actual array data. */
     FreeDynamicArray(*((struct dynamic_array*) p.data));
 
@@ -116,6 +146,10 @@ export pageable struct region CdClosePath(struct path p, int mode) {
 }
 
 export pageable struct path CopyPath(struct path old) {
+    if (old.data == NULL) {
+        return old;
+    }
+
     struct dynamic_array* data = AllocHeap(sizeof(struct dynamic_array));
     *data = CopyDynamicArray(*((struct dynamic_array*) old.data));
 
@@ -126,6 +160,10 @@ export pageable struct path CopyPath(struct path old) {
 }
 
 export pageable void CdDrawPath(struct path* p, int x, int y) {
+    if (p == NULL || p->data == NULL) {
+        return;
+    }
+
     /* 
      * Save the old 'current point' into the array. The array stores all points
      * besides the most recently added.
@@ -220,6 +258,10 @@ static pageable void DrawCubicBeizerPathRecursive(
 }
 
 export pageable void DrawCubicBeizerPath(struct path* p, int x, int y, int c1x, int c1y, int c2x, int c2y) {
+    if (p == NULL || p->data == NULL) {
+        return;
+    }
+
     int x1 = p->x;
     int y1 = p->y;
     
@@ -238,6 +280,10 @@ export pageable void DrawQuadraticBezierPath(
     int x, int y,
     int cx, int cy)
 {
+    if (p == NULL || p->data == NULL) {
+        return;
+    }
+
     int x0 = p->x;
     int y0 = p->y;
 

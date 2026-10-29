@@ -17,34 +17,47 @@ struct polypoly {
 #define MAX_POINTS      50000
 
 pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, size_t mode) {
+    if (IsOutOfMemory()) {
+        KeSetLastUserError(ENOMEM);
+        return 0;
+    }
     if (polygons < 1 || polygons > MAX_POLYGONS) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 
     struct polypoly pp;
     struct transfer tr = CreateTransferReadingFromUser((const void*) ppp, sizeof(struct polypoly), 0);
-    if (PerformTransfer(&pp, &tr, sizeof(struct polypoly)) != 0) {
-        return 0;
+    
+    int res = PerformTransfer(&pp, &tr, sizeof(struct polypoly));
+    if (res != 0) {
+        KeSetLastUserError(res);
+        return res;
     }
 
     if (polygons > SIZE_MAX / sizeof(int)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 
     int* cc = AllocHeap(sizeof(int) * polygons);
     if (!cc) {
+        KeSetLastUserError(ENOMEM);
         return 0;
     }
 
     tr = CreateTransferReadingFromUser((const void*) pp.counts, sizeof(int) * polygons, 0);
-    if (PerformTransfer(cc, &tr, sizeof(int) * polygons) != 0) {
+    res = PerformTransfer(cc, &tr, sizeof(int) * polygons);
+    if (res != 0) {
         FreeHeap(cc);
+        KeSetLastUserError(res);
         return 0;
     }
 
     int calculated_sum = 0;
     for (size_t i = 0; i < polygons; ++i) {
         if (calculated_sum > MAX_POINTS - cc[i]) {
+            KeSetLastUserError(EINVAL);
             FreeHeap(cc);
             return 0;
         }
@@ -52,6 +65,7 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
     }
     if (calculated_sum == 0 || calculated_sum > MAX_POINTS) {
         FreeHeap(cc);
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 
@@ -61,6 +75,7 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
         if (xx) FreeHeap(xx);
         if (yy) FreeHeap(yy);
         FreeHeap(cc);
+        KeSetLastUserError(ENOMEM);
         return 0;
     }
 
@@ -85,6 +100,7 @@ cleanup:
     FreeHeap(xx);
     FreeHeap(yy);
     FreeHeap(cc);
+    KeSetLastUserError(EINVAL);
     return 0;
 }
 

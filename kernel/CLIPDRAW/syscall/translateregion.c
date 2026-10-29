@@ -9,6 +9,7 @@ pageable size_t SysTranslateRegion(size_t a, size_t _x, size_t _y, size_t) {
     struct uregion* ua = (struct uregion*) a;
 
     if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+        KeSetLastUserError(EINVAL);
         return 0;
     }
 

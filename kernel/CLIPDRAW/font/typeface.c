@@ -382,12 +382,18 @@ export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
 
 static void CleanupTypeface(void* _tf) {
     struct typeface* tf = _tf;
+    if (tf == NULL) {
+        return;
+    }
     OmfClose(&tf->omf);
     FreeHeap(tf);
 }
 
 static void CleanupFont(void* _fn) {
     struct font* fn = _fn;
+    if (fn == NULL) {
+        return;
+    }
     DerefObject(fn->tf);
     FreeHeap(fn);
 }

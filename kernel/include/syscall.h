@@ -1,6 +1,8 @@
 #pragma once
 
 #include <stddef.h>
+#include <errno.h>
+#include <phys.h>
 
 #define GLUE(a, b) a##b
 #define EVAL(a, b) GLUE(a, b)
@@ -22,6 +24,8 @@ MK_SYSCALL(IsPointInRegion)
 MK_SYSCALL(TranslateRegion)
 MK_SYSCALL(CopyRegion)
 MK_SYSCALL(GetRegionBounds)
+
+void KeSetLastUserError(int errno);
 
 // User side - requests it
 size_t SystemCall(int call, size_t arg1, size_t arg2, size_t arg3, size_t arg4);

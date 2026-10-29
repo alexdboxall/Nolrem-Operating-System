@@ -17,6 +17,9 @@ export struct file* CreateFile(
     struct vnode* node, int mode, int flags, bool can_read, bool can_write
 ) {    
 	struct file* file = AllocHeap(sizeof(struct file));
+    if (file == NULL) {
+        return NULL;
+    }
     InitObject(file, OBJTYPE_FILE);
     
 	file->node = node;

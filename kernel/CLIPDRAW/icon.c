@@ -1,9 +1,9 @@
-#include "font_structures.h"
 #include <heap.h>
+#include <common.h>
 #include <errno.h>
 #include <omf.h>
-#include "../api.h"
-#include "../clipdraw_internal.h"
+#include "api.h"
+#include "clipdraw_internal.h"
 
 struct icon {
     struct user_obj_header hdr;
@@ -12,14 +12,15 @@ struct icon {
     uint16_t* ico_offsets_bitmap;
     uint16_t* ico_offsets_mask;
     uint8_t* ico_types;
-}
+    struct open_mapped_file omf;
+};
 
 export pageable struct icon* CdOpenIcon(const char* file) {
     struct icon* ico = AllocHeap(sizeof(struct icon));
     if (ico == NULL) {
         return NULL;
     }
-    InitUserObject(ico, UBOJ_ICON);
+    InitUserObject(ico, UOBJ_ICON);
 
     int res = OpenAndMapFile(file, &ico->omf);
     if (res != 0) {
@@ -32,10 +33,10 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     ico->ico_offsets_bitmap = NULL;
     ico->ico_types = NULL;
     
-    uint8_t sig1 = OmfRead8AndAdvance(&tf->omf);
-    uint8_t sig2 = OmfRead8AndAdvance(&tf->omf);
-    uint8_t sig3 = OmfRead8AndAdvance(&tf->omf);
-    uint8_t ver  = OmfRead8AndAdvance(&tf->omf);
+    uint8_t sig1 = OmfRead8AndAdvance(&ico->omf);
+    uint8_t sig2 = OmfRead8AndAdvance(&ico->omf);
+    uint8_t sig3 = OmfRead8AndAdvance(&ico->omf);
+    uint8_t ver  = OmfRead8AndAdvance(&ico->omf);
     if (sig1 != 'I' || sig2 != 'C' || sig3 != 'O' || ver != 0x00) {
         goto fail_after_open;
     }
@@ -50,6 +51,9 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     ico->ico_offsets_bitmap = AllocHeap(sizeof(uint16_t) * ico->num_icons);
     ico->ico_types = AllocHeap(sizeof(uint8_t) * ico->num_icons);
 
+    if (ico->ico_types == NULL || ico->ico_offsets_mask == NULL || ico->ico_offsets_bitmap == NULL) {
+        goto fail_after_open;
+    }
     OmfJump(&ico->omf, 8);
     for (int i = 0; i < ico->num_icons; ++i) {
         ico->ico_offsets_bitmap[i] = OmfRead16AndAdvanceLE(&ico->omf);
@@ -71,6 +75,9 @@ fail_after_open:
 
 static void CleanupIcon(void* _ico) {
     struct icon* ico = _ico;
+    if (ico == NULL) {
+        return;
+    }
     OmfClose(&ico->omf);
     FreeHeap(ico->ico_offsets_bitmap);
     FreeHeap(ico->ico_offsets_mask);

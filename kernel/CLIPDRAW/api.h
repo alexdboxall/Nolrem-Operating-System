@@ -399,3 +399,7 @@ int CdClaimCaret(struct window* win, int width, int height);
 void CdShowCaret(struct window* win);
 void CdHideCaret(struct window* win);
 void CdMoveCaret(struct window* win, int x, int y);
+
+
+/* Hard Fault */
+int WmHardError(int hard_errno); 

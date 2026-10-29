@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unaligned.h>
 
-static struct spinlock video_lock;
+struct spinlock video_lock;
 
 extern void VgaInvertRect(struct graphics_driver* drv, int x1, int y1, int x2, int y2);
 extern colour_t VGAReadPixel(struct graphics_driver*, int x, int y);
@@ -39,6 +39,9 @@ struct cursor {
 
 static void CleanupCursor(void* _cur) {
     struct cursor* cur = (void*) _cur;
+    if (cur == NULL) {
+        return;
+    }
     if (cur->data != standard_mouse_file) {
         FreeHeap(cur->data);
     }
@@ -219,8 +222,7 @@ static void DoBufferedMouse(void) {
 }
 
 /* x, y are accepted for API compatibility; the cursor is removed from wherever it was drawn. */
-void CdRemoveMouse(int x, int y) {
-    (void) x; (void) y;
+void CdRemoveMouse(void) {
     if (TryAcquireSpinlock(&video_lock)) {
         DoBufferedMouse();
         RealRemoveMouse();

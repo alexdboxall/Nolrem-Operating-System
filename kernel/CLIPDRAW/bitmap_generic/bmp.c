@@ -1,5 +1,6 @@
 #include "bmp.h"
 #include "../api.h" // AllocHeap / FreeHeap - adjust the path if this lands elsewhere
+#include <errno.h>  // ENOMEM - adjust if errno codes live somewhere else in this codebase
 #include <string.h>
 
 static uint32_t ReadU32LE(const uint8_t* p) {
@@ -95,14 +96,18 @@ int BmpParse(const uint8_t* bmp_file_data, bmp_info_t* out) {
     memset(out, 0, sizeof(*out));
 
     const uint8_t* fh = bmp_file_data;
-    if (fh[0] != 'B' || fh[1] != 'M') return 0;
+    if (fh[0] != 'B' || fh[1] != 'M') {
+        return EINVAL;
+    }
 
     uint32_t file_size = ReadU32LE(fh + 2);
     uint32_t pixel_data_offset = ReadU32LE(fh + 10);
 
     const uint8_t* ih = bmp_file_data + 14;
     uint32_t header_size = ReadU32LE(ih + 0);
-    if (header_size < 40) return 0; // OS/2 BITMAPCOREHEADER etc - not handled
+    if (header_size < 40) {
+        return ENOTSUP; // OS/2 BITMAPCOREHEADER etc - not handled
+    }
 
     int32_t width      = (int32_t)ReadU32LE(ih + 4);
     int32_t height_raw = (int32_t)ReadU32LE(ih + 8);
@@ -111,13 +116,19 @@ int BmpParse(const uint8_t* bmp_file_data, bmp_info_t* out) {
     uint32_t image_size  = ReadU32LE(ih + 20);
     uint32_t colors_used = ReadU32LE(ih + 32);
 
-    if (width <= 0) return 0;
+    if (width <= 0) {
+        return EINVAL;
+    }
     int top_down = (height_raw < 0);
     int height = top_down ? -height_raw : height_raw;
-    if (height <= 0) return 0;
+    if (height <= 0) {
+        return EINVAL;
+    }
 
     if (compression == BMP_COMPRESSION_RLE8 || compression == BMP_COMPRESSION_RLE4) {
-        if (top_down) return 0; // invalid per the BMP spec - RLE requires bottom-up storage
+        if (top_down) {
+            return EINVAL; // invalid per the BMP spec - RLE requires bottom-up storage
+        }
 
         uint16_t nominal_bpp = (compression == BMP_COMPRESSION_RLE8) ? 8 : 4;
 
@@ -140,11 +151,11 @@ int BmpParse(const uint8_t* bmp_file_data, bmp_info_t* out) {
             // unbounded read later.
             out->rle_len = (file_size > pixel_data_offset) ? (file_size - pixel_data_offset) : 0;
         }
-        return 1;
+        return 0;
     }
 
     if (bpp != 1 && bpp != 4 && bpp != 8 && bpp != 16 && bpp != 24 && bpp != 32) {
-        return 0; // unsupported bit depth
+        return ENOTSUP; // unsupported bit depth
     }
 
     out->width = width;
@@ -179,7 +190,7 @@ int BmpParse(const uint8_t* bmp_file_data, bmp_info_t* out) {
 
     out->row_stride = ((width * bpp + 31) / 32) * 4;
     out->pixels = bmp_file_data + pixel_data_offset;
-    return 1;
+    return 0;
 }
 
 // ---------------------------------------------------------------------
@@ -292,13 +303,17 @@ static const uint8_t* BmpRowCursorNextRLE(bmp_row_cursor_t* cursor) {
     return cursor->row_buffer;
 }
 
+// Returns 0 on success, ENOMEM if the RLE row buffer couldn't be allocated.
+// (Non-RLE sources never allocate, so they always succeed.)
 int BmpRowCursorInit(const bmp_info_t* info, bmp_row_cursor_t* cursor) {
     memset(cursor, 0, sizeof(*cursor));
     cursor->info = info;
 
     if (info->compression == BMP_COMPRESSION_RLE8 || info->compression == BMP_COMPRESSION_RLE4) {
         cursor->row_buffer = (uint8_t*)AllocHeap((size_t)info->width);
-        if (!cursor->row_buffer) return 0;
+        if (cursor->row_buffer == NULL) {
+            return ENOMEM;
+        }
         cursor->rle_data = info->rle_data;
         cursor->rle_len  = info->rle_len;
         // rle_pos, rle_x, rle_y, finished, next_row are already 0 via memset
@@ -306,7 +321,7 @@ int BmpRowCursorInit(const bmp_info_t* info, bmp_row_cursor_t* cursor) {
     // Non-RLE: nothing to allocate - row_buffer stays NULL, and
     // BmpRowCursorNext() reads straight out of info->pixels/row_stride.
 
-    return 1;
+    return 0;
 }
 
 const uint8_t* BmpRowCursorNext(bmp_row_cursor_t* cursor) {
@@ -336,9 +351,11 @@ void BmpRowCursorSaveCheckpoint(const bmp_row_cursor_t* cursor, bmp_row_checkpoi
     checkpoint->next_row  = cursor->next_row;
 }
 
+// Returns 0 on success, or whatever BmpRowCursorInit returned (ENOMEM) on failure.
 int BmpRowCursorResume(const bmp_info_t* info, const bmp_row_checkpoint_t* checkpoint,
                         bmp_row_cursor_t* cursor) {
-    if (!BmpRowCursorInit(info, cursor)) return 0;
+    int err = BmpRowCursorInit(info, cursor);
+    if (err != 0) return err;
 
     // Only an RLE cursor carries resumable state (row_buffer != NULL
     // is how BmpRowCursorNext() already tells the two apart) - for
@@ -351,5 +368,5 @@ int BmpRowCursorResume(const bmp_info_t* info, const bmp_row_checkpoint_t* check
         cursor->finished = checkpoint->finished;
         cursor->next_row = checkpoint->next_row;
     }
-    return 1;
+    return 0;
 }

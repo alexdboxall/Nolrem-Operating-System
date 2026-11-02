@@ -17,12 +17,22 @@ static const char* objtype_strings[] = {
     [OBJTYPE_AIO] = "Async IO"
 };
 
+static const char* uobjtype_strings[] = {
+
+};
+
 void DbgPrintObject(void* _o) {
     struct obj_header* hdr = _o;
     uint8_t type = KeGetObjectType(hdr);
     uint32_t ref = KeGetRefCount(hdr);
     bool valid_sig = true;
     if (type == OBJTYPE_USEROBJ) {
+        struct user_obj_header* uo = _o;
+        uint32_t userref = uo->user_ref_count;
+        bool gone = uo->user_gone;
+        uint8_t utype = uo->user_type;
+        const char* utype_str = utype < sizeof(uobjtype_strings) / sizeof(uobjtype_strings[0]) ? uobjtype_strings[type] : "INVALID USERTYPE";
+        LogPrintf("%s %s@ 0x%X - %s (0x%X)\n    Refcnt: %d\n    Usrref: %d\n", valid_sig ? "User object" : "User object (bad sig.)", gone ? "(GONE) " : "", hdr, utype_str, utype, ref, userref);
 
     } else {
         const char* type_str = type < sizeof(objtype_strings) / sizeof(objtype_strings[0]) ? objtype_strings[type] : "INVALID TYPE";

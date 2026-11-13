@@ -22,6 +22,7 @@ static bool WmAppCaretEligible(struct app* app) {
     return is_toplevel_thread && app->caret_level >= 0;
 }
 
+
 static void WmAppInvertCaret(struct app* app, uint64_t now) {
     // TODO: actually draw the caret!
     // invert on app->caret_owner 
@@ -54,49 +55,12 @@ export int WmDispatchMessage(struct msg msg) {
     return proc(win, msg);
 }
 
-static void SetModifierIf(struct app* app, int keycode, int compare, bool keydown, int bit) {
-    if (keycode == compare) {
-        if (keydown) app->modifier_state |= bit;
-        else app->modifier_state &= ~bit;
-    }
-}
-
-static void UpdateVirtualKeyState(struct app* app, struct msg* msg) {
-    int keycode = msg->i_arg;
-    if (keycode < 0 || keycode >= (int) sizeof(app->keystate) * 8) {
-        return;
-    }
-    bool keydown = msg->type == WM_KEYDOWN;
-    if (keydown) {
-        app->keystate[keycode >> 3] |= 1 << (keycode & 7);
+export int WmPostOrDispatchMessage(struct msg msg, bool local) {
+    if (local) {
+        return WmDispatchMessage(msg);
     } else {
-        app->keystate[keycode >> 3] &= ~(1 << (keycode & 7));
+        return WmPostMessage(msg);
     }
-
-    SetModifierIf(app, keycode, KEYCODE_LSHIFT, keydown, MODIFIER_LSHIFT);
-    SetModifierIf(app, keycode, KEYCODE_RSHIFT, keydown, MODIFIER_RSHIFT);
-    SetModifierIf(app, keycode, KEYCODE_LCTRL, keydown, MODIFIER_LCTRL);
-    SetModifierIf(app, keycode, KEYCODE_RCTRL, keydown, MODIFIER_RCTRL);
-    SetModifierIf(app, keycode, KEYCODE_LALT, keydown, MODIFIER_LALT);
-    SetModifierIf(app, keycode, KEYCODE_RALT, keydown, MODIFIER_RALT);
-
-    if (keydown && keycode == KEYCODE_CAPSLOCK) {
-        app->modifier_state ^= MODIFIER_CAPSLOCK;
-        
-    } else if (keydown && keycode == KEYCODE_NUMLOCK) {
-        app->modifier_state ^= MODIFIER_NUMLOCK;
-        
-    } else if (keydown && keycode == KEYCODE_SCROLLLOCK) {
-        app->modifier_state ^= MODIFIER_SCROLLLOCK;
-    }
-}
-
-/* Every message handed back to the caller goes through here. */
-static int WmAppFinishGet(struct app* app, struct msg* msg_out, int res) {
-    if (res == 0 && (msg_out->type == WM_KEYDOWN || msg_out->type == WM_KEYUP)) {
-        UpdateVirtualKeyState(app, msg_out);
-    }
-    return res;
 }
 
 static void WmCheckGenerateSynthMessages(struct app* app) {
@@ -130,6 +94,7 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
      * held across the peek and the synth call.
      */
     WmLock();
+    app->timeof_last_entry_to_getmessage = GetTimeSinceBoot();
     int res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
     if (res == EAGAIN) {
         WmCheckGenerateSynthMessages(app);
@@ -139,7 +104,7 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
 
     if (res != EAGAIN) {
         /* A real message, or a real error. */
-        return WmAppFinishGet(app, msg_out, res);
+        return res;
     }
 
     for (;;) {
@@ -176,30 +141,11 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
 
         res = KeGetMessage(app->mbox, msg_out, timeout);
         if (res != ETIMEDOUT) {
-            return WmAppFinishGet(app, msg_out, res);
+            return res;
         }
 
         /* Woke only for the caret; go round again and wait for a message. */
     }
-}
-
-export bool WmIsKeyDown(struct app* app, int keycode) {
-    if (keycode < 0 || keycode >= (int) sizeof(app->keystate) * 8) {
-        return false;
-    }
-    return (app->keystate[keycode >> 3] >> (keycode & 7)) & 1;
-}
-
-export bool WmIsShiftHeld(struct app* app) {
-    return !!(app->modifier_state & (MODIFIER_LSHIFT | MODIFIER_RSHIFT));
-}
-
-export bool WmIsAltHeld(struct app* app) {
-    return !!(app->modifier_state & (MODIFIER_LALT | MODIFIER_RALT));
-}
-
-export bool WmIsControlHeld(struct app* app) {
-    return !!(app->modifier_state & (MODIFIER_LCTRL | MODIFIER_RCTRL));
 }
 
 struct app* WmCreateApp(void) {
@@ -213,14 +159,12 @@ struct app* WmCreateApp(void) {
     app->caret_owner = NULL;
     app->caret_timeout_time = 0;
     app->timeof_last_caret_invert = 0;
-    app->modifier_state = 0;
     app->win_list_head = NULL;
     app->mbox = CreateMessageBox(sizeof(struct msg), APP_QUEUE_SIZE);
     if (app->mbox == NULL) {
         FreeHeap(app);
         return NULL;
     }
-    memset(app->keystate, 0, sizeof(app->keystate));
     return app;
 }
 

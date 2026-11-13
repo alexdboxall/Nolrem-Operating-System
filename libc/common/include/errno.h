@@ -52,3 +52,7 @@ int* __thread_local_errno_();
 #define errno *__thread_local_errno_()
 
 #endif
+
+#ifdef COMPILE_KERNEL
+void KeSetLastUserError(int errno);
+#endif

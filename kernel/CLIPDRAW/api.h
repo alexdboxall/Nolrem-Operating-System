@@ -352,6 +352,8 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_SETCURSOR            8
 #define WM_KEYDOWN              9
 #define WM_KEYUP                10
+#define WM_ACTIVATE_APP         11
+#define WM_ACTIVATE             12
 
 #define HIT_TOP_BORDER      (1 << 0)
 #define HIT_LEFT_BORDER     (1 << 1)
@@ -362,7 +364,11 @@ struct point GetPenOrigin(pen_t pen);
 #define HIT_CLIENT          (1 << 6)
 #define HIT_NONCLIENT       (1 << 7)
 
-#define CS_ALLCLIENT    1
+#define WA_DEACTIVATE       0
+#define WA_ACTIVATE         1
+#define WA_CLICKACTIVATE    2
+
+#define CS_ALLCLIENT        1
 
 struct window;
 

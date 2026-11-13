@@ -184,9 +184,50 @@ static int HandleToplevelMousedown(struct window* win, struct msg msg) {
     p.x -= win->global_offset_cached.x;
     p.y -= win->global_offset_cached.y;
     WmRaiseToTop(win, false);
+    struct window* old_fg = WmGetForegroundWindow();
+    bool send_activate = win != old_fg;
+    bool send_app_activate = send_activate && old_fg != NULL && win->app != old_fg->app;
+    bool send_deactivate = old_fg != NULL && old_fg != WmGetDesktop();
+    if (send_deactivate) {
+        RefObject(old_fg);
+    } else {
+        old_fg = NULL;
+    }
     WmSetForegroundWindow(win, false);
     WmUnlock();
-    int retv = WmCallWinProc(win, (struct msg) {
+    /* TODO: Move all this nonsense into WmSetForegroundWindow... though 
+     * given it's lockable idk*/
+    if (send_deactivate) {
+        WmPostOrDispatchMessage((struct msg) {
+            .win = old_fg,
+            .type = WM_ACTIVATE,
+            .i_arg = WA_DEACTIVATE,
+        }, old_fg->app == win->app);
+
+        if (send_app_activate) {
+            WmPostMessage((struct msg) {
+                .win = old_fg,
+                .type = WM_ACTIVATE_APP,
+                .i_arg = WA_DEACTIVATE,
+            });
+        }
+        DerefObject(old_fg);
+    }
+    if (send_app_activate) {
+        WmDispatchMessage((struct msg) {
+            .win = win,
+            .type = WM_ACTIVATE_APP,
+            .i_arg = WA_ACTIVATE,
+        });
+    }
+    if (send_activate) {
+        WmDispatchMessage((struct msg) {
+            .win = win,
+            .type = WM_ACTIVATE,
+            .i_arg = WA_CLICKACTIVATE,
+        });
+    }
+    int retv = WmDispatchMessage((struct msg) {
         .win = win,
         .type = WM_HITTEST,
         .point_arg1 = p
@@ -269,6 +310,7 @@ export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
         return 0;
 
     case WM_HITTEST:
+        LogPrintf("Doing hit test...\n");
         return HandleHitTest(win, msg.point_arg1);
 
     case WM_TOPLEVEL_MOUSEDOWN:

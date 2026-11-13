@@ -21,12 +21,12 @@ export struct window_class* WmCreateWindowClassEx(
     int* extra_off_out
 ) {
     if (extra_ptrs < 0 || extra_ptrs > 8) {
-        WmSetError(EINVAL);
+        KeSetLastUserError(EINVAL);
         return NULL;
     }
     struct window_class* wc = AllocHeap(sizeof(struct window_class) + strlen(name) + 1);
     if (wc == NULL) {
-        WmSetError(ENOMEM);
+        KeSetLastUserError(ENOMEM);
         return NULL;
     }
     if (parent != NULL) {
@@ -34,7 +34,7 @@ export struct window_class* WmCreateWindowClassEx(
         if (parent->extra_ptrs + extra_ptrs > 16) {
             DerefObject(parent);
             FreeHeap(wc);
-            WmSetError(EINVAL);
+            KeSetLastUserError(EINVAL);
             return NULL;
         }
         extra_ptrs += parent->extra_ptrs;
@@ -56,15 +56,13 @@ export struct window_class* WmCreateWindowClassEx(
     wc->parent = parent;
     wc->icon = icon;
     wc->cursor = cursor;
-
+    wc->flags = flags;
+    
     AcquireSpinlock(&winclass_lock);
     wc->next = classes;
-    wc->flags = flags;
-    wc->extra_win_ptrs = 0;
     classes = wc;
     ReleaseSpinlock(&winclass_lock);
 
-    WmSetError(0);
     return wc;
 }
 

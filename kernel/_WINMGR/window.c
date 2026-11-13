@@ -1,4 +1,3 @@
-
 #include <obj.h>
 #include <heap.h>
 #include <log.h>
@@ -195,6 +194,28 @@ bool DoesWindowShowBorder(struct window* win) {
     return !(win->style & WS_MAXIMISED);
 }
 
+/*
+ * The region (in screen coordinates) that children of `parent` are clipped to.
+ * This is the parent's client area. Windows whose class is CS_ALLCLIENT have no
+ * non-client area (see WmBeginPaint), so for those the client area is the whole
+ * window. The returned region is borrowed from `parent` - do not free it.
+ *
+ * Both regions are themselves already clipped against the parent's own parent
+ * (see SetInternalWindowBounds), so clipping against this clips against every
+ * ancestor, not just the immediate one.
+ */
+static struct region WmGetChildClipRegion(struct window* parent) {
+    if (parent->winclass->flags & CS_ALLCLIENT) {
+        return parent->win_rgn;
+    }
+    return parent->client_rgn;
+}
+
+/*
+ * Requires the parent's win_rgn/client_rgn to be up to date. That holds for
+ * WmCreateWindow (the parent already exists) and for WmChangePosition (a window
+ * is updated before the recursion into its children).
+ */
 static void SetInternalWindowBounds(struct window* win, struct rect local_r) {
     bool has_border = DoesWindowShowBorder(win);
     int border_width = has_border ? BORDER_WIDTH : 0;
@@ -208,18 +229,30 @@ static void SetInternalWindowBounds(struct window* win, struct rect local_r) {
     win->local_client_bound.h = MAX(0, win->local_win_bound.h - border_width * 2 - TITLEBAR_HEIGHT - shadow);
     win->global_offset_cached = WmAccumulateScreenOrigin(win, false);
 
-    win->win_rgn = CdCreateRectRegion(
+    struct region raw_win_rgn = CdCreateRectRegion(
         win->global_offset_cached.x,
         win->global_offset_cached.y,
         win->local_win_bound.w,
         win->local_win_bound.h
     );
-    win->client_rgn = CdCreateRectRegion(
+    struct region raw_client_rgn = CdCreateRectRegion(
         win->global_offset_cached.x + win->local_client_bound.x - win->local_win_bound.x,
         win->global_offset_cached.y + win->local_client_bound.y - win->local_win_bound.y,
         win->local_client_bound.w,
         win->local_client_bound.h
     );
+
+    /* A child must never extend past its parent's client area. */
+    if (win->parent != NULL) {
+        win->win_rgn = CdIntersectRegion(raw_win_rgn, WmGetChildClipRegion(win->parent));
+        CdFreeRegion(raw_win_rgn);
+    } else {
+        win->win_rgn = raw_win_rgn;
+    }
+
+    /* The client area is always a subset of the (clipped) window. */
+    win->client_rgn = CdIntersectRegion(raw_client_rgn, win->win_rgn);
+    CdFreeRegion(raw_client_rgn);
 }
 
 static void ClipOurVisibility(struct window* win) {
@@ -307,7 +340,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
         return NULL;
     }
     
-    struct window* win = AllocHeap(sizeof(struct window) + wc->extra_win_ptrs * sizeof(void*));
+    struct window* win = AllocHeap(sizeof(struct window) + wc->extra_ptrs * sizeof(void*));
     if (win == NULL) {
         return NULL;
     }

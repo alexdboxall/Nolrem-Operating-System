@@ -21,17 +21,26 @@ struct app {
     uint64_t caret_timeout_time;            /* pushed into the future on each keypress, etc. */
     struct point caret_location;
     struct size caret_size;
+    struct window* win_list_head;
+    uint64_t timeof_last_entry_to_getmessage;
+};
+
+struct uapp {
+    struct user_obj_header hdr;
+    struct app* krnl_app_ptr;
     uint8_t keystate[256 / 8];
     uint16_t modifier_state;
-    struct window* win_list_head;
 };
 
 struct window_class {
     struct user_obj_header hdr;
     winproc_t proc;
     struct window_class* next;
+    struct window_class* parent;
+    struct icon* icon;
+    struct cursor* cursor;
     int flags;
-    uint8_t extra_win_ptrs;
+    uint8_t extra_ptrs;
     char name[];
 };
 
@@ -63,7 +72,7 @@ struct window {
     struct rect restore_pos;
     int style;
 
-    void* win_extra[];
+    void* extra_ptrs[];
 };
 
 
@@ -106,4 +115,5 @@ bool WmCheckIfPaintRequired(struct window* win);
 bool DoesWindowShowBorder(struct window* win);
 bool WmIsAncestor(struct window* potential_ancestor, struct window* reference);
 int WmDispatchMessage(struct msg msg);
+int WmPostOrDispatchMessage(struct msg msg, bool local);
 int WmChangeStyle(struct window* win, int style);

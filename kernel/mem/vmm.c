@@ -22,7 +22,7 @@
  * means a retry path exists that can never make progress, which used to hang
  * the machine in silence. Fail loudly instead.
  */
-#define VMM_MAX_FAULT_RETRIES   100
+#define VMM_MAX_FAULT_RETRIES   16
 
 static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
                                             const struct virt_loader* loader,

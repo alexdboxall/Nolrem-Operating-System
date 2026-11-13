@@ -307,7 +307,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
         return NULL;
     }
     
-    struct window* win = AllocHeap(sizeof(struct window));
+    struct window* win = AllocHeap(sizeof(struct window) + wc->extra_win_ptrs * sizeof(void*));
     if (win == NULL) {
         return NULL;
     }
@@ -487,4 +487,8 @@ export struct dc* WmBeginPaint(struct window* win) {
     }
     
     return dc;
+}
+
+int WmChangeStyle(struct window* win, int style) {
+    return 0; (void) win; (void) style;
 }

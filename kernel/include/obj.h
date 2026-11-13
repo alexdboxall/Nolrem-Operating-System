@@ -20,6 +20,9 @@
 #define OBJTYPE_AIO             11
 
 struct obj_header {
+#ifndef NDEBUG
+    char obj_sig[4];
+#endif 
     _Atomic uint32_t ref_count;
 };
 

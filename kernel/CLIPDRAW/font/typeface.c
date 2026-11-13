@@ -70,6 +70,7 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
     fn->avg_advance = OmfRead16AndAdvanceLE(&tf->omf);
     fn->ascend_px = OmfRead16AndAdvanceLE(&tf->omf);
     fn->height_px = OmfRead16AndAdvanceLE(&tf->omf);
+    fn->lineheight_px = OmfRead16AndAdvanceLE(&tf->omf);
     fn->is_large_font = OmfRead8AndAdvance(&tf->omf);
     fn->is_32bit_glyph_offsets = OmfRead8AndAdvance(&tf->omf);
     fn->gap_table_offset = OmfRead32AndAdvanceLE(&tf->omf);
@@ -200,6 +201,27 @@ static uint32_t ReadAndAdvanceCodePointSize(struct font* fn) {
     }
 }
 
+/* Same width as ReadAndAdvanceCodePointSize, but sign-extended. */
+static int32_t ReadAndAdvanceSignedCodePointSize(struct font* fn) {
+    if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
+        return (int8_t)OmfRead8AndAdvance(&fn->tf->omf);
+    } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
+        return (int16_t)OmfRead16AndAdvanceLE(&fn->tf->omf);
+    } else {
+        return (int32_t)OmfRead32AndAdvanceLE(&fn->tf->omf);
+    }
+}
+
+static uint32_t GetCodePointSizeInBytes(struct font* fn) {
+    if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
+        return 1;
+    } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
+        return 2;
+    } else {
+        return 4;
+    }
+}
+
 /* Maps a code point to an index into the glyph table, or BAD_GLYPH_CHAR if the
  * font has no glyph for it. */
 static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
@@ -270,7 +292,7 @@ struct glyph_data {
     uint16_t width_px;
     uint16_t height_px;
     uint16_t advance;
-    uint32_t absolute_advance_to_bitmap;
+    uint32_t absolute_offset_to_bitmap;
     bool error;
 };
 
@@ -347,7 +369,7 @@ export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
     data.width_px = 0;
     data.height_px = 0;
     data.advance = 0;
-    data.absolute_advance_to_bitmap = 0;
+    data.absolute_offset_to_bitmap = 0;
     data.error = false;
 
     if (fn == NULL) {
@@ -372,12 +394,76 @@ export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
         data.width_px = OmfRead8AndAdvance(&fn->tf->omf);
         data.advance = OmfRead8AndAdvance(&fn->tf->omf);
     }
-    data.absolute_advance_to_bitmap = fn->tf->omf.cursor;
+    data.absolute_offset_to_bitmap = fn->tf->omf.cursor;
     if (fn->tf->omf.error) {
         data.error = true;
         return data;
     }
     return data;
+}
+
+/* Binary searches the kern table for a pair of glyph indices (not code
+ * points). The table is: u32 num_pairs, then num_pairs sorted entries of
+ * (left, right, amount), each field codepoint_size wide, amount signed.
+ * Returns 0 for "no kerning", which is also what any file error gives. */
+static int32_t LookupKernByGlyphIndex(struct font* fn, uint32_t left, uint32_t right) {
+    struct open_mapped_file* omf = &fn->tf->omf;
+
+    const uint64_t entry_size = (uint64_t)GetCodePointSizeInBytes(fn) * 3;
+    const uint64_t table_pos  = (uint64_t)fn->file_offset + fn->kern_table_offset;
+    if (table_pos > UINT32_MAX) {
+        return 0;
+    }
+
+    OmfJump(omf, (uint32_t)table_pos);
+    uint32_t num_pairs = OmfRead32AndAdvanceLE(omf);
+    if (omf->error) {
+        return 0;
+    }
+
+    uint32_t lo = 0;
+    uint32_t hi = num_pairs;     /* search [lo, hi) */
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo) / 2;
+
+        /* 64-bit: with 32-bit fields and billions of pairs this overflows. */
+        uint64_t pos = table_pos + 4 + (uint64_t)mid * entry_size;
+        if (pos > UINT32_MAX) {
+            return 0;
+        }
+        OmfJump(omf, (uint32_t)pos);
+        uint32_t entry_left  = ReadAndAdvanceCodePointSize(fn);
+        uint32_t entry_right = ReadAndAdvanceCodePointSize(fn);
+        int32_t  amount      = ReadAndAdvanceSignedCodePointSize(fn);
+        if (omf->error) {
+            return 0;
+        }
+
+        if (entry_left == left && entry_right == right) {
+            return amount;
+        }
+        if (entry_left < left || (entry_left == left && entry_right < right)) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    return 0;
+}
+
+export pageable int CdGetKern(struct font* fn, uint32_t left, uint32_t right) {
+    if (fn == NULL || fn->kern_table_offset == 0) {
+        return 0;
+    }
+
+    /* The table is keyed by glyph index, so go through the gap table first. */
+    uint32_t left_index  = GetGlyphIndex(fn, left);
+    uint32_t right_index = GetGlyphIndex(fn, right);
+    if (left_index == BAD_GLYPH_CHAR || right_index == BAD_GLYPH_CHAR) {
+        return 0;
+    }
+
+    return (int)LookupKernByGlyphIndex(fn, left_index, right_index);
 }
 
 static void CleanupTypeface(void* _tf) {

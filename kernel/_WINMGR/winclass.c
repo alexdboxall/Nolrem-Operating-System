@@ -22,6 +22,7 @@ export struct window_class* WmCreateWindowClass(const char* name, winproc_t proc
     AcquireSpinlock(&winclass_lock);
     wc->next = classes;
     wc->flags = flags;
+    wc->extra_win_ptrs = 0;
     classes = wc;
     ReleaseSpinlock(&winclass_lock);
 

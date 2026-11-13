@@ -39,5 +39,13 @@ struct graphics_driver {
     void (*draw_mouse)(struct graphics_driver*, int x, int y, const uint32_t* black, const uint32_t* white, void* restore_buffer, int width, int height);
     void (*remove_mouse)(struct graphics_driver*, int x, int y, void* _restore_buffer, int width, int height);
     struct compat_bitmap* (*create_compatible_bitmap)(struct graphics_driver*, struct file* bmp_data, int target_width, int target_height);
+    
+    /* DRIVERS ARE RESPONSIBLE FOR CALLING     
+            CdStartVideoUpdate(dest.x, dest.y, dest.x + src.w, dest.y + src.h);
+            CdEndVideoUpdate(dest.x, dest.y, dest.x + src.w, dest.y + src.h);
+        THEMSELVES, WITHIN THE blit_compatible_bitmap CALL. THIS LETS THEM WIRE
+        IN MEMORY, THEN START THE UPDATE - THIS PREVENTS PAGE FAULTS LOADING
+        THINGS IN OVER A LOCK HOLD (WHICH MAKES THE HARDFAULT HANDLER UGLIER)
+    */
     void (*blit_compatible_bitmap)(struct graphics_driver*, struct compat_bitmap* bmp, struct rect src, struct point dst);
 };

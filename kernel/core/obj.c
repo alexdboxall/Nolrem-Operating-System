@@ -1,5 +1,6 @@
 #include <obj.h>
 #include <common.h>
+#include <string.h>
 #include <log.h>
 
 static void(*objtype_cleanup_handlers[32])(void*);
@@ -15,6 +16,9 @@ void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*)) {
 
 void InitObject(void* obj, uint8_t type) {
     struct obj_header* hdr = obj;
+#ifndef NDEBUG
+    memcpy(hdr->obj_sig, "OBJ:", 4);
+#endif 
     atomic_store_explicit(&hdr->ref_count, 1U | ((uint32_t) type << 27U), memory_order_relaxed);
     atomic_thread_fence(memory_order_release);
 }

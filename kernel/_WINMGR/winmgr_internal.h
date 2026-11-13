@@ -31,10 +31,12 @@ struct window_class {
     winproc_t proc;
     struct window_class* next;
     int flags;
+    uint8_t extra_win_ptrs;
     char name[];
 };
 
-#define WS_MAXIMISED        1
+#define WS_MAXIMISED                    (1 << 0)
+#define WS_HIDDEN                       (1 << 1)
 
 struct window {
     struct user_obj_header hdr;
@@ -60,6 +62,8 @@ struct window {
 
     struct rect restore_pos;
     int style;
+
+    void* win_extra[];
 };
 
 
@@ -102,3 +106,4 @@ bool WmCheckIfPaintRequired(struct window* win);
 bool DoesWindowShowBorder(struct window* win);
 bool WmIsAncestor(struct window* potential_ancestor, struct window* reference);
 int WmDispatchMessage(struct msg msg);
+int WmChangeStyle(struct window* win, int style);

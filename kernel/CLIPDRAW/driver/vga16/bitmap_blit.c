@@ -78,6 +78,8 @@ void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
         }
     }
 
+    CdStartVideoUpdate(dest.x, dest.y, dest.x + src.w, dest.y + src.h);
+
     outb(VGA_GC_INDEX, 0x05); outb(VGA_GC_DATA, 0x00); // write mode 0
     outb(VGA_GC_INDEX, 0x01); outb(VGA_GC_DATA, 0x00); // enable set/reset: off
     outb(VGA_GC_INDEX, 0x03); outb(VGA_GC_DATA, 0x00); // rotate 0, function none
@@ -130,6 +132,8 @@ void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
     outb(VGA_GC_INDEX, 0x08); outb(VGA_GC_DATA, 0xFF); // bit mask: all bits (resting)
     outb(VGA_SEQ_INDEX, 0x02); outb(VGA_SEQ_DATA, 0x0F); // map mask: all planes (resting)
     (void)dummy;
+
+    CdEndVideoUpdate(dest.x, dest.y, dest.x + src.w, dest.y + src.h);
 
     for (int p = 0; p < 4; p++) {
         uint8_t* ptr;

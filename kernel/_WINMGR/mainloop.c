@@ -182,6 +182,8 @@ static bool HandleMouse(int mx, int my, int click_bits) {
         CdDrawMouse(mouse_x, mouse_y);
     }
 
+    static struct window* prev_set_cursor_win = NULL;
+
     /* Cursor changing. We don't perform this if dragging/resizing in order to
      * lock the cursor as it currently is (otherwise it'd reset to normal). */
     if (moved && !dragging_win && !resizing_win) {
@@ -190,28 +192,40 @@ static bool HandleMouse(int mx, int my, int click_bits) {
         if (deepest_child != NULL && (
             WmGetForegroundWindow() == deepest_child || WmIsAncestor(WmGetForegroundWindow(), deepest_child)
         )) {
-            struct point pt;
-            pt.x = mouse_x - deepest_child->global_offset_cached.x;
-            pt.y = mouse_y - deepest_child->global_offset_cached.y;
-            WmPostMessage((struct msg) {
-                .win = deepest_child,
-                .type = WM_SETCURSOR,
-                .point_arg1 = pt
-            });
+            if (prev_set_cursor_win != deepest_child) {
+                struct point pt;
+                pt.x = mouse_x - deepest_child->global_offset_cached.x;
+                pt.y = mouse_y - deepest_child->global_offset_cached.y;
+                WmPostMessage((struct msg) {
+                    .win = deepest_child,
+                    .type = WM_SETCURSOR,
+                    .point_arg1 = pt
+                });
+            }
+            prev_set_cursor_win = deepest_child;
         } else {
             /* Not over any normal window - i.e. it's over the desktop. */
-            struct point pt;
-            pt.x = mouse_x;
-            pt.y = mouse_y;
-            WmPostMessage((struct msg) {
-                .win = WmGetDesktop(),
-                .type = WM_SETCURSOR,
-                .point_arg1 = pt
-            });
+            struct window* desktop = WmGetDesktop();
+            if (prev_set_cursor_win != desktop) {
+                 struct point pt;
+                 pt.x = mouse_x;
+                 pt.y = mouse_y;
+                WmPostMessage((struct msg) {
+                    .win = desktop,
+                    .type = WM_SETCURSOR,
+                    .point_arg1 = pt
+                });
+            }
+            prev_set_cursor_win = desktop;
         }
         WmUnlock();
     }
 
+    if (prev_mouse_buttons != mouse_buttons) {
+        /* Don't trust old value if anything more than just a move over the window happened, send new WM_SETCURSOR */
+        prev_set_cursor_win = NULL;
+    }
+    
     prev_mouse_buttons = mouse_buttons;
     mouse_buttons = click_bits;
 

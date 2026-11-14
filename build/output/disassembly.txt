@@ -1397,103 +1397,103 @@ c0010e01: eb f0                        	jmp	0xc0010df3 <AcquireSpinlock+0xa>
 c0010e03: 83 c4 0c                     	add	esp, 0xc
 c0010e06: c3                           	ret
 
-c0010e07 <CdSetBrushSecondaryColour>:
-c0010e07: 53                           	push	ebx
-c0010e08: 83 ec 14                     	sub	esp, 0x14
-c0010e0b: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
-c0010e0f: 8d 43 08                     	lea	eax, [ebx + 0x8]
-c0010e12: 50                           	push	eax
-c0010e13: e8 d1 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
-c0010e18: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
-c0010e1c: 89 43 1c                     	mov	dword ptr [ebx + 0x1c], eax
-c0010e1f: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
-c0010e23: e8 d5 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
-c0010e28: 31 c0                        	xor	eax, eax
-c0010e2a: 83 c4 18                     	add	esp, 0x18
-c0010e2d: 5b                           	pop	ebx
-c0010e2e: c3                           	ret
+c0010e07 <CdSetBrushPattern>:
+c0010e07: 56                           	push	esi
+c0010e08: 53                           	push	ebx
+c0010e09: 51                           	push	ecx
+c0010e0a: 8b 5c 24 10                  	mov	ebx, dword ptr [esp + 0x10]
+c0010e0e: 8b 74 24 14                  	mov	esi, dword ptr [esp + 0x14]
+c0010e12: b8 07 00 00 00               	mov	eax, 0x7
+c0010e17: 83 fe 16                     	cmp	esi, 0x16
+c0010e1a: 77 2e                        	ja	0xc0010e4a <CdSetBrushPattern+0x43>
+c0010e1c: 8d 43 08                     	lea	eax, [ebx + 0x8]
+c0010e1f: 83 ec 0c                     	sub	esp, 0xc
+c0010e22: 50                           	push	eax
+c0010e23: e8 c1 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
+c0010e28: 8d 14 f5 80 34 02 c0         	lea	edx, [8*esi - 0x3ffdcb80]
+c0010e2f: 8d 43 0f                     	lea	eax, [ebx + 0xf]
+c0010e32: b9 08 00 00 00               	mov	ecx, 0x8
+c0010e37: e8 af 0c 01 00               	call	0xc0021aeb <memcpy.isra.0>
+c0010e3c: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
+c0010e40: e8 b8 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
+c0010e45: 83 c4 10                     	add	esp, 0x10
+c0010e48: 31 c0                        	xor	eax, eax
+c0010e4a: 5a                           	pop	edx
+c0010e4b: 5b                           	pop	ebx
+c0010e4c: 5e                           	pop	esi
+c0010e4d: c3                           	ret
 
-c0010e2f <CdSetBrushPattern>:
-c0010e2f: 56                           	push	esi
-c0010e30: 53                           	push	ebx
-c0010e31: 51                           	push	ecx
-c0010e32: 8b 5c 24 10                  	mov	ebx, dword ptr [esp + 0x10]
-c0010e36: 8b 74 24 14                  	mov	esi, dword ptr [esp + 0x14]
-c0010e3a: b8 07 00 00 00               	mov	eax, 0x7
-c0010e3f: 83 fe 16                     	cmp	esi, 0x16
-c0010e42: 77 2e                        	ja	0xc0010e72 <CdSetBrushPattern+0x43>
-c0010e44: 8d 43 08                     	lea	eax, [ebx + 0x8]
-c0010e47: 83 ec 0c                     	sub	esp, 0xc
-c0010e4a: 50                           	push	eax
-c0010e4b: e8 99 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
-c0010e50: 8d 14 f5 80 34 02 c0         	lea	edx, [8*esi - 0x3ffdcb80]
-c0010e57: 8d 43 0f                     	lea	eax, [ebx + 0xf]
-c0010e5a: b9 08 00 00 00               	mov	ecx, 0x8
-c0010e5f: e8 87 0c 01 00               	call	0xc0021aeb <memcpy.isra.0>
+c0010e4e <CdGetBrushPattern>:
+c0010e4e: 56                           	push	esi
+c0010e4f: 53                           	push	ebx
+c0010e50: 83 ec 10                     	sub	esp, 0x10
+c0010e53: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
+c0010e57: 8d 43 08                     	lea	eax, [ebx + 0x8]
+c0010e5a: 50                           	push	eax
+c0010e5b: e8 89 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
+c0010e60: 0f b6 73 0e                  	movzx	esi, byte ptr [ebx + 0xe]
 c0010e64: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
 c0010e68: e8 90 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
-c0010e6d: 83 c4 10                     	add	esp, 0x10
-c0010e70: 31 c0                        	xor	eax, eax
-c0010e72: 5a                           	pop	edx
-c0010e73: 5b                           	pop	ebx
-c0010e74: 5e                           	pop	esi
-c0010e75: c3                           	ret
+c0010e6d: 89 f0                        	mov	eax, esi
+c0010e6f: 83 c4 14                     	add	esp, 0x14
+c0010e72: 5b                           	pop	ebx
+c0010e73: 5e                           	pop	esi
+c0010e74: c3                           	ret
 
-c0010e76 <CdGetBrushPattern>:
-c0010e76: 56                           	push	esi
-c0010e77: 53                           	push	ebx
-c0010e78: 83 ec 10                     	sub	esp, 0x10
-c0010e7b: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
-c0010e7f: 8d 43 08                     	lea	eax, [ebx + 0x8]
-c0010e82: 50                           	push	eax
-c0010e83: e8 61 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
-c0010e88: 0f b6 73 0e                  	movzx	esi, byte ptr [ebx + 0xe]
-c0010e8c: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
-c0010e90: e8 68 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
-c0010e95: 89 f0                        	mov	eax, esi
-c0010e97: 83 c4 14                     	add	esp, 0x14
-c0010e9a: 5b                           	pop	ebx
-c0010e9b: 5e                           	pop	esi
+c0010e75 <CdSetBrushColour>:
+c0010e75: 53                           	push	ebx
+c0010e76: 83 ec 14                     	sub	esp, 0x14
+c0010e79: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
+c0010e7d: 8d 43 08                     	lea	eax, [ebx + 0x8]
+c0010e80: 50                           	push	eax
+c0010e81: e8 63 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
+c0010e86: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
+c0010e8a: 89 43 18                     	mov	dword ptr [ebx + 0x18], eax
+c0010e8d: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
+c0010e91: e8 67 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
+c0010e96: 31 c0                        	xor	eax, eax
+c0010e98: 83 c4 18                     	add	esp, 0x18
+c0010e9b: 5b                           	pop	ebx
 c0010e9c: c3                           	ret
 
-c0010e9d <CdSetBrushColour>:
-c0010e9d: 53                           	push	ebx
-c0010e9e: 83 ec 14                     	sub	esp, 0x14
-c0010ea1: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
-c0010ea5: 8d 43 08                     	lea	eax, [ebx + 0x8]
-c0010ea8: 50                           	push	eax
-c0010ea9: e8 3b ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
-c0010eae: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
-c0010eb2: 89 43 18                     	mov	dword ptr [ebx + 0x18], eax
-c0010eb5: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
-c0010eb9: e8 3f fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
-c0010ebe: 31 c0                        	xor	eax, eax
-c0010ec0: 83 c4 18                     	add	esp, 0x18
-c0010ec3: 5b                           	pop	ebx
+c0010e9d <CdSetPenColour>:
+c0010e9d: eb d6                        	jmp	0xc0010e75 <CdSetBrushColour>
+
+c0010e9f <CdGetBrushColour>:
+c0010e9f: 56                           	push	esi
+c0010ea0: 53                           	push	ebx
+c0010ea1: 83 ec 10                     	sub	esp, 0x10
+c0010ea4: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
+c0010ea8: 8d 43 08                     	lea	eax, [ebx + 0x8]
+c0010eab: 50                           	push	eax
+c0010eac: e8 38 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
+c0010eb1: 8b 73 18                     	mov	esi, dword ptr [ebx + 0x18]
+c0010eb4: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
+c0010eb8: e8 40 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
+c0010ebd: 89 f0                        	mov	eax, esi
+c0010ebf: 83 c4 14                     	add	esp, 0x14
+c0010ec2: 5b                           	pop	ebx
+c0010ec3: 5e                           	pop	esi
 c0010ec4: c3                           	ret
 
-c0010ec5 <CdSetPenColour>:
-c0010ec5: eb d6                        	jmp	0xc0010e9d <CdSetBrushColour>
+c0010ec5 <CdGetPenColour>:
+c0010ec5: eb d8                        	jmp	0xc0010e9f <CdGetBrushColour>
 
-c0010ec7 <CdGetBrushColour>:
-c0010ec7: 56                           	push	esi
-c0010ec8: 53                           	push	ebx
-c0010ec9: 83 ec 10                     	sub	esp, 0x10
-c0010ecc: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
-c0010ed0: 8d 43 08                     	lea	eax, [ebx + 0x8]
-c0010ed3: 50                           	push	eax
-c0010ed4: e8 10 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
-c0010ed9: 8b 73 18                     	mov	esi, dword ptr [ebx + 0x18]
-c0010edc: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
-c0010ee0: e8 18 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
-c0010ee5: 89 f0                        	mov	eax, esi
-c0010ee7: 83 c4 14                     	add	esp, 0x14
-c0010eea: 5b                           	pop	ebx
-c0010eeb: 5e                           	pop	esi
-c0010eec: c3                           	ret
-
-c0010eed <CdGetPenColour>:
-c0010eed: eb d8                        	jmp	0xc0010ec7 <CdGetBrushColour>
+c0010ec7 <CdSetBrushSecondaryColour>:
+c0010ec7: 53                           	push	ebx
+c0010ec8: 83 ec 14                     	sub	esp, 0x14
+c0010ecb: 8b 5c 24 1c                  	mov	ebx, dword ptr [esp + 0x1c]
+c0010ecf: 8d 43 08                     	lea	eax, [ebx + 0x8]
+c0010ed2: 50                           	push	eax
+c0010ed3: e8 11 ff ff ff               	call	0xc0010de9 <AcquireSpinlock>
+c0010ed8: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
+c0010edc: 89 43 1c                     	mov	dword ptr [ebx + 0x1c], eax
+c0010edf: c6 43 08 00                  	mov	byte ptr [ebx + 0x8], 0x0
+c0010ee3: e8 15 fe ff ff               	call	0xc0010cfd <ReleaseIrqPrevent>
+c0010ee8: 31 c0                        	xor	eax, eax
+c0010eea: 83 c4 18                     	add	esp, 0x18
+c0010eed: 5b                           	pop	ebx
+c0010eee: c3                           	ret
 
 c0010eef <CdGetBrushSecondaryColour>:
 c0010eef: 56                           	push	esi
@@ -5709,7 +5709,7 @@ c0014097: c1 e2 18                     	shl	edx, 0x18
 c001409a: 09 d0                        	or	eax, edx
 c001409c: 50                           	push	eax
 c001409d: 56                           	push	esi
-c001409e: e8 fa cd ff ff               	call	0xc0010e9d <CdSetBrushColour>
+c001409e: e8 d2 cd ff ff               	call	0xc0010e75 <CdSetBrushColour>
 c00140a3: 58                           	pop	eax
 c00140a4: 5a                           	pop	edx
 c00140a5: 56                           	push	esi
@@ -9436,7 +9436,7 @@ c0016965: e8 f1 d5 ff ff               	call	0xc0013f5b <CdPaintGradientRectHz>
 c001696a: 83 c4 18                     	add	esp, 0x18
 c001696d: ff 74 24 0c                  	push	dword ptr [esp + 0xc]
 c0016971: ff 74 24 0c                  	push	dword ptr [esp + 0xc]
-c0016975: e8 23 a5 ff ff               	call	0xc0010e9d <CdSetBrushColour>
+c0016975: e8 fb a4 ff ff               	call	0xc0010e75 <CdSetBrushColour>
 c001697a: 58                           	pop	eax
 c001697b: 5a                           	pop	edx
 c001697c: ff 74 24 08                  	push	dword ptr [esp + 0x8]
@@ -10241,7 +10241,7 @@ c001730e: bd 38 a0 02 c0               	mov	ebp, 0xc002a038
 c0017313: c1 ed 0c                     	shr	ebp, 0xc
 c0017316: bb 00 a0 02 c0               	mov	ebx, 0xc002a000
 c001731b: c1 eb 0c                     	shr	ebx, 0xc
-c001731e: b8 e3 b7 02 c0               	mov	eax, 0xc002b7e3
+c001731e: b8 87 b7 02 c0               	mov	eax, 0xc002b787
 c0017323: c1 e8 0c                     	shr	eax, 0xc
 c0017326: 89 44 24 14                  	mov	dword ptr [esp + 0x14], eax
 c001732a: 6a 14                        	push	0x14
@@ -23465,7 +23465,7 @@ c0020e90: bf d3 59 02 c0               	mov	edi, 0xc00259d3
 c0020e95: c1 ef 0c                     	shr	edi, 0xc
 c0020e98: b8 00 a0 02 c0               	mov	eax, 0xc002a000
 c0020e9d: c1 e8 0c                     	shr	eax, 0xc
-c0020ea0: be e3 b7 02 c0               	mov	esi, 0xc002b7e3
+c0020ea0: be 87 b7 02 c0               	mov	esi, 0xc002b787
 c0020ea5: c1 ee 0c                     	shr	esi, 0xc
 c0020ea8: 39 fa                        	cmp	edx, edi
 c0020eaa: 73 1c                        	jae	0xc0020ec8 <ArchInitVas.part.0+0x67>
@@ -26979,21 +26979,21 @@ c0023080: 11 00 00 00 35 00 00 00         ....5...
 c0023088: 31 00 00 00 15 00 00 00         1.......
 c0023090: 03 00 00 00 27 00 00 00         ....'...
 c0023098: 23 00 00 00 07 00 00 00         #.......
-c00230a0: c5 a4 02 c0 e3 a4 02 c0         ........
-c00230a8: c9 a4 02 c0 d7 a4 02 c0         ........
-c00230b0: db a4 02 c0 df a4 02 c0         ........
-c00230b8: 36 a5 02 c0 2e a6 02 c0         6.......
-c00230c0: 3d a5 02 c0 32 a6 02 c0         =...2...
-c00230c8: 4a a5 02 c0 2f a5 02 c0         J.../...
-c00230d0: 22 a6 02 c0 f2 a5 02 c0         ".......
-c00230d8: 26 a6 02 c0 2a a6 02 c0         &...*...
-c00230e0: f6 a5 02 c0 f6 a5 02 c0         ........
-c00230e8: f6 a5 02 c0 f6 a5 02 c0         ........
-c00230f0: f6 a5 02 c0 f6 a5 02 c0         ........
-c00230f8: f6 a5 02 c0 f6 a5 02 c0         ........
-c0023100: f6 a5 02 c0 f6 a5 02 c0         ........
-c0023108: f6 a5 02 c0 36 a6 02 c0         ....6...
-c0023110: f6 a5 02 c0 2e a6 02 c0         ........
+c00230a0: 69 a4 02 c0 87 a4 02 c0         i.......
+c00230a8: 6d a4 02 c0 7b a4 02 c0         m...{...
+c00230b0: 7f a4 02 c0 83 a4 02 c0         ........
+c00230b8: da a4 02 c0 d2 a5 02 c0         ........
+c00230c0: e1 a4 02 c0 d6 a5 02 c0         ........
+c00230c8: ee a4 02 c0 d3 a4 02 c0         ........
+c00230d0: c6 a5 02 c0 96 a5 02 c0         ........
+c00230d8: ca a5 02 c0 ce a5 02 c0         ........
+c00230e0: 9a a5 02 c0 9a a5 02 c0         ........
+c00230e8: 9a a5 02 c0 9a a5 02 c0         ........
+c00230f0: 9a a5 02 c0 9a a5 02 c0         ........
+c00230f8: 9a a5 02 c0 9a a5 02 c0         ........
+c0023100: 9a a5 02 c0 9a a5 02 c0         ........
+c0023108: 9a a5 02 c0 da a5 02 c0         ........
+c0023110: 9a a5 02 c0 d2 a5 02 c0         ........
 c0023118: 00 00 00 00 00 00 00 00         ........
 c0023120: 00 00 00 ff 00 00 00 ff         ........
 c0023128: 00 00 00 ff 00 00 00 ff         ........
@@ -33556,810 +33556,745 @@ c002a055: 83 e0 01                     	and	eax, 0x1
 c002a058: c3                           	ret
 
 c002a059 <CopyRegion>:
-c002a059: 56                           	push	esi
-c002a05a: 53                           	push	ebx
-c002a05b: 31 c9                        	xor	ecx, ecx
-c002a05d: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a061: b8 0c 00 00 00               	mov	eax, 0xc
-c002a066: 89 cb                        	mov	ebx, ecx
-c002a068: 89 ce                        	mov	esi, ecx
-c002a06a: cd 60                        	int	0x60
-c002a06c: 5b                           	pop	ebx
-c002a06d: 5e                           	pop	esi
-c002a06e: c3                           	ret
+c002a059: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a05d: b8 0c 00 00 00               	mov	eax, 0xc
+c002a062: cd 60                        	int	0x60
+c002a064: c3                           	ret
 
-c002a06f <CreateEllipseRegion>:
-c002a06f: 56                           	push	esi
-c002a070: 53                           	push	ebx
-c002a071: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a075: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a079: b8 04 00 00 00               	mov	eax, 0x4
-c002a07e: 8b 5c 24 14                  	mov	ebx, dword ptr [esp + 0x14]
-c002a082: 8b 74 24 18                  	mov	esi, dword ptr [esp + 0x18]
-c002a086: cd 60                        	int	0x60
-c002a088: 5b                           	pop	ebx
-c002a089: 5e                           	pop	esi
-c002a08a: c3                           	ret
+c002a065 <CreateEllipseRegion>:
+c002a065: 56                           	push	esi
+c002a066: 53                           	push	ebx
+c002a067: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
+c002a06b: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
+c002a06f: b8 04 00 00 00               	mov	eax, 0x4
+c002a074: 8b 5c 24 14                  	mov	ebx, dword ptr [esp + 0x14]
+c002a078: 8b 74 24 18                  	mov	esi, dword ptr [esp + 0x18]
+c002a07c: cd 60                        	int	0x60
+c002a07e: 5b                           	pop	ebx
+c002a07f: 5e                           	pop	esi
+c002a080: c3                           	ret
 
-c002a08b <CreatePolyPolygonRegion>:
-c002a08b: 56                           	push	esi
-c002a08c: 53                           	push	ebx
-c002a08d: 83 ec 10                     	sub	esp, 0x10
-c002a090: 8b 44 24 1c                  	mov	eax, dword ptr [esp + 0x1c]
-c002a094: 89 44 24 04                  	mov	dword ptr [esp + 0x4], eax
-c002a098: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
-c002a09c: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
-c002a0a0: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
-c002a0a4: 89 44 24 0c                  	mov	dword ptr [esp + 0xc], eax
-c002a0a8: 8d 54 24 04                  	lea	edx, [esp + 0x4]
-c002a0ac: b8 06 00 00 00               	mov	eax, 0x6
-c002a0b1: 31 c9                        	xor	ecx, ecx
-c002a0b3: 8b 5c 24 28                  	mov	ebx, dword ptr [esp + 0x28]
-c002a0b7: 8b 74 24 2c                  	mov	esi, dword ptr [esp + 0x2c]
-c002a0bb: cd 60                        	int	0x60
-c002a0bd: 83 c4 10                     	add	esp, 0x10
-c002a0c0: 5b                           	pop	ebx
-c002a0c1: 5e                           	pop	esi
-c002a0c2: c3                           	ret
+c002a081 <CreatePolyPolygonRegion>:
+c002a081: 56                           	push	esi
+c002a082: 53                           	push	ebx
+c002a083: 83 ec 10                     	sub	esp, 0x10
+c002a086: 8b 44 24 1c                  	mov	eax, dword ptr [esp + 0x1c]
+c002a08a: 89 44 24 04                  	mov	dword ptr [esp + 0x4], eax
+c002a08e: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
+c002a092: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
+c002a096: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
+c002a09a: 89 44 24 0c                  	mov	dword ptr [esp + 0xc], eax
+c002a09e: 8d 54 24 04                  	lea	edx, [esp + 0x4]
+c002a0a2: b8 06 00 00 00               	mov	eax, 0x6
+c002a0a7: 31 c9                        	xor	ecx, ecx
+c002a0a9: 8b 5c 24 28                  	mov	ebx, dword ptr [esp + 0x28]
+c002a0ad: 8b 74 24 2c                  	mov	esi, dword ptr [esp + 0x2c]
+c002a0b1: cd 60                        	int	0x60
+c002a0b3: 83 c4 10                     	add	esp, 0x10
+c002a0b6: 5b                           	pop	ebx
+c002a0b7: 5e                           	pop	esi
+c002a0b8: c3                           	ret
 
-c002a0c3 <CreatePolygonRegion>:
-c002a0c3: 56                           	push	esi
-c002a0c4: 53                           	push	ebx
-c002a0c5: 83 ec 10                     	sub	esp, 0x10
-c002a0c8: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
-c002a0cc: 89 04 24                     	mov	dword ptr [esp], eax
-c002a0cf: 8b 44 24 1c                  	mov	eax, dword ptr [esp + 0x1c]
-c002a0d3: 89 44 24 04                  	mov	dword ptr [esp + 0x4], eax
-c002a0d7: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
-c002a0db: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
-c002a0df: 89 64 24 0c                  	mov	dword ptr [esp + 0xc], esp
-c002a0e3: 8d 54 24 04                  	lea	edx, [esp + 0x4]
-c002a0e7: b8 06 00 00 00               	mov	eax, 0x6
-c002a0ec: 31 c9                        	xor	ecx, ecx
-c002a0ee: bb 01 00 00 00               	mov	ebx, 0x1
-c002a0f3: 8b 74 24 28                  	mov	esi, dword ptr [esp + 0x28]
-c002a0f7: cd 60                        	int	0x60
-c002a0f9: 83 c4 10                     	add	esp, 0x10
-c002a0fc: 5b                           	pop	ebx
-c002a0fd: 5e                           	pop	esi
-c002a0fe: c3                           	ret
+c002a0b9 <CreatePolygonRegion>:
+c002a0b9: 56                           	push	esi
+c002a0ba: 53                           	push	ebx
+c002a0bb: 83 ec 10                     	sub	esp, 0x10
+c002a0be: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
+c002a0c2: 89 04 24                     	mov	dword ptr [esp], eax
+c002a0c5: 8b 44 24 1c                  	mov	eax, dword ptr [esp + 0x1c]
+c002a0c9: 89 44 24 04                  	mov	dword ptr [esp + 0x4], eax
+c002a0cd: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
+c002a0d1: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
+c002a0d5: 89 64 24 0c                  	mov	dword ptr [esp + 0xc], esp
+c002a0d9: 8d 54 24 04                  	lea	edx, [esp + 0x4]
+c002a0dd: b8 06 00 00 00               	mov	eax, 0x6
+c002a0e2: 31 c9                        	xor	ecx, ecx
+c002a0e4: bb 01 00 00 00               	mov	ebx, 0x1
+c002a0e9: 8b 74 24 28                  	mov	esi, dword ptr [esp + 0x28]
+c002a0ed: cd 60                        	int	0x60
+c002a0ef: 83 c4 10                     	add	esp, 0x10
+c002a0f2: 5b                           	pop	ebx
+c002a0f3: 5e                           	pop	esi
+c002a0f4: c3                           	ret
 
-c002a0ff <CreateRectRegion>:
-c002a0ff: 56                           	push	esi
-c002a100: 53                           	push	ebx
-c002a101: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a105: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a109: b8 03 00 00 00               	mov	eax, 0x3
-c002a10e: 8b 5c 24 14                  	mov	ebx, dword ptr [esp + 0x14]
-c002a112: 8b 74 24 18                  	mov	esi, dword ptr [esp + 0x18]
-c002a116: cd 60                        	int	0x60
-c002a118: 5b                           	pop	ebx
-c002a119: 5e                           	pop	esi
-c002a11a: c3                           	ret
+c002a0f5 <CreateRectRegion>:
+c002a0f5: 56                           	push	esi
+c002a0f6: 53                           	push	ebx
+c002a0f7: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
+c002a0fb: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
+c002a0ff: b8 03 00 00 00               	mov	eax, 0x3
+c002a104: 8b 5c 24 14                  	mov	ebx, dword ptr [esp + 0x14]
+c002a108: 8b 74 24 18                  	mov	esi, dword ptr [esp + 0x18]
+c002a10c: cd 60                        	int	0x60
+c002a10e: 5b                           	pop	ebx
+c002a10f: 5e                           	pop	esi
+c002a110: c3                           	ret
 
-c002a11b <CreateRoundedRectRegion>:
-c002a11b: 56                           	push	esi
-c002a11c: 53                           	push	ebx
-c002a11d: 83 ec 10                     	sub	esp, 0x10
-c002a120: 8b 44 24 1c                  	mov	eax, dword ptr [esp + 0x1c]
-c002a124: 66 89 44 24 08               	mov	word ptr [esp + 0x8], ax
-c002a129: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
-c002a12d: 66 89 44 24 0a               	mov	word ptr [esp + 0xa], ax
-c002a132: 8b 44 24 24                  	mov	eax, dword ptr [esp + 0x24]
-c002a136: 66 89 44 24 0c               	mov	word ptr [esp + 0xc], ax
-c002a13b: 8b 44 24 28                  	mov	eax, dword ptr [esp + 0x28]
-c002a13f: 66 89 44 24 0e               	mov	word ptr [esp + 0xe], ax
-c002a144: 8d 54 24 08                  	lea	edx, [esp + 0x8]
-c002a148: 31 db                        	xor	ebx, ebx
-c002a14a: 8b 4c 24 2c                  	mov	ecx, dword ptr [esp + 0x2c]
-c002a14e: b8 05 00 00 00               	mov	eax, 0x5
-c002a153: 89 de                        	mov	esi, ebx
-c002a155: cd 60                        	int	0x60
-c002a157: 83 c4 10                     	add	esp, 0x10
-c002a15a: 5b                           	pop	ebx
-c002a15b: 5e                           	pop	esi
-c002a15c: c3                           	ret
+c002a111 <CreateRoundedRectRegion>:
+c002a111: 83 ec 10                     	sub	esp, 0x10
+c002a114: 8b 44 24 14                  	mov	eax, dword ptr [esp + 0x14]
+c002a118: 66 89 44 24 08               	mov	word ptr [esp + 0x8], ax
+c002a11d: 8b 44 24 18                  	mov	eax, dword ptr [esp + 0x18]
+c002a121: 66 89 44 24 0a               	mov	word ptr [esp + 0xa], ax
+c002a126: 8b 44 24 1c                  	mov	eax, dword ptr [esp + 0x1c]
+c002a12a: 66 89 44 24 0c               	mov	word ptr [esp + 0xc], ax
+c002a12f: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
+c002a133: 66 89 44 24 0e               	mov	word ptr [esp + 0xe], ax
+c002a138: 8d 54 24 08                  	lea	edx, [esp + 0x8]
+c002a13c: 8b 4c 24 24                  	mov	ecx, dword ptr [esp + 0x24]
+c002a140: b8 05 00 00 00               	mov	eax, 0x5
+c002a145: cd 60                        	int	0x60
+c002a147: 83 c4 10                     	add	esp, 0x10
+c002a14a: c3                           	ret
 
-c002a15d <EmptyRegion>:
-c002a15d: 56                           	push	esi
-c002a15e: 53                           	push	ebx
-c002a15f: 31 d2                        	xor	edx, edx
-c002a161: b8 01 00 00 00               	mov	eax, 0x1
-c002a166: 89 d1                        	mov	ecx, edx
-c002a168: 89 d3                        	mov	ebx, edx
-c002a16a: 89 d6                        	mov	esi, edx
-c002a16c: cd 60                        	int	0x60
-c002a16e: 5b                           	pop	ebx
-c002a16f: 5e                           	pop	esi
-c002a170: c3                           	ret
+c002a14b <EmptyRegion>:
+c002a14b: b8 01 00 00 00               	mov	eax, 0x1
+c002a150: 31 d2                        	xor	edx, edx
+c002a152: cd 60                        	int	0x60
+c002a154: c3                           	ret
 
-c002a171 <EverythingRegion>:
-c002a171: 56                           	push	esi
-c002a172: 53                           	push	ebx
-c002a173: b8 01 00 00 00               	mov	eax, 0x1
-c002a178: 31 c9                        	xor	ecx, ecx
-c002a17a: 89 c2                        	mov	edx, eax
-c002a17c: 89 cb                        	mov	ebx, ecx
-c002a17e: 89 ce                        	mov	esi, ecx
-c002a180: cd 60                        	int	0x60
-c002a182: 5b                           	pop	ebx
-c002a183: 5e                           	pop	esi
-c002a184: c3                           	ret
+c002a155 <EverythingRegion>:
+c002a155: b8 01 00 00 00               	mov	eax, 0x1
+c002a15a: 89 c2                        	mov	edx, eax
+c002a15c: cd 60                        	int	0x60
+c002a15e: c3                           	ret
 
-c002a185 <GetRegionBounds>:
-c002a185: 57                           	push	edi
-c002a186: 56                           	push	esi
-c002a187: 53                           	push	ebx
-c002a188: 83 ec 10                     	sub	esp, 0x10
-c002a18b: 8b 7c 24 20                  	mov	edi, dword ptr [esp + 0x20]
-c002a18f: 8d 54 24 08                  	lea	edx, [esp + 0x8]
-c002a193: 31 db                        	xor	ebx, ebx
-c002a195: 8b 4c 24 24                  	mov	ecx, dword ptr [esp + 0x24]
-c002a199: b8 0d 00 00 00               	mov	eax, 0xd
-c002a19e: 89 de                        	mov	esi, ebx
-c002a1a0: cd 60                        	int	0x60
-c002a1a2: 85 c0                        	test	eax, eax
-c002a1a4: 75 0f                        	jne	0xc002a1b5 <GetRegionBounds+0x30>
-c002a1a6: 8b 44 24 08                  	mov	eax, dword ptr [esp + 0x8]
-c002a1aa: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a1ae: 89 07                        	mov	dword ptr [edi], eax
-c002a1b0: 89 57 04                     	mov	dword ptr [edi + 0x4], edx
-c002a1b3: eb 10                        	jmp	0xc002a1c5 <GetRegionBounds+0x40>
-c002a1b5: 8b 15 00 c9 02 c0            	mov	edx, dword ptr [-0x3ffd3700]
-c002a1bb: 89 42 48                     	mov	dword ptr [edx + 0x48], eax
-c002a1be: 31 c0                        	xor	eax, eax
-c002a1c0: 89 07                        	mov	dword ptr [edi], eax
-c002a1c2: 89 47 04                     	mov	dword ptr [edi + 0x4], eax
-c002a1c5: 89 f8                        	mov	eax, edi
-c002a1c7: 83 c4 10                     	add	esp, 0x10
-c002a1ca: 5b                           	pop	ebx
-c002a1cb: 5e                           	pop	esi
-c002a1cc: 5f                           	pop	edi
-c002a1cd: c2 04 00                     	ret	0x4
+c002a15f <GetRegionBounds>:
+c002a15f: 53                           	push	ebx
+c002a160: 83 ec 10                     	sub	esp, 0x10
+c002a163: 8b 5c 24 18                  	mov	ebx, dword ptr [esp + 0x18]
+c002a167: 8d 54 24 08                  	lea	edx, [esp + 0x8]
+c002a16b: 8b 4c 24 1c                  	mov	ecx, dword ptr [esp + 0x1c]
+c002a16f: b8 0d 00 00 00               	mov	eax, 0xd
+c002a174: cd 60                        	int	0x60
+c002a176: 85 c0                        	test	eax, eax
+c002a178: 75 0f                        	jne	0xc002a189 <GetRegionBounds+0x2a>
+c002a17a: 8b 44 24 08                  	mov	eax, dword ptr [esp + 0x8]
+c002a17e: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
+c002a182: 89 03                        	mov	dword ptr [ebx], eax
+c002a184: 89 53 04                     	mov	dword ptr [ebx + 0x4], edx
+c002a187: eb 10                        	jmp	0xc002a199 <GetRegionBounds+0x3a>
+c002a189: 8b 15 00 c9 02 c0            	mov	edx, dword ptr [-0x3ffd3700]
+c002a18f: 89 42 48                     	mov	dword ptr [edx + 0x48], eax
+c002a192: 31 c0                        	xor	eax, eax
+c002a194: 89 03                        	mov	dword ptr [ebx], eax
+c002a196: 89 43 04                     	mov	dword ptr [ebx + 0x4], eax
+c002a199: 89 d8                        	mov	eax, ebx
+c002a19b: 83 c4 10                     	add	esp, 0x10
+c002a19e: 5b                           	pop	ebx
+c002a19f: c2 04 00                     	ret	0x4
 
-c002a1d0 <GetRegionCombination>:
-c002a1d0: 56                           	push	esi
-c002a1d1: 53                           	push	ebx
-c002a1d2: 8b 54 24 10                  	mov	edx, dword ptr [esp + 0x10]
-c002a1d6: 8b 4c 24 14                  	mov	ecx, dword ptr [esp + 0x14]
-c002a1da: b8 02 00 00 00               	mov	eax, 0x2
-c002a1df: 31 f6                        	xor	esi, esi
-c002a1e1: 8b 5c 24 0c                  	mov	ebx, dword ptr [esp + 0xc]
-c002a1e5: cd 60                        	int	0x60
-c002a1e7: 5b                           	pop	ebx
-c002a1e8: 5e                           	pop	esi
-c002a1e9: c3                           	ret
+c002a1a2 <GetRegionCombination>:
+c002a1a2: 53                           	push	ebx
+c002a1a3: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
+c002a1a7: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
+c002a1ab: b8 02 00 00 00               	mov	eax, 0x2
+c002a1b0: 8b 5c 24 08                  	mov	ebx, dword ptr [esp + 0x8]
+c002a1b4: cd 60                        	int	0x60
+c002a1b6: 5b                           	pop	ebx
+c002a1b7: c3                           	ret
 
-c002a1ea <GetRegionCombinationInPlace>:
-c002a1ea: 57                           	push	edi
-c002a1eb: 56                           	push	esi
-c002a1ec: 53                           	push	ebx
-c002a1ed: 8b 7c 24 14                  	mov	edi, dword ptr [esp + 0x14]
-c002a1f1: 8b 17                        	mov	edx, dword ptr [edi]
-c002a1f3: 31 f6                        	xor	esi, esi
-c002a1f5: 8b 5c 24 10                  	mov	ebx, dword ptr [esp + 0x10]
-c002a1f9: 8b 4c 24 18                  	mov	ecx, dword ptr [esp + 0x18]
-c002a1fd: b8 02 00 00 00               	mov	eax, 0x2
-c002a202: cd 60                        	int	0x60
-c002a204: 89 c3                        	mov	ebx, eax
-c002a206: 8b 17                        	mov	edx, dword ptr [edi]
-c002a208: b9 01 00 00 00               	mov	ecx, 0x1
-c002a20d: 89 f0                        	mov	eax, esi
-c002a20f: cd 60                        	int	0x60
-c002a211: 89 1f                        	mov	dword ptr [edi], ebx
-c002a213: 5b                           	pop	ebx
-c002a214: 5e                           	pop	esi
-c002a215: 5f                           	pop	edi
-c002a216: c3                           	ret
+c002a1b8 <GetRegionCombinationInPlace>:
+c002a1b8: 56                           	push	esi
+c002a1b9: 53                           	push	ebx
+c002a1ba: 8b 74 24 10                  	mov	esi, dword ptr [esp + 0x10]
+c002a1be: 8b 16                        	mov	edx, dword ptr [esi]
+c002a1c0: 8b 5c 24 0c                  	mov	ebx, dword ptr [esp + 0xc]
+c002a1c4: 8b 4c 24 14                  	mov	ecx, dword ptr [esp + 0x14]
+c002a1c8: b8 02 00 00 00               	mov	eax, 0x2
+c002a1cd: cd 60                        	int	0x60
+c002a1cf: 89 c3                        	mov	ebx, eax
+c002a1d1: 8b 16                        	mov	edx, dword ptr [esi]
+c002a1d3: 31 c0                        	xor	eax, eax
+c002a1d5: b9 01 00 00 00               	mov	ecx, 0x1
+c002a1da: cd 60                        	int	0x60
+c002a1dc: 89 1e                        	mov	dword ptr [esi], ebx
+c002a1de: 5b                           	pop	ebx
+c002a1df: 5e                           	pop	esi
+c002a1e0: c3                           	ret
 
-c002a217 <Deref>:
-c002a217: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a21b: 31 c0                        	xor	eax, eax
-c002a21d: b9 01 00 00 00               	mov	ecx, 0x1
-c002a222: cd 60                        	int	0x60
-c002a224: c3                           	ret
+c002a1e1 <Deref>:
+c002a1e1: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a1e5: 31 c0                        	xor	eax, eax
+c002a1e7: b9 01 00 00 00               	mov	ecx, 0x1
+c002a1ec: cd 60                        	int	0x60
+c002a1ee: c3                           	ret
 
-c002a225 <GetObjectType>:
-c002a225: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a229: b8 07 00 00 00               	mov	eax, 0x7
-c002a22e: cd 60                        	int	0x60
-c002a230: c3                           	ret
+c002a1ef <GetObjectType>:
+c002a1ef: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a1f3: b8 07 00 00 00               	mov	eax, 0x7
+c002a1f8: cd 60                        	int	0x60
+c002a1fa: c3                           	ret
 
-c002a231 <IsMailbox>:
-c002a231: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a235: b8 07 00 00 00               	mov	eax, 0x7
-c002a23a: cd 60                        	int	0x60
-c002a23c: 83 f8 11                     	cmp	eax, 0x11
-c002a23f: 0f 94 c0                     	sete	al
-c002a242: c3                           	ret
+c002a1fb <IsMailbox>:
+c002a1fb: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a1ff: b8 07 00 00 00               	mov	eax, 0x7
+c002a204: cd 60                        	int	0x60
+c002a206: 83 f8 11                     	cmp	eax, 0x11
+c002a209: 0f 94 c0                     	sete	al
+c002a20c: c3                           	ret
 
-c002a243 <IsMutex>:
-c002a243: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a247: b8 07 00 00 00               	mov	eax, 0x7
-c002a24c: cd 60                        	int	0x60
-c002a24e: 48                           	dec	eax
+c002a20d <IsMutex>:
+c002a20d: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a211: b8 07 00 00 00               	mov	eax, 0x7
+c002a216: cd 60                        	int	0x60
+c002a218: 48                           	dec	eax
+c002a219: 0f 94 c0                     	sete	al
+c002a21c: c3                           	ret
+
+c002a21d <IsThread>:
+c002a21d: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a221: b8 07 00 00 00               	mov	eax, 0x7
+c002a226: cd 60                        	int	0x60
+c002a228: 83 f8 02                     	cmp	eax, 0x2
+c002a22b: 0f 94 c0                     	sete	al
+c002a22e: c3                           	ret
+
+c002a22f <IsProcess>:
+c002a22f: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a233: b8 07 00 00 00               	mov	eax, 0x7
+c002a238: cd 60                        	int	0x60
+c002a23a: 83 f8 03                     	cmp	eax, 0x3
+c002a23d: 0f 94 c0                     	sete	al
+c002a240: c3                           	ret
+
+c002a241 <IsFile>:
+c002a241: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a245: b8 07 00 00 00               	mov	eax, 0x7
+c002a24a: cd 60                        	int	0x60
+c002a24c: 83 f8 04                     	cmp	eax, 0x4
 c002a24f: 0f 94 c0                     	sete	al
 c002a252: c3                           	ret
 
-c002a253 <IsThread>:
+c002a253 <IsDirectory>:
 c002a253: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a257: b8 07 00 00 00               	mov	eax, 0x7
 c002a25c: cd 60                        	int	0x60
-c002a25e: 83 f8 02                     	cmp	eax, 0x2
+c002a25e: 83 f8 05                     	cmp	eax, 0x5
 c002a261: 0f 94 c0                     	sete	al
 c002a264: c3                           	ret
 
-c002a265 <IsProcess>:
+c002a265 <IsTimer>:
 c002a265: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a269: b8 07 00 00 00               	mov	eax, 0x7
 c002a26e: cd 60                        	int	0x60
-c002a270: 83 f8 03                     	cmp	eax, 0x3
+c002a270: 83 f8 06                     	cmp	eax, 0x6
 c002a273: 0f 94 c0                     	sete	al
 c002a276: c3                           	ret
 
-c002a277 <IsFile>:
+c002a277 <IsMemoryRegion>:
 c002a277: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a27b: b8 07 00 00 00               	mov	eax, 0x7
 c002a280: cd 60                        	int	0x60
-c002a282: 83 f8 04                     	cmp	eax, 0x4
+c002a282: 83 f8 07                     	cmp	eax, 0x7
 c002a285: 0f 94 c0                     	sete	al
 c002a288: c3                           	ret
 
-c002a289 <IsDirectory>:
+c002a289 <IsSound>:
 c002a289: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a28d: b8 07 00 00 00               	mov	eax, 0x7
 c002a292: cd 60                        	int	0x60
-c002a294: 83 f8 05                     	cmp	eax, 0x5
+c002a294: 83 f8 08                     	cmp	eax, 0x8
 c002a297: 0f 94 c0                     	sete	al
 c002a29a: c3                           	ret
 
-c002a29b <IsTimer>:
+c002a29b <IsDynamicLibrary>:
 c002a29b: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a29f: b8 07 00 00 00               	mov	eax, 0x7
 c002a2a4: cd 60                        	int	0x60
-c002a2a6: 83 f8 06                     	cmp	eax, 0x6
+c002a2a6: 83 f8 09                     	cmp	eax, 0x9
 c002a2a9: 0f 94 c0                     	sete	al
 c002a2ac: c3                           	ret
 
-c002a2ad <IsMemoryRegion>:
+c002a2ad <IsWindow>:
 c002a2ad: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a2b1: b8 07 00 00 00               	mov	eax, 0x7
 c002a2b6: cd 60                        	int	0x60
-c002a2b8: 83 f8 07                     	cmp	eax, 0x7
+c002a2b8: 83 f8 0a                     	cmp	eax, 0xa
 c002a2bb: 0f 94 c0                     	sete	al
 c002a2be: c3                           	ret
 
-c002a2bf <IsSound>:
+c002a2bf <IsWindowClass>:
 c002a2bf: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a2c3: b8 07 00 00 00               	mov	eax, 0x7
 c002a2c8: cd 60                        	int	0x60
-c002a2ca: 83 f8 08                     	cmp	eax, 0x8
+c002a2ca: 83 f8 0b                     	cmp	eax, 0xb
 c002a2cd: 0f 94 c0                     	sete	al
 c002a2d0: c3                           	ret
 
-c002a2d1 <IsDynamicLibrary>:
+c002a2d1 <IsBrush>:
 c002a2d1: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a2d5: b8 07 00 00 00               	mov	eax, 0x7
 c002a2da: cd 60                        	int	0x60
-c002a2dc: 83 f8 09                     	cmp	eax, 0x9
+c002a2dc: 83 f8 0c                     	cmp	eax, 0xc
 c002a2df: 0f 94 c0                     	sete	al
 c002a2e2: c3                           	ret
 
-c002a2e3 <IsWindow>:
+c002a2e3 <IsPen>:
 c002a2e3: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a2e7: b8 07 00 00 00               	mov	eax, 0x7
 c002a2ec: cd 60                        	int	0x60
-c002a2ee: 83 f8 0a                     	cmp	eax, 0xa
+c002a2ee: 83 f8 0d                     	cmp	eax, 0xd
 c002a2f1: 0f 94 c0                     	sete	al
 c002a2f4: c3                           	ret
 
-c002a2f5 <IsWindowClass>:
+c002a2f5 <IsBitmap>:
 c002a2f5: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a2f9: b8 07 00 00 00               	mov	eax, 0x7
 c002a2fe: cd 60                        	int	0x60
-c002a300: 83 f8 0b                     	cmp	eax, 0xb
+c002a300: 83 f8 0e                     	cmp	eax, 0xe
 c002a303: 0f 94 c0                     	sete	al
 c002a306: c3                           	ret
 
-c002a307 <IsBrush>:
+c002a307 <IsTypeface>:
 c002a307: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a30b: b8 07 00 00 00               	mov	eax, 0x7
 c002a310: cd 60                        	int	0x60
-c002a312: 83 f8 0c                     	cmp	eax, 0xc
+c002a312: 83 f8 0f                     	cmp	eax, 0xf
 c002a315: 0f 94 c0                     	sete	al
 c002a318: c3                           	ret
 
-c002a319 <IsPen>:
+c002a319 <IsFont>:
 c002a319: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a31d: b8 07 00 00 00               	mov	eax, 0x7
 c002a322: cd 60                        	int	0x60
-c002a324: 83 f8 0d                     	cmp	eax, 0xd
+c002a324: 83 f8 10                     	cmp	eax, 0x10
 c002a327: 0f 94 c0                     	sete	al
 c002a32a: c3                           	ret
 
-c002a32b <IsBitmap>:
+c002a32b <IsRegion>:
 c002a32b: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a32f: b8 07 00 00 00               	mov	eax, 0x7
 c002a334: cd 60                        	int	0x60
-c002a336: 83 f8 0e                     	cmp	eax, 0xe
+c002a336: 83 f8 12                     	cmp	eax, 0x12
 c002a339: 0f 94 c0                     	sete	al
 c002a33c: c3                           	ret
 
-c002a33d <IsTypeface>:
+c002a33d <IsDc>:
 c002a33d: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a341: b8 07 00 00 00               	mov	eax, 0x7
 c002a346: cd 60                        	int	0x60
-c002a348: 83 f8 0f                     	cmp	eax, 0xf
+c002a348: 83 f8 13                     	cmp	eax, 0x13
 c002a34b: 0f 94 c0                     	sete	al
 c002a34e: c3                           	ret
 
-c002a34f <IsFont>:
+c002a34f <IsAnything>:
 c002a34f: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
 c002a353: b8 07 00 00 00               	mov	eax, 0x7
 c002a358: cd 60                        	int	0x60
-c002a35a: 83 f8 10                     	cmp	eax, 0x10
-c002a35d: 0f 94 c0                     	sete	al
-c002a360: c3                           	ret
+c002a35a: 85 c0                        	test	eax, eax
+c002a35c: 0f 95 c0                     	setne	al
+c002a35f: c3                           	ret
 
-c002a361 <IsRegion>:
-c002a361: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a365: b8 07 00 00 00               	mov	eax, 0x7
-c002a36a: cd 60                        	int	0x60
-c002a36c: 83 f8 12                     	cmp	eax, 0x12
-c002a36f: 0f 94 c0                     	sete	al
-c002a372: c3                           	ret
+c002a360 <IsPointInRegion>:
+c002a360: 53                           	push	ebx
+c002a361: 8b 54 24 08                  	mov	edx, dword ptr [esp + 0x8]
+c002a365: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
+c002a369: b8 0a 00 00 00               	mov	eax, 0xa
+c002a36e: 8b 5c 24 10                  	mov	ebx, dword ptr [esp + 0x10]
+c002a372: cd 60                        	int	0x60
+c002a374: 85 c0                        	test	eax, eax
+c002a376: 0f 95 c0                     	setne	al
+c002a379: 5b                           	pop	ebx
+c002a37a: c3                           	ret
 
-c002a373 <IsDc>:
-c002a373: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a377: b8 07 00 00 00               	mov	eax, 0x7
-c002a37c: cd 60                        	int	0x60
-c002a37e: 83 f8 13                     	cmp	eax, 0x13
-c002a381: 0f 94 c0                     	sete	al
-c002a384: c3                           	ret
+c002a37b <IsRegionEmpty>:
+c002a37b: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a37f: b8 09 00 00 00               	mov	eax, 0x9
+c002a384: cd 60                        	int	0x60
+c002a386: 85 c0                        	test	eax, eax
+c002a388: 0f 95 c0                     	setne	al
+c002a38b: c3                           	ret
 
-c002a385 <IsAnything>:
-c002a385: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a389: b8 07 00 00 00               	mov	eax, 0x7
-c002a38e: cd 60                        	int	0x60
-c002a390: 85 c0                        	test	eax, eax
-c002a392: 0f 95 c0                     	setne	al
-c002a395: c3                           	ret
+c002a38c <IsRegionEqual>:
+c002a38c: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a390: 8b 4c 24 08                  	mov	ecx, dword ptr [esp + 0x8]
+c002a394: b8 08 00 00 00               	mov	eax, 0x8
+c002a399: cd 60                        	int	0x60
+c002a39b: 85 c0                        	test	eax, eax
+c002a39d: 0f 95 c0                     	setne	al
+c002a3a0: c3                           	ret
 
-c002a396 <IsPointInRegion>:
-c002a396: 56                           	push	esi
-c002a397: 53                           	push	ebx
-c002a398: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a39c: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a3a0: b8 0a 00 00 00               	mov	eax, 0xa
-c002a3a5: 31 f6                        	xor	esi, esi
-c002a3a7: 8b 5c 24 14                  	mov	ebx, dword ptr [esp + 0x14]
-c002a3ab: cd 60                        	int	0x60
-c002a3ad: 85 c0                        	test	eax, eax
-c002a3af: 0f 95 c0                     	setne	al
-c002a3b2: 5b                           	pop	ebx
-c002a3b3: 5e                           	pop	esi
-c002a3b4: c3                           	ret
+c002a3a1 <Ref>:
+c002a3a1: 31 c0                        	xor	eax, eax
+c002a3a3: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a3a7: 89 c1                        	mov	ecx, eax
+c002a3a9: cd 60                        	int	0x60
+c002a3ab: c3                           	ret
 
-c002a3b5 <IsRegionEmpty>:
-c002a3b5: 56                           	push	esi
-c002a3b6: 53                           	push	ebx
-c002a3b7: 31 c9                        	xor	ecx, ecx
-c002a3b9: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a3bd: b8 09 00 00 00               	mov	eax, 0x9
-c002a3c2: 89 cb                        	mov	ebx, ecx
-c002a3c4: 89 ce                        	mov	esi, ecx
+c002a3ac <IsOverlappingRegion>:
+c002a3ac: 56                           	push	esi
+c002a3ad: 53                           	push	ebx
+c002a3ae: 31 db                        	xor	ebx, ebx
+c002a3b0: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
+c002a3b4: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
+c002a3b8: b8 02 00 00 00               	mov	eax, 0x2
+c002a3bd: cd 60                        	int	0x60
+c002a3bf: 89 c2                        	mov	edx, eax
+c002a3c1: b8 09 00 00 00               	mov	eax, 0x9
 c002a3c6: cd 60                        	int	0x60
-c002a3c8: 85 c0                        	test	eax, eax
-c002a3ca: 0f 95 c0                     	setne	al
-c002a3cd: 5b                           	pop	ebx
-c002a3ce: 5e                           	pop	esi
-c002a3cf: c3                           	ret
+c002a3c8: 89 c6                        	mov	esi, eax
+c002a3ca: b9 01 00 00 00               	mov	ecx, 0x1
+c002a3cf: 89 d8                        	mov	eax, ebx
+c002a3d1: cd 60                        	int	0x60
+c002a3d3: 85 f6                        	test	esi, esi
+c002a3d5: 0f 94 c0                     	sete	al
+c002a3d8: 5b                           	pop	ebx
+c002a3d9: 5e                           	pop	esi
+c002a3da: c3                           	ret
 
-c002a3d0 <IsRegionEqual>:
-c002a3d0: 56                           	push	esi
-c002a3d1: 53                           	push	ebx
-c002a3d2: 31 db                        	xor	ebx, ebx
-c002a3d4: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a3d8: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a3dc: b8 08 00 00 00               	mov	eax, 0x8
-c002a3e1: 89 de                        	mov	esi, ebx
-c002a3e3: cd 60                        	int	0x60
-c002a3e5: 85 c0                        	test	eax, eax
-c002a3e7: 0f 95 c0                     	setne	al
-c002a3ea: 5b                           	pop	ebx
-c002a3eb: 5e                           	pop	esi
-c002a3ec: c3                           	ret
+c002a3db <IsSubRegion>:
+c002a3db: 56                           	push	esi
+c002a3dc: 53                           	push	ebx
+c002a3dd: bb 01 00 00 00               	mov	ebx, 0x1
+c002a3e2: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
+c002a3e6: b8 02 00 00 00               	mov	eax, 0x2
+c002a3eb: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
+c002a3ef: cd 60                        	int	0x60
+c002a3f1: 89 c2                        	mov	edx, eax
+c002a3f3: b8 08 00 00 00               	mov	eax, 0x8
+c002a3f8: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
+c002a3fc: cd 60                        	int	0x60
+c002a3fe: 89 c6                        	mov	esi, eax
+c002a400: 31 c0                        	xor	eax, eax
+c002a402: 89 d9                        	mov	ecx, ebx
+c002a404: cd 60                        	int	0x60
+c002a406: 85 f6                        	test	esi, esi
+c002a408: 0f 95 c0                     	setne	al
+c002a40b: 5b                           	pop	ebx
+c002a40c: 5e                           	pop	esi
+c002a40d: c3                           	ret
 
-c002a3ed <Ref>:
-c002a3ed: 31 c0                        	xor	eax, eax
-c002a3ef: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a3f3: 89 c1                        	mov	ecx, eax
-c002a3f5: cd 60                        	int	0x60
-c002a3f7: c3                           	ret
+c002a40e <TranslateRegion>:
+c002a40e: 53                           	push	ebx
+c002a40f: 8b 54 24 08                  	mov	edx, dword ptr [esp + 0x8]
+c002a413: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
+c002a417: b8 0b 00 00 00               	mov	eax, 0xb
+c002a41c: 8b 5c 24 10                  	mov	ebx, dword ptr [esp + 0x10]
+c002a420: cd 60                        	int	0x60
+c002a422: 5b                           	pop	ebx
+c002a423: c3                           	ret
 
-c002a3f8 <IsOverlappingRegion>:
-c002a3f8: 56                           	push	esi
-c002a3f9: 53                           	push	ebx
-c002a3fa: 31 db                        	xor	ebx, ebx
-c002a3fc: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a400: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a404: b8 02 00 00 00               	mov	eax, 0x2
-c002a409: 89 de                        	mov	esi, ebx
-c002a40b: cd 60                        	int	0x60
-c002a40d: 89 c2                        	mov	edx, eax
-c002a40f: b8 09 00 00 00               	mov	eax, 0x9
-c002a414: 89 d9                        	mov	ecx, ebx
-c002a416: cd 60                        	int	0x60
-c002a418: 89 c6                        	mov	esi, eax
-c002a41a: b9 01 00 00 00               	mov	ecx, 0x1
-c002a41f: 89 d8                        	mov	eax, ebx
-c002a421: cd 60                        	int	0x60
-c002a423: 85 f6                        	test	esi, esi
-c002a425: 0f 94 c0                     	sete	al
-c002a428: 5b                           	pop	ebx
-c002a429: 5e                           	pop	esi
-c002a42a: c3                           	ret
+c002a424 <TranslateNumpad>:
+c002a424: 53                           	push	ebx
+c002a425: 8b 44 24 08                  	mov	eax, dword ptr [esp + 0x8]
+c002a429: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
+c002a42d: 66 81 e1 80 00               	and	cx, 0x80
+c002a432: 8d 58 70                     	lea	ebx, [eax + 0x70]
+c002a435: 80 fb 09                     	cmp	bl, 0x9
+c002a438: 77 1c                        	ja	0xc002a456 <TranslateNumpad+0x32>
+c002a43a: 8d 50 a0                     	lea	edx, [eax - 0x60]
+c002a43d: 66 85 c9                     	test	cx, cx
+c002a440: 75 47                        	jne	0xc002a489 <TranslateNumpad+0x65>
+c002a442: 83 c0 6f                     	add	eax, 0x6f
+c002a445: b2 b0                        	mov	dl, -0x50
+c002a447: 3c 08                        	cmp	al, 0x8
+c002a449: 77 3e                        	ja	0xc002a489 <TranslateNumpad+0x65>
+c002a44b: 0f b6 c0                     	movzx	eax, al
+c002a44e: 8a 90 74 32 02 c0            	mov	dl, byte ptr [eax - 0x3ffdcd8c]
+c002a454: eb 33                        	jmp	0xc002a489 <TranslateNumpad+0x65>
+c002a456: 88 c2                        	mov	dl, al
+c002a458: 83 c0 66                     	add	eax, 0x66
+c002a45b: 3c 05                        	cmp	al, 0x5
+c002a45d: 77 2a                        	ja	0xc002a489 <TranslateNumpad+0x65>
+c002a45f: 0f b6 c0                     	movzx	eax, al
+c002a462: ff 24 85 a0 30 02 c0         	jmp	dword ptr [4*eax - 0x3ffdcf60]
+c002a469: b2 2a                        	mov	dl, 0x2a
+c002a46b: eb 1c                        	jmp	0xc002a489 <TranslateNumpad+0x65>
+c002a46d: 66 83 f9 01                  	cmp	cx, 0x1
+c002a471: 19 d2                        	sbb	edx, edx
+c002a473: 83 e2 87                     	and	edx, -0x79
+c002a476: 83 c2 2e                     	add	edx, 0x2e
+c002a479: eb 0e                        	jmp	0xc002a489 <TranslateNumpad+0x65>
+c002a47b: b2 2d                        	mov	dl, 0x2d
+c002a47d: eb 0a                        	jmp	0xc002a489 <TranslateNumpad+0x65>
+c002a47f: b2 2f                        	mov	dl, 0x2f
+c002a481: eb 06                        	jmp	0xc002a489 <TranslateNumpad+0x65>
+c002a483: b2 0a                        	mov	dl, 0xa
+c002a485: eb 02                        	jmp	0xc002a489 <TranslateNumpad+0x65>
+c002a487: b2 2b                        	mov	dl, 0x2b
+c002a489: 88 d0                        	mov	al, dl
+c002a48b: 5b                           	pop	ebx
+c002a48c: c3                           	ret
 
-c002a42b <IsSubRegion>:
-c002a42b: 57                           	push	edi
-c002a42c: 56                           	push	esi
-c002a42d: 53                           	push	ebx
-c002a42e: bf 01 00 00 00               	mov	edi, 0x1
-c002a433: 31 f6                        	xor	esi, esi
-c002a435: 8b 4c 24 14                  	mov	ecx, dword ptr [esp + 0x14]
-c002a439: b8 02 00 00 00               	mov	eax, 0x2
-c002a43e: 8b 54 24 10                  	mov	edx, dword ptr [esp + 0x10]
-c002a442: 89 fb                        	mov	ebx, edi
-c002a444: cd 60                        	int	0x60
-c002a446: 89 c2                        	mov	edx, eax
-c002a448: b8 08 00 00 00               	mov	eax, 0x8
-c002a44d: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a451: 89 f3                        	mov	ebx, esi
-c002a453: cd 60                        	int	0x60
-c002a455: 89 c3                        	mov	ebx, eax
-c002a457: 89 f0                        	mov	eax, esi
-c002a459: 89 f9                        	mov	ecx, edi
-c002a45b: cd 60                        	int	0x60
-c002a45d: 85 db                        	test	ebx, ebx
-c002a45f: 0f 95 c0                     	setne	al
-c002a462: 5b                           	pop	ebx
-c002a463: 5e                           	pop	esi
-c002a464: 5f                           	pop	edi
-c002a465: c3                           	ret
+c002a48d <TranslateKey>:
+c002a48d: 53                           	push	ebx
+c002a48e: 8b 54 24 08                  	mov	edx, dword ptr [esp + 0x8]
+c002a492: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
+c002a496: 31 c0                        	xor	eax, eax
+c002a498: f6 c1 2d                     	test	cl, 0x2d
+c002a49b: 0f 85 3b 01 00 00            	jne	0xc002a5dc <TranslateKey+0x14f>
+c002a4a1: 89 cb                        	mov	ebx, ecx
+c002a4a3: 66 81 e3 80 00               	and	bx, 0x80
+c002a4a8: 8d 42 70                     	lea	eax, [edx + 0x70]
+c002a4ab: 3c 09                        	cmp	al, 0x9
+c002a4ad: 77 13                        	ja	0xc002a4c2 <TranslateKey+0x35>
+c002a4af: 31 c0                        	xor	eax, eax
+c002a4b1: 66 85 db                     	test	bx, bx
+c002a4b4: 0f 84 22 01 00 00            	je	0xc002a5dc <TranslateKey+0x14f>
+c002a4ba: 8d 42 a0                     	lea	eax, [edx - 0x60]
+c002a4bd: e9 1a 01 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a4c2: 8d 42 66                     	lea	eax, [edx + 0x66]
+c002a4c5: 3c 05                        	cmp	al, 0x5
+c002a4c7: 77 2c                        	ja	0xc002a4f5 <TranslateKey+0x68>
+c002a4c9: 0f b6 c0                     	movzx	eax, al
+c002a4cc: ff 24 85 b8 30 02 c0         	jmp	dword ptr [4*eax - 0x3ffdcf48]
+c002a4d3: b0 0a                        	mov	al, 0xa
+c002a4d5: e9 02 01 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a4da: b0 2a                        	mov	al, 0x2a
+c002a4dc: e9 fb 00 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a4e1: 66 f7 db                     	neg	bx
+c002a4e4: 18 c0                        	sbb	al, al
+c002a4e6: 83 e0 2e                     	and	eax, 0x2e
+c002a4e9: e9 ee 00 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a4ee: b0 2f                        	mov	al, 0x2f
+c002a4f0: e9 e7 00 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a4f5: b0 0a                        	mov	al, 0xa
+c002a4f7: 80 fa 0a                     	cmp	dl, 0xa
+c002a4fa: 0f 84 dc 00 00 00            	je	0xc002a5dc <TranslateKey+0x14f>
+c002a500: 77 12                        	ja	0xc002a514 <TranslateKey+0x87>
+c002a502: b0 08                        	mov	al, 0x8
+c002a504: 80 fa 08                     	cmp	dl, 0x8
+c002a507: 0f 84 cf 00 00 00            	je	0xc002a5dc <TranslateKey+0x14f>
+c002a50d: b0 09                        	mov	al, 0x9
+c002a50f: 80 fa 09                     	cmp	dl, 0x9
+c002a512: eb 10                        	jmp	0xc002a524 <TranslateKey+0x97>
+c002a514: b0 1b                        	mov	al, 0x1b
+c002a516: 80 fa 1b                     	cmp	dl, 0x1b
+c002a519: 0f 84 bd 00 00 00            	je	0xc002a5dc <TranslateKey+0x14f>
+c002a51f: b0 20                        	mov	al, 0x20
+c002a521: 80 fa 20                     	cmp	dl, 0x20
+c002a524: 0f 84 b2 00 00 00            	je	0xc002a5dc <TranslateKey+0x14f>
+c002a52a: 89 c8                        	mov	eax, ecx
+c002a52c: 83 e0 12                     	and	eax, 0x12
+c002a52f: 8d 5a bf                     	lea	ebx, [edx - 0x41]
+c002a532: 80 fb 19                     	cmp	bl, 0x19
+c002a535: 77 19                        	ja	0xc002a550 <TranslateKey+0xc3>
+c002a537: 66 85 c0                     	test	ax, ax
+c002a53a: 0f 95 c0                     	setne	al
+c002a53d: 66 c1 e9 06                  	shr	cx, 0x6
+c002a541: 83 e1 01                     	and	ecx, 0x1
+c002a544: 38 c8                        	cmp	al, cl
+c002a546: 75 0d                        	jne	0xc002a555 <TranslateKey+0xc8>
+c002a548: 8d 42 20                     	lea	eax, [edx + 0x20]
+c002a54b: e9 8c 00 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a550: 66 85 c0                     	test	ax, ax
+c002a553: 75 07                        	jne	0xc002a55c <TranslateKey+0xcf>
+c002a555: 88 d0                        	mov	al, dl
+c002a557: e9 80 00 00 00               	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a55c: 8d 42 d0                     	lea	eax, [edx - 0x30]
+c002a55f: 3c 09                        	cmp	al, 0x9
+c002a561: 77 0b                        	ja	0xc002a56e <TranslateKey+0xe1>
+c002a563: 0f b6 d2                     	movzx	edx, dl
+c002a566: 8a 82 38 32 02 c0            	mov	al, byte ptr [edx - 0x3ffdcdc8]
+c002a56c: eb 6e                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a56e: 80 fa 3d                     	cmp	dl, 0x3d
+c002a571: 77 2b                        	ja	0xc002a59e <TranslateKey+0x111>
+c002a573: 80 fa 2b                     	cmp	dl, 0x2b
+c002a576: 77 0c                        	ja	0xc002a584 <TranslateKey+0xf7>
+c002a578: 80 fa 27                     	cmp	dl, 0x27
+c002a57b: 0f 95 c0                     	setne	al
+c002a57e: 48                           	dec	eax
+c002a57f: 83 e0 22                     	and	eax, 0x22
+c002a582: eb 58                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a584: 83 ea 2c                     	sub	edx, 0x2c
+c002a587: 80 fa 11                     	cmp	dl, 0x11
+c002a58a: 77 0e                        	ja	0xc002a59a <TranslateKey+0x10d>
+c002a58c: 0f b6 d2                     	movzx	edx, dl
+c002a58f: ff 24 95 d0 30 02 c0         	jmp	dword ptr [4*edx - 0x3ffdcf30]
+c002a596: b0 5f                        	mov	al, 0x5f
+c002a598: eb 42                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a59a: 31 c0                        	xor	eax, eax
+c002a59c: eb 3e                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a59e: b0 7d                        	mov	al, 0x7d
+c002a5a0: 80 fa 5d                     	cmp	dl, 0x5d
+c002a5a3: 74 37                        	je	0xc002a5dc <TranslateKey+0x14f>
+c002a5a5: 77 13                        	ja	0xc002a5ba <TranslateKey+0x12d>
+c002a5a7: b0 7b                        	mov	al, 0x7b
+c002a5a9: 80 fa 5b                     	cmp	dl, 0x5b
+c002a5ac: 74 2e                        	je	0xc002a5dc <TranslateKey+0x14f>
+c002a5ae: 80 fa 5c                     	cmp	dl, 0x5c
+c002a5b1: 0f 95 c0                     	setne	al
+c002a5b4: 48                           	dec	eax
+c002a5b5: 83 e0 7c                     	and	eax, 0x7c
+c002a5b8: eb 22                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5ba: 80 fa 60                     	cmp	dl, 0x60
+c002a5bd: 0f 95 c0                     	setne	al
+c002a5c0: 48                           	dec	eax
+c002a5c1: 83 e0 7e                     	and	eax, 0x7e
+c002a5c4: eb 16                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5c6: b0 3c                        	mov	al, 0x3c
+c002a5c8: eb 12                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5ca: b0 3e                        	mov	al, 0x3e
+c002a5cc: eb 0e                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5ce: b0 3f                        	mov	al, 0x3f
+c002a5d0: eb 0a                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5d2: b0 2b                        	mov	al, 0x2b
+c002a5d4: eb 06                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5d6: b0 2d                        	mov	al, 0x2d
+c002a5d8: eb 02                        	jmp	0xc002a5dc <TranslateKey+0x14f>
+c002a5da: b0 3a                        	mov	al, 0x3a
+c002a5dc: 5b                           	pop	ebx
+c002a5dd: c3                           	ret
 
-c002a466 <TranslateRegion>:
-c002a466: 56                           	push	esi
-c002a467: 53                           	push	ebx
-c002a468: 8b 54 24 0c                  	mov	edx, dword ptr [esp + 0xc]
-c002a46c: 8b 4c 24 10                  	mov	ecx, dword ptr [esp + 0x10]
-c002a470: b8 0b 00 00 00               	mov	eax, 0xb
-c002a475: 31 f6                        	xor	esi, esi
-c002a477: 8b 5c 24 14                  	mov	ebx, dword ptr [esp + 0x14]
-c002a47b: cd 60                        	int	0x60
-c002a47d: 5b                           	pop	ebx
-c002a47e: 5e                           	pop	esi
-c002a47f: c3                           	ret
-
-c002a480 <TranslateNumpad>:
-c002a480: 53                           	push	ebx
-c002a481: 8b 44 24 08                  	mov	eax, dword ptr [esp + 0x8]
-c002a485: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
-c002a489: 66 81 e1 80 00               	and	cx, 0x80
-c002a48e: 8d 58 70                     	lea	ebx, [eax + 0x70]
-c002a491: 80 fb 09                     	cmp	bl, 0x9
-c002a494: 77 1c                        	ja	0xc002a4b2 <TranslateNumpad+0x32>
-c002a496: 8d 50 a0                     	lea	edx, [eax - 0x60]
-c002a499: 66 85 c9                     	test	cx, cx
-c002a49c: 75 47                        	jne	0xc002a4e5 <TranslateNumpad+0x65>
-c002a49e: 83 c0 6f                     	add	eax, 0x6f
-c002a4a1: b2 b0                        	mov	dl, -0x50
-c002a4a3: 3c 08                        	cmp	al, 0x8
-c002a4a5: 77 3e                        	ja	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4a7: 0f b6 c0                     	movzx	eax, al
-c002a4aa: 8a 90 74 32 02 c0            	mov	dl, byte ptr [eax - 0x3ffdcd8c]
-c002a4b0: eb 33                        	jmp	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4b2: 88 c2                        	mov	dl, al
-c002a4b4: 83 c0 66                     	add	eax, 0x66
-c002a4b7: 3c 05                        	cmp	al, 0x5
-c002a4b9: 77 2a                        	ja	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4bb: 0f b6 c0                     	movzx	eax, al
-c002a4be: ff 24 85 a0 30 02 c0         	jmp	dword ptr [4*eax - 0x3ffdcf60]
-c002a4c5: b2 2a                        	mov	dl, 0x2a
-c002a4c7: eb 1c                        	jmp	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4c9: 66 83 f9 01                  	cmp	cx, 0x1
-c002a4cd: 19 d2                        	sbb	edx, edx
-c002a4cf: 83 e2 87                     	and	edx, -0x79
-c002a4d2: 83 c2 2e                     	add	edx, 0x2e
-c002a4d5: eb 0e                        	jmp	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4d7: b2 2d                        	mov	dl, 0x2d
-c002a4d9: eb 0a                        	jmp	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4db: b2 2f                        	mov	dl, 0x2f
-c002a4dd: eb 06                        	jmp	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4df: b2 0a                        	mov	dl, 0xa
-c002a4e1: eb 02                        	jmp	0xc002a4e5 <TranslateNumpad+0x65>
-c002a4e3: b2 2b                        	mov	dl, 0x2b
-c002a4e5: 88 d0                        	mov	al, dl
-c002a4e7: 5b                           	pop	ebx
-c002a4e8: c3                           	ret
-
-c002a4e9 <TranslateKey>:
-c002a4e9: 53                           	push	ebx
-c002a4ea: 8b 54 24 08                  	mov	edx, dword ptr [esp + 0x8]
-c002a4ee: 8b 4c 24 0c                  	mov	ecx, dword ptr [esp + 0xc]
-c002a4f2: 31 c0                        	xor	eax, eax
-c002a4f4: f6 c1 2d                     	test	cl, 0x2d
-c002a4f7: 0f 85 3b 01 00 00            	jne	0xc002a638 <TranslateKey+0x14f>
-c002a4fd: 89 cb                        	mov	ebx, ecx
-c002a4ff: 66 81 e3 80 00               	and	bx, 0x80
-c002a504: 8d 42 70                     	lea	eax, [edx + 0x70]
-c002a507: 3c 09                        	cmp	al, 0x9
-c002a509: 77 13                        	ja	0xc002a51e <TranslateKey+0x35>
-c002a50b: 31 c0                        	xor	eax, eax
-c002a50d: 66 85 db                     	test	bx, bx
-c002a510: 0f 84 22 01 00 00            	je	0xc002a638 <TranslateKey+0x14f>
-c002a516: 8d 42 a0                     	lea	eax, [edx - 0x60]
-c002a519: e9 1a 01 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a51e: 8d 42 66                     	lea	eax, [edx + 0x66]
-c002a521: 3c 05                        	cmp	al, 0x5
-c002a523: 77 2c                        	ja	0xc002a551 <TranslateKey+0x68>
-c002a525: 0f b6 c0                     	movzx	eax, al
-c002a528: ff 24 85 b8 30 02 c0         	jmp	dword ptr [4*eax - 0x3ffdcf48]
-c002a52f: b0 0a                        	mov	al, 0xa
-c002a531: e9 02 01 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a536: b0 2a                        	mov	al, 0x2a
-c002a538: e9 fb 00 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a53d: 66 f7 db                     	neg	bx
-c002a540: 18 c0                        	sbb	al, al
-c002a542: 83 e0 2e                     	and	eax, 0x2e
-c002a545: e9 ee 00 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a54a: b0 2f                        	mov	al, 0x2f
-c002a54c: e9 e7 00 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a551: b0 0a                        	mov	al, 0xa
-c002a553: 80 fa 0a                     	cmp	dl, 0xa
-c002a556: 0f 84 dc 00 00 00            	je	0xc002a638 <TranslateKey+0x14f>
-c002a55c: 77 12                        	ja	0xc002a570 <TranslateKey+0x87>
-c002a55e: b0 08                        	mov	al, 0x8
-c002a560: 80 fa 08                     	cmp	dl, 0x8
-c002a563: 0f 84 cf 00 00 00            	je	0xc002a638 <TranslateKey+0x14f>
-c002a569: b0 09                        	mov	al, 0x9
-c002a56b: 80 fa 09                     	cmp	dl, 0x9
-c002a56e: eb 10                        	jmp	0xc002a580 <TranslateKey+0x97>
-c002a570: b0 1b                        	mov	al, 0x1b
-c002a572: 80 fa 1b                     	cmp	dl, 0x1b
-c002a575: 0f 84 bd 00 00 00            	je	0xc002a638 <TranslateKey+0x14f>
-c002a57b: b0 20                        	mov	al, 0x20
-c002a57d: 80 fa 20                     	cmp	dl, 0x20
-c002a580: 0f 84 b2 00 00 00            	je	0xc002a638 <TranslateKey+0x14f>
-c002a586: 89 c8                        	mov	eax, ecx
-c002a588: 83 e0 12                     	and	eax, 0x12
-c002a58b: 8d 5a bf                     	lea	ebx, [edx - 0x41]
-c002a58e: 80 fb 19                     	cmp	bl, 0x19
-c002a591: 77 19                        	ja	0xc002a5ac <TranslateKey+0xc3>
-c002a593: 66 85 c0                     	test	ax, ax
-c002a596: 0f 95 c0                     	setne	al
-c002a599: 66 c1 e9 06                  	shr	cx, 0x6
-c002a59d: 83 e1 01                     	and	ecx, 0x1
-c002a5a0: 38 c8                        	cmp	al, cl
-c002a5a2: 75 0d                        	jne	0xc002a5b1 <TranslateKey+0xc8>
-c002a5a4: 8d 42 20                     	lea	eax, [edx + 0x20]
-c002a5a7: e9 8c 00 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a5ac: 66 85 c0                     	test	ax, ax
-c002a5af: 75 07                        	jne	0xc002a5b8 <TranslateKey+0xcf>
-c002a5b1: 88 d0                        	mov	al, dl
-c002a5b3: e9 80 00 00 00               	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a5b8: 8d 42 d0                     	lea	eax, [edx - 0x30]
-c002a5bb: 3c 09                        	cmp	al, 0x9
-c002a5bd: 77 0b                        	ja	0xc002a5ca <TranslateKey+0xe1>
-c002a5bf: 0f b6 d2                     	movzx	edx, dl
-c002a5c2: 8a 82 38 32 02 c0            	mov	al, byte ptr [edx - 0x3ffdcdc8]
-c002a5c8: eb 6e                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a5ca: 80 fa 3d                     	cmp	dl, 0x3d
-c002a5cd: 77 2b                        	ja	0xc002a5fa <TranslateKey+0x111>
-c002a5cf: 80 fa 2b                     	cmp	dl, 0x2b
-c002a5d2: 77 0c                        	ja	0xc002a5e0 <TranslateKey+0xf7>
-c002a5d4: 80 fa 27                     	cmp	dl, 0x27
-c002a5d7: 0f 95 c0                     	setne	al
-c002a5da: 48                           	dec	eax
-c002a5db: 83 e0 22                     	and	eax, 0x22
-c002a5de: eb 58                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a5e0: 83 ea 2c                     	sub	edx, 0x2c
-c002a5e3: 80 fa 11                     	cmp	dl, 0x11
-c002a5e6: 77 0e                        	ja	0xc002a5f6 <TranslateKey+0x10d>
-c002a5e8: 0f b6 d2                     	movzx	edx, dl
-c002a5eb: ff 24 95 d0 30 02 c0         	jmp	dword ptr [4*edx - 0x3ffdcf30]
-c002a5f2: b0 5f                        	mov	al, 0x5f
-c002a5f4: eb 42                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a5f6: 31 c0                        	xor	eax, eax
-c002a5f8: eb 3e                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a5fa: b0 7d                        	mov	al, 0x7d
-c002a5fc: 80 fa 5d                     	cmp	dl, 0x5d
-c002a5ff: 74 37                        	je	0xc002a638 <TranslateKey+0x14f>
-c002a601: 77 13                        	ja	0xc002a616 <TranslateKey+0x12d>
-c002a603: b0 7b                        	mov	al, 0x7b
-c002a605: 80 fa 5b                     	cmp	dl, 0x5b
-c002a608: 74 2e                        	je	0xc002a638 <TranslateKey+0x14f>
-c002a60a: 80 fa 5c                     	cmp	dl, 0x5c
-c002a60d: 0f 95 c0                     	setne	al
-c002a610: 48                           	dec	eax
-c002a611: 83 e0 7c                     	and	eax, 0x7c
-c002a614: eb 22                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a616: 80 fa 60                     	cmp	dl, 0x60
-c002a619: 0f 95 c0                     	setne	al
-c002a61c: 48                           	dec	eax
-c002a61d: 83 e0 7e                     	and	eax, 0x7e
-c002a620: eb 16                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a622: b0 3c                        	mov	al, 0x3c
-c002a624: eb 12                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a626: b0 3e                        	mov	al, 0x3e
-c002a628: eb 0e                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a62a: b0 3f                        	mov	al, 0x3f
-c002a62c: eb 0a                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a62e: b0 2b                        	mov	al, 0x2b
-c002a630: eb 06                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a632: b0 2d                        	mov	al, 0x2d
-c002a634: eb 02                        	jmp	0xc002a638 <TranslateKey+0x14f>
-c002a636: b0 3a                        	mov	al, 0x3a
-c002a638: 5b                           	pop	ebx
-c002a639: c3                           	ret
-
-c002a63a <UpdateVirtualKeystate>:
-c002a63a: 55                           	push	ebp
-c002a63b: 57                           	push	edi
-c002a63c: 56                           	push	esi
-c002a63d: 53                           	push	ebx
-c002a63e: 51                           	push	ecx
-c002a63f: 8b 44 24 18                  	mov	eax, dword ptr [esp + 0x18]
-c002a643: 8b 54 24 1c                  	mov	edx, dword ptr [esp + 0x1c]
-c002a647: 83 7c 24 20 00               	cmp	dword ptr [esp + 0x20], 0x0
-c002a64c: 0f 85 3c 01 00 00            	jne	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a652: 8b 3a                        	mov	edi, dword ptr [edx]
-c002a654: 8d 4f f7                     	lea	ecx, [edi - 0x9]
-c002a657: 66 83 f9 01                  	cmp	cx, 0x1
-c002a65b: 0f 87 2d 01 00 00            	ja	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a661: 8b 52 04                     	mov	edx, dword ptr [edx + 0x4]
-c002a664: 81 fa ff 00 00 00            	cmp	edx, 0xff
-c002a66a: 0f 87 1e 01 00 00            	ja	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a670: 66 83 ff 09                  	cmp	di, 0x9
-c002a674: 0f 94 c3                     	sete	bl
-c002a677: 89 d5                        	mov	ebp, edx
-c002a679: c1 fd 03                     	sar	ebp, 0x3
-c002a67c: 8a 4c 28 10                  	mov	cl, byte ptr [eax + ebp + 0x10]
-c002a680: 88 4c 24 03                  	mov	byte ptr [esp + 0x3], cl
-c002a684: 89 d1                        	mov	ecx, edx
-c002a686: 83 e1 07                     	and	ecx, 0x7
-c002a689: be 01 00 00 00               	mov	esi, 0x1
-c002a68e: d3 e6                        	shl	esi, cl
+c002a5de <UpdateVirtualKeystate>:
+c002a5de: 55                           	push	ebp
+c002a5df: 57                           	push	edi
+c002a5e0: 56                           	push	esi
+c002a5e1: 53                           	push	ebx
+c002a5e2: 51                           	push	ecx
+c002a5e3: 8b 44 24 18                  	mov	eax, dword ptr [esp + 0x18]
+c002a5e7: 8b 54 24 1c                  	mov	edx, dword ptr [esp + 0x1c]
+c002a5eb: 83 7c 24 20 00               	cmp	dword ptr [esp + 0x20], 0x0
+c002a5f0: 0f 85 3c 01 00 00            	jne	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a5f6: 8b 3a                        	mov	edi, dword ptr [edx]
+c002a5f8: 8d 4f f7                     	lea	ecx, [edi - 0x9]
+c002a5fb: 66 83 f9 01                  	cmp	cx, 0x1
+c002a5ff: 0f 87 2d 01 00 00            	ja	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a605: 8b 52 04                     	mov	edx, dword ptr [edx + 0x4]
+c002a608: 81 fa ff 00 00 00            	cmp	edx, 0xff
+c002a60e: 0f 87 1e 01 00 00            	ja	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a614: 66 83 ff 09                  	cmp	di, 0x9
+c002a618: 0f 94 c3                     	sete	bl
+c002a61b: 89 d5                        	mov	ebp, edx
+c002a61d: c1 fd 03                     	sar	ebp, 0x3
+c002a620: 8a 4c 28 10                  	mov	cl, byte ptr [eax + ebp + 0x10]
+c002a624: 88 4c 24 03                  	mov	byte ptr [esp + 0x3], cl
+c002a628: 89 d1                        	mov	ecx, edx
+c002a62a: 83 e1 07                     	and	ecx, 0x7
+c002a62d: be 01 00 00 00               	mov	esi, 0x1
+c002a632: d3 e6                        	shl	esi, cl
+c002a634: 66 83 ff 09                  	cmp	di, 0x9
+c002a638: 75 16                        	jne	0xc002a650 <UpdateVirtualKeystate+0x72>
+c002a63a: 8a 4c 24 03                  	mov	cl, byte ptr [esp + 0x3]
+c002a63e: 09 f1                        	or	ecx, esi
+c002a640: 88 4c 28 10                  	mov	byte ptr [eax + ebp + 0x10], cl
+c002a644: 83 fa 02                     	cmp	edx, 0x2
+c002a647: 75 1f                        	jne	0xc002a668 <UpdateVirtualKeystate+0x8a>
+c002a649: 66 83 48 30 02               	or	word ptr [eax + 0x30], 0x2
+c002a64e: eb 63                        	jmp	0xc002a6b3 <UpdateVirtualKeystate+0xd5>
+c002a650: f7 d6                        	not	esi
+c002a652: 8a 4c 24 03                  	mov	cl, byte ptr [esp + 0x3]
+c002a656: 21 f1                        	and	ecx, esi
+c002a658: 88 4c 28 10                  	mov	byte ptr [eax + ebp + 0x10], cl
+c002a65c: 83 fa 02                     	cmp	edx, 0x2
+c002a65f: 75 07                        	jne	0xc002a668 <UpdateVirtualKeystate+0x8a>
+c002a661: 66 83 60 30 fd               	and	word ptr [eax + 0x30], -0x3
+c002a666: eb 4b                        	jmp	0xc002a6b3 <UpdateVirtualKeystate+0xd5>
+c002a668: 83 fa 05                     	cmp	edx, 0x5
+c002a66b: 75 16                        	jne	0xc002a683 <UpdateVirtualKeystate+0xa5>
+c002a66d: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
+c002a670: 89 f1                        	mov	ecx, esi
+c002a672: 83 e1 ef                     	and	ecx, -0x11
+c002a675: 83 ce 10                     	or	esi, 0x10
+c002a678: 66 83 ff 09                  	cmp	di, 0x9
+c002a67c: 74 1f                        	je	0xc002a69d <UpdateVirtualKeystate+0xbf>
+c002a67e: e9 a9 00 00 00               	jmp	0xc002a72c <UpdateVirtualKeystate+0x14e>
+c002a683: 83 fa 01                     	cmp	edx, 0x1
+c002a686: 75 1c                        	jne	0xc002a6a4 <UpdateVirtualKeystate+0xc6>
+c002a688: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
+c002a68b: 89 f1                        	mov	ecx, esi
+c002a68d: 83 e1 fe                     	and	ecx, -0x2
 c002a690: 66 83 ff 09                  	cmp	di, 0x9
-c002a694: 75 16                        	jne	0xc002a6ac <UpdateVirtualKeystate+0x72>
-c002a696: 8a 4c 24 03                  	mov	cl, byte ptr [esp + 0x3]
-c002a69a: 09 f1                        	or	ecx, esi
-c002a69c: 88 4c 28 10                  	mov	byte ptr [eax + ebp + 0x10], cl
-c002a6a0: 83 fa 02                     	cmp	edx, 0x2
-c002a6a3: 75 1f                        	jne	0xc002a6c4 <UpdateVirtualKeystate+0x8a>
-c002a6a5: 66 83 48 30 02               	or	word ptr [eax + 0x30], 0x2
-c002a6aa: eb 63                        	jmp	0xc002a70f <UpdateVirtualKeystate+0xd5>
-c002a6ac: f7 d6                        	not	esi
-c002a6ae: 8a 4c 24 03                  	mov	cl, byte ptr [esp + 0x3]
-c002a6b2: 21 f1                        	and	ecx, esi
-c002a6b4: 88 4c 28 10                  	mov	byte ptr [eax + ebp + 0x10], cl
-c002a6b8: 83 fa 02                     	cmp	edx, 0x2
-c002a6bb: 75 07                        	jne	0xc002a6c4 <UpdateVirtualKeystate+0x8a>
-c002a6bd: 66 83 60 30 fd               	and	word ptr [eax + 0x30], -0x3
-c002a6c2: eb 4b                        	jmp	0xc002a70f <UpdateVirtualKeystate+0xd5>
-c002a6c4: 83 fa 05                     	cmp	edx, 0x5
-c002a6c7: 75 16                        	jne	0xc002a6df <UpdateVirtualKeystate+0xa5>
-c002a6c9: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
-c002a6cc: 89 f1                        	mov	ecx, esi
-c002a6ce: 83 e1 ef                     	and	ecx, -0x11
-c002a6d1: 83 ce 10                     	or	esi, 0x10
-c002a6d4: 66 83 ff 09                  	cmp	di, 0x9
-c002a6d8: 74 1f                        	je	0xc002a6f9 <UpdateVirtualKeystate+0xbf>
-c002a6da: e9 a9 00 00 00               	jmp	0xc002a788 <UpdateVirtualKeystate+0x14e>
-c002a6df: 83 fa 01                     	cmp	edx, 0x1
-c002a6e2: 75 1c                        	jne	0xc002a700 <UpdateVirtualKeystate+0xc6>
-c002a6e4: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
-c002a6e7: 89 f1                        	mov	ecx, esi
-c002a6e9: 83 e1 fe                     	and	ecx, -0x2
-c002a6ec: 66 83 ff 09                  	cmp	di, 0x9
-c002a6f0: 0f 85 92 00 00 00            	jne	0xc002a788 <UpdateVirtualKeystate+0x14e>
-c002a6f6: 83 ce 01                     	or	esi, 0x1
-c002a6f9: 89 f1                        	mov	ecx, esi
-c002a6fb: e9 88 00 00 00               	jmp	0xc002a788 <UpdateVirtualKeystate+0x14e>
-c002a700: 83 fa 04                     	cmp	edx, 0x4
-c002a703: 74 3c                        	je	0xc002a741 <UpdateVirtualKeystate+0x107>
-c002a705: 83 fa 03                     	cmp	edx, 0x3
-c002a708: 74 4c                        	je	0xc002a756 <UpdateVirtualKeystate+0x11c>
-c002a70a: 83 fa 06                     	cmp	edx, 0x6
-c002a70d: 74 5a                        	je	0xc002a769 <UpdateVirtualKeystate+0x12f>
-c002a70f: 83 fa 07                     	cmp	edx, 0x7
-c002a712: 74 22                        	je	0xc002a736 <UpdateVirtualKeystate+0xfc>
-c002a714: 83 fa 0b                     	cmp	edx, 0xb
-c002a717: 74 11                        	je	0xc002a72a <UpdateVirtualKeystate+0xf0>
-c002a719: 83 fa 0c                     	cmp	edx, 0xc
-c002a71c: 75 70                        	jne	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a71e: 84 db                        	test	bl, bl
-c002a720: 74 6c                        	je	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a722: 66 81 70 30 00 01            	xor	word ptr [eax + 0x30], 0x100
-c002a728: eb 64                        	jmp	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a72a: 84 db                        	test	bl, bl
-c002a72c: 74 eb                        	je	0xc002a719 <UpdateVirtualKeystate+0xdf>
-c002a72e: 66 81 70 30 80 00            	xor	word ptr [eax + 0x30], 0x80
-c002a734: eb 58                        	jmp	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a736: 84 db                        	test	bl, bl
-c002a738: 74 da                        	je	0xc002a714 <UpdateVirtualKeystate+0xda>
-c002a73a: 66 83 70 30 40               	xor	word ptr [eax + 0x30], 0x40
-c002a73f: eb 4d                        	jmp	0xc002a78e <UpdateVirtualKeystate+0x154>
-c002a741: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
-c002a744: 89 f1                        	mov	ecx, esi
-c002a746: 83 e1 f7                     	and	ecx, -0x9
-c002a749: 66 83 ff 09                  	cmp	di, 0x9
-c002a74d: 75 33                        	jne	0xc002a782 <UpdateVirtualKeystate+0x148>
-c002a74f: 83 ce 08                     	or	esi, 0x8
-c002a752: 89 f1                        	mov	ecx, esi
-c002a754: eb 2c                        	jmp	0xc002a782 <UpdateVirtualKeystate+0x148>
-c002a756: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
-c002a759: 89 f1                        	mov	ecx, esi
-c002a75b: 83 e1 fb                     	and	ecx, -0x5
-c002a75e: 83 ce 04                     	or	esi, 0x4
-c002a761: 66 83 ff 09                  	cmp	di, 0x9
-c002a765: 74 13                        	je	0xc002a77a <UpdateVirtualKeystate+0x140>
-c002a767: eb 13                        	jmp	0xc002a77c <UpdateVirtualKeystate+0x142>
-c002a769: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
-c002a76c: 89 f1                        	mov	ecx, esi
-c002a76e: 83 e1 df                     	and	ecx, -0x21
-c002a771: 66 83 ff 09                  	cmp	di, 0x9
-c002a775: 75 05                        	jne	0xc002a77c <UpdateVirtualKeystate+0x142>
-c002a777: 83 ce 20                     	or	esi, 0x20
-c002a77a: 89 f1                        	mov	ecx, esi
-c002a77c: 66 89 48 30                  	mov	word ptr [eax + 0x30], cx
-c002a780: eb 97                        	jmp	0xc002a719 <UpdateVirtualKeystate+0xdf>
-c002a782: 66 89 48 30                  	mov	word ptr [eax + 0x30], cx
-c002a786: eb 8c                        	jmp	0xc002a714 <UpdateVirtualKeystate+0xda>
-c002a788: 66 89 48 30                  	mov	word ptr [eax + 0x30], cx
-c002a78c: eb 81                        	jmp	0xc002a70f <UpdateVirtualKeystate+0xd5>
-c002a78e: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
-c002a792: 5a                           	pop	edx
-c002a793: 5b                           	pop	ebx
-c002a794: 5e                           	pop	esi
-c002a795: 5f                           	pop	edi
-c002a796: 5d                           	pop	ebp
-c002a797: c3                           	ret
+c002a694: 0f 85 92 00 00 00            	jne	0xc002a72c <UpdateVirtualKeystate+0x14e>
+c002a69a: 83 ce 01                     	or	esi, 0x1
+c002a69d: 89 f1                        	mov	ecx, esi
+c002a69f: e9 88 00 00 00               	jmp	0xc002a72c <UpdateVirtualKeystate+0x14e>
+c002a6a4: 83 fa 04                     	cmp	edx, 0x4
+c002a6a7: 74 3c                        	je	0xc002a6e5 <UpdateVirtualKeystate+0x107>
+c002a6a9: 83 fa 03                     	cmp	edx, 0x3
+c002a6ac: 74 4c                        	je	0xc002a6fa <UpdateVirtualKeystate+0x11c>
+c002a6ae: 83 fa 06                     	cmp	edx, 0x6
+c002a6b1: 74 5a                        	je	0xc002a70d <UpdateVirtualKeystate+0x12f>
+c002a6b3: 83 fa 07                     	cmp	edx, 0x7
+c002a6b6: 74 22                        	je	0xc002a6da <UpdateVirtualKeystate+0xfc>
+c002a6b8: 83 fa 0b                     	cmp	edx, 0xb
+c002a6bb: 74 11                        	je	0xc002a6ce <UpdateVirtualKeystate+0xf0>
+c002a6bd: 83 fa 0c                     	cmp	edx, 0xc
+c002a6c0: 75 70                        	jne	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a6c2: 84 db                        	test	bl, bl
+c002a6c4: 74 6c                        	je	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a6c6: 66 81 70 30 00 01            	xor	word ptr [eax + 0x30], 0x100
+c002a6cc: eb 64                        	jmp	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a6ce: 84 db                        	test	bl, bl
+c002a6d0: 74 eb                        	je	0xc002a6bd <UpdateVirtualKeystate+0xdf>
+c002a6d2: 66 81 70 30 80 00            	xor	word ptr [eax + 0x30], 0x80
+c002a6d8: eb 58                        	jmp	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a6da: 84 db                        	test	bl, bl
+c002a6dc: 74 da                        	je	0xc002a6b8 <UpdateVirtualKeystate+0xda>
+c002a6de: 66 83 70 30 40               	xor	word ptr [eax + 0x30], 0x40
+c002a6e3: eb 4d                        	jmp	0xc002a732 <UpdateVirtualKeystate+0x154>
+c002a6e5: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
+c002a6e8: 89 f1                        	mov	ecx, esi
+c002a6ea: 83 e1 f7                     	and	ecx, -0x9
+c002a6ed: 66 83 ff 09                  	cmp	di, 0x9
+c002a6f1: 75 33                        	jne	0xc002a726 <UpdateVirtualKeystate+0x148>
+c002a6f3: 83 ce 08                     	or	esi, 0x8
+c002a6f6: 89 f1                        	mov	ecx, esi
+c002a6f8: eb 2c                        	jmp	0xc002a726 <UpdateVirtualKeystate+0x148>
+c002a6fa: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
+c002a6fd: 89 f1                        	mov	ecx, esi
+c002a6ff: 83 e1 fb                     	and	ecx, -0x5
+c002a702: 83 ce 04                     	or	esi, 0x4
+c002a705: 66 83 ff 09                  	cmp	di, 0x9
+c002a709: 74 13                        	je	0xc002a71e <UpdateVirtualKeystate+0x140>
+c002a70b: eb 13                        	jmp	0xc002a720 <UpdateVirtualKeystate+0x142>
+c002a70d: 8b 70 30                     	mov	esi, dword ptr [eax + 0x30]
+c002a710: 89 f1                        	mov	ecx, esi
+c002a712: 83 e1 df                     	and	ecx, -0x21
+c002a715: 66 83 ff 09                  	cmp	di, 0x9
+c002a719: 75 05                        	jne	0xc002a720 <UpdateVirtualKeystate+0x142>
+c002a71b: 83 ce 20                     	or	esi, 0x20
+c002a71e: 89 f1                        	mov	ecx, esi
+c002a720: 66 89 48 30                  	mov	word ptr [eax + 0x30], cx
+c002a724: eb 97                        	jmp	0xc002a6bd <UpdateVirtualKeystate+0xdf>
+c002a726: 66 89 48 30                  	mov	word ptr [eax + 0x30], cx
+c002a72a: eb 8c                        	jmp	0xc002a6b8 <UpdateVirtualKeystate+0xda>
+c002a72c: 66 89 48 30                  	mov	word ptr [eax + 0x30], cx
+c002a730: eb 81                        	jmp	0xc002a6b3 <UpdateVirtualKeystate+0xd5>
+c002a732: 8b 44 24 20                  	mov	eax, dword ptr [esp + 0x20]
+c002a736: 5a                           	pop	edx
+c002a737: 5b                           	pop	ebx
+c002a738: 5e                           	pop	esi
+c002a739: 5f                           	pop	edi
+c002a73a: 5d                           	pop	ebp
+c002a73b: c3                           	ret
 
-c002a798 <IsKeyDown>:
-c002a798: 8b 4c 24 08                  	mov	ecx, dword ptr [esp + 0x8]
-c002a79c: 31 c0                        	xor	eax, eax
-c002a79e: 81 f9 ff 00 00 00            	cmp	ecx, 0xff
-c002a7a4: 77 16                        	ja	0xc002a7bc <IsKeyDown+0x24>
-c002a7a6: 89 c8                        	mov	eax, ecx
-c002a7a8: c1 f8 03                     	sar	eax, 0x3
-c002a7ab: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
-c002a7af: 0f b6 44 02 10               	movzx	eax, byte ptr [edx + eax + 0x10]
-c002a7b4: 83 e1 07                     	and	ecx, 0x7
-c002a7b7: d3 f8                        	sar	eax, cl
-c002a7b9: 83 e0 01                     	and	eax, 0x1
-c002a7bc: c3                           	ret
+c002a73c <IsKeyDown>:
+c002a73c: 8b 4c 24 08                  	mov	ecx, dword ptr [esp + 0x8]
+c002a740: 31 c0                        	xor	eax, eax
+c002a742: 81 f9 ff 00 00 00            	cmp	ecx, 0xff
+c002a748: 77 16                        	ja	0xc002a760 <IsKeyDown+0x24>
+c002a74a: 89 c8                        	mov	eax, ecx
+c002a74c: c1 f8 03                     	sar	eax, 0x3
+c002a74f: 8b 54 24 04                  	mov	edx, dword ptr [esp + 0x4]
+c002a753: 0f b6 44 02 10               	movzx	eax, byte ptr [edx + eax + 0x10]
+c002a758: 83 e1 07                     	and	ecx, 0x7
+c002a75b: d3 f8                        	sar	eax, cl
+c002a75d: 83 e0 01                     	and	eax, 0x1
+c002a760: c3                           	ret
 
-c002a7bd <IsShiftHeld>:
-c002a7bd: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
-c002a7c1: f6 40 30 12                  	test	byte ptr [eax + 0x30], 0x12
-c002a7c5: 0f 95 c0                     	setne	al
-c002a7c8: c3                           	ret
+c002a761 <IsShiftHeld>:
+c002a761: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
+c002a765: f6 40 30 12                  	test	byte ptr [eax + 0x30], 0x12
+c002a769: 0f 95 c0                     	setne	al
+c002a76c: c3                           	ret
 
-c002a7c9 <IsAltHeld>:
-c002a7c9: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
-c002a7cd: f6 40 30 24                  	test	byte ptr [eax + 0x30], 0x24
-c002a7d1: 0f 95 c0                     	setne	al
-c002a7d4: c3                           	ret
+c002a76d <IsAltHeld>:
+c002a76d: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
+c002a771: f6 40 30 24                  	test	byte ptr [eax + 0x30], 0x24
+c002a775: 0f 95 c0                     	setne	al
+c002a778: c3                           	ret
 
-c002a7d5 <IsControlHeld>:
-c002a7d5: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
-c002a7d9: f6 40 30 09                  	test	byte ptr [eax + 0x30], 0x9
-c002a7dd: 0f 95 c0                     	setne	al
-c002a7e0: c3                           	ret
+c002a779 <IsControlHeld>:
+c002a779: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
+c002a77d: f6 40 30 09                  	test	byte ptr [eax + 0x30], 0x9
+c002a781: 0f 95 c0                     	setne	al
+c002a784: c3                           	ret
 
-c002a7e1 <ProcessKeyboardShortcut>:
-c002a7e1: 31 c0                        	xor	eax, eax
-c002a7e3: c3                           	ret
+c002a785 <ProcessKeyboardShortcut>:
+c002a785: 31 c0                        	xor	eax, eax
+c002a787: c3                           	ret
 
-c002a7e4 <__end_pageablekuser>:
+c002a788 <__end_pageablekuser>:
 		...

@@ -19,5 +19,5 @@ pageable size_t SysIsRegionEmpty(size_t a, size_t, size_t, size_t) {
 }
 
 export pageableuserexec bool IsRegionEmpty(region_t a) {
-    return (region_t) SystemCall(SYS_IsRegionEmpty, (size_t) a, 0, 0, 0);
+    return (region_t) SystemCall2(SYS_IsRegionEmpty, (size_t) a);
 }

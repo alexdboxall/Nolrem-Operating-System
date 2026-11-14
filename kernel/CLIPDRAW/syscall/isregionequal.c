@@ -31,5 +31,5 @@ pageable size_t SysIsRegionEqual(size_t a, size_t b, size_t, size_t) {
 }
 
 export pageableuserexec bool IsRegionEqual(region_t a, region_t b) {
-    return (region_t) SystemCall(SYS_IsRegionEqual, (size_t) a, (size_t) b, 0, 0);
+    return (region_t) SystemCall3(SYS_IsRegionEqual, (size_t) a, (size_t) b);
 }

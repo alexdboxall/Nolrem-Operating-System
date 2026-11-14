@@ -23,5 +23,5 @@ pageable size_t SysIsPointInRegion(size_t a, size_t x, size_t y, size_t) {
 }
 
 export pageableuserexec bool IsPointInRegion(region_t a, int x, int y) {
-    return (region_t) SystemCall(SYS_IsPointInRegion, (size_t) a, x, y, 0);
+    return (region_t) SystemCall4(SYS_IsPointInRegion, (size_t) a, x, y);
 }

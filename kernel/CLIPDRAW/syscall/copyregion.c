@@ -24,5 +24,5 @@ pageable size_t SysCopyRegion(size_t a, size_t, size_t, size_t) {
 }
 
 export pageableuserexec region_t CopyRegion(region_t a) {
-    return (region_t) SystemCall(SYS_CopyRegion, (size_t) a, 0, 0, 0);
+    return (region_t) SystemCall2(SYS_CopyRegion, (size_t) a);
 }

@@ -32,6 +32,6 @@ export pageableuserexec region_t CreateRoundedRectRegion(int x, int y, int w, in
     r.y = y;
     r.w = w;
     r.h = h;
-    size_t ret = SystemCall(SYS_CreateRoundedRectRegion, (size_t) &r, radius, 0, 0);
+    size_t ret = SystemCall3(SYS_CreateRoundedRectRegion, (size_t) &r, radius);
     return (region_t) ret;
 }

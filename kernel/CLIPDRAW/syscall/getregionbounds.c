@@ -25,7 +25,7 @@ pageable size_t SysGetRegionBounds(size_t rect_ptr, size_t rgn, size_t, size_t) 
 
 export pageableuserexec struct rect GetRegionBounds(region_t rgn) {
     struct rect r;
-    size_t res = SystemCall(SYS_GetRegionBounds, (size_t) &r, (size_t) rgn, 0, 0);
+    size_t res = SystemCall3(SYS_GetRegionBounds, (size_t) &r, (size_t) rgn);
     if (res == 0) {
         return r;
     } else {

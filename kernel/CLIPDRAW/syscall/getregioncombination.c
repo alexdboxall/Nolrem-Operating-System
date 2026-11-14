@@ -42,7 +42,7 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
 }
 
 export pageableuserexec region_t GetRegionCombination(int mode, region_t a, region_t b) {
-    return (region_t) SystemCall(SYS_GetRegionCombination, (size_t) a, (size_t) b, mode, 0);
+    return (region_t) SystemCall4(SYS_GetRegionCombination, (size_t) a, (size_t) b, mode);
 }
 
 export pageableuserexec void GetRegionCombinationInPlace(int mode, region_t* a, region_t b) {

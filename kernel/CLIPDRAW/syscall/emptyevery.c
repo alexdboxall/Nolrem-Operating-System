@@ -24,11 +24,11 @@ pageable size_t SysEmptyOrEveryRegion(size_t type, size_t, size_t, size_t) {
 }
 
 export pageableuserexec region_t EmptyRegion(void) {
-    size_t ret = SystemCall(SYS_EmptyOrEveryRegion, TYPE_EMPTY, 0, 0, 0);
+    size_t ret = SystemCall2(SYS_EmptyOrEveryRegion, TYPE_EMPTY);
     return (region_t) ret;
 }
 
 export pageableuserexec region_t EverythingRegion(void) {
-    size_t ret = SystemCall(SYS_EmptyOrEveryRegion, TYPE_EVERY, 0, 0, 0);
+    size_t ret = SystemCall2(SYS_EmptyOrEveryRegion, TYPE_EVERY);
     return (region_t) ret;
 }

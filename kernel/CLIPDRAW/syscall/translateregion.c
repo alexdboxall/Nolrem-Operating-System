@@ -22,5 +22,5 @@ pageable size_t SysTranslateRegion(size_t a, size_t _x, size_t _y, size_t) {
 }
 
 export pageableuserexec int TranslateRegion(region_t a, int offx, int offy) {
-    return SystemCall(SYS_TranslateRegion, (size_t) a, offx, offy, 0);
+    return SystemCall4(SYS_TranslateRegion, (size_t) a, offx, offy);
 }

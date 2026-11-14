@@ -38,9 +38,9 @@ static inline int KeGetRefCount(void* _o) {
 
 struct user_obj_header {
     struct obj_header hdr;
-    uint8_t user_ref_count;
-    uint8_t user_gone       : 1;
-    uint8_t user_type       : 7;
+    uint32_t user_ref_count  : 24;
+    uint32_t user_gone       : 1;
+    uint32_t user_type       : 7;
     struct spinlock lock;
 };
 
@@ -55,5 +55,5 @@ void InitUserObject(void* obj, uint8_t user_type);
 void LockUserObject(void* obj);
 void UnlockUserObject(void* obj);
 
-void UserRef(void* obj);
-void UserDeref(void* obj);
+int UserRef(void* obj);
+int UserDeref(void* obj);

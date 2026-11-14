@@ -14,19 +14,22 @@ pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
+    int retv;
     if (type == TYPE_REF) {
-        UserRef(uo);
+        retv = UserRef(uo);
     } else if (type == TYPE_DEREF) {
-        UserDeref(uo);
+        retv = UserDeref(uo);
+    } else {
+        retv = EINVAL;
     }
     DerefObject(uo);
-    return 0;
+    return retv;
 }
 
 export pageableuserexec void Ref(any_t obj) {
-    SystemCall(SYS_Ref, (size_t) obj, TYPE_REF, 0, 0);
+    SystemCall3(SYS_Ref, (size_t) obj, TYPE_REF);
 }
 
 export pageableuserexec void Deref(any_t obj) {
-    SystemCall(SYS_Ref, (size_t) obj, TYPE_DEREF, 0, 0);
+    SystemCall3(SYS_Ref, (size_t) obj, TYPE_DEREF);
 }

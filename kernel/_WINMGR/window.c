@@ -191,7 +191,7 @@ static void WmInvalidateExposedRegion(struct window* win, struct region* exposed
 }
 
 bool DoesWindowShowBorder(struct window* win) {
-    return !(win->style & WS_MAXIMISED);
+    return !(win->style & WS_MAXIMISED) && !(win->winclass->flags & CS_ALLCLIENT);
 }
 
 /*

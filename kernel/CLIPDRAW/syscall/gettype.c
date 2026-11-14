@@ -16,7 +16,7 @@ pageable size_t SysGetObjectType(size_t handle, size_t, size_t, size_t) {
 }
 
 export pageableuserexec int GetObjectType(any_t handle) {
-    return SystemCall(SYS_GetObjectType, (size_t) handle, 0, 0, 0);
+    return SystemCall2(SYS_GetObjectType, (size_t) handle);
 }
 
 export pageableuserexec bool IsMailbox(any_t handle) {

@@ -28,7 +28,7 @@
 #define UOBJ_DC                  19
 #define UOBJ_CURSOR              20
 #define UOBJ_APP                 21
-#define UOBJ_ICON                 22
+#define UOBJ_ICON                22
 
 /* INTERNAL ONLY */
 

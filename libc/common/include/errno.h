@@ -46,6 +46,7 @@
 #define ECANCELED		34			// Operation cancelled
 #define EOVERFLOW		35			// Overflow
 #define EABANDONED		36			// Sem/mutex abandoned
+#define EGONE			37			// Already gone
 #ifndef COMPILE_KERNEL
 
 int* __thread_local_errno_();

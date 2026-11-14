@@ -2,6 +2,7 @@
 #include <common.h>
 #include <string.h>
 #include <log.h>
+#include <errno.h>
 
 static void(*objtype_cleanup_handlers[32])(void*);
 static void(*uobjtype_cleanup_handlers[32])(void*);
@@ -44,7 +45,7 @@ void InitUserObjectType(void) {
     RegisterObjectType(OBJTYPE_USEROBJ, CleanupUserObj);
 }
 
-export void InitUserObject(void* obj, uint8_t user_type) {
+void InitUserObject(void* obj, uint8_t user_type) {
     InitObject(obj, OBJTYPE_USEROBJ);
     struct user_obj_header* uo = obj;
     InitSpinlock(&uo->lock);
@@ -53,35 +54,50 @@ export void InitUserObject(void* obj, uint8_t user_type) {
     uo->user_type = user_type;
 }
 
-export pageable void UserRef(void* obj) {
+pageable int UserRef(void* obj) {
     struct user_obj_header* uo = obj;
     AcquireSpinlock(&uo->lock);
+    if (uo->user_ref_count == 0xFFFFFF) {
+        ReleaseSpinlock(&uo->lock);
+        return EOVERFLOW;
+    }
+    if (uo->user_ref_count == 0) {
+        ReleaseSpinlock(&uo->lock);
+        return EGONE;
+    }
     uo->user_ref_count++;
     ReleaseSpinlock(&uo->lock);
+    return 0;
 }
 
-export pageable void UserDeref(void* obj) {
+pageable int UserDeref(void* obj) {
     struct user_obj_header* uo = obj;
     AcquireSpinlock(&uo->lock);
+    if (uo->user_ref_count == 0) {
+        ReleaseSpinlock(&uo->lock);
+        return EGONE;
+    }
     uo->user_ref_count--;
+    int retv = 0;
     if (uo->user_gone) {
         // Don't allow the user to trigger the 'userref == 0' part more than
         // once, as that will cause multiple, real dereferences!
-
+        retv = EGONE;
     } else if (uo->user_ref_count == 0) {
         // TODO: user cleanup?
         uo->user_gone = true;
         DerefObject(obj);
     }
     ReleaseSpinlock(&uo->lock);
+    return retv;
 }
 
-export void LockUserObject(void* obj) {
+void LockUserObject(void* obj) {
     struct user_obj_header* hdr = obj;
     AcquireSpinlock(&hdr->lock);
 }
 
-export void UnlockUserObject(void* obj) {
+void UnlockUserObject(void* obj) {
     struct user_obj_header* hdr = obj;
     ReleaseSpinlock(&hdr->lock);
 }

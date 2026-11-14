@@ -39,7 +39,7 @@ void x86HandleInterrupt(struct x86_regs* r) {
     int num = r->int_no;
 
     if (num == ISR_SYSTEM_CALL) {
-        r->eax = PerformSystemCall(r->eax, r->ebx, r->ecx, r->edx, r->esi);
+        r->eax = PerformSystemCall(r->eax, r->edx, r->ecx, r->ebx, r->esi);
         return;
     }
 

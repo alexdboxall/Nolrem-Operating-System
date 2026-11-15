@@ -3,33 +3,6 @@
 #include "api.h"
 #include <obj.h>
 
-// used for the validation func
-#define UOBJ_ANYTYPE            (-1)
-
-#define UOBJ_INVALID             0
-#define UOBJ_MUTEX               1
-#define UOBJ_THREAD              2
-#define UOBJ_PROCESS             3
-#define UOBJ_FILE                4
-#define UOBJ_DIRECTORY           5
-#define UOBJ_TIMER               6
-#define UOBJ_MEMORY_REGION       7
-#define UOBJ_SOUND               8
-#define UOBJ_DYNAMIC_LIBRARY     9
-#define UOBJ_WINDOW              10
-#define UOBJ_WINDOW_CLASS        11
-#define UOBJ_BRUSH               12
-#define UOBJ_PEN                 13
-#define UOBJ_BITMAP              14
-#define UOBJ_TYPEFACE            15
-#define UOBJ_FONT                16
-#define UOBJ_MAILBOX             17
-#define UOBJ_REGION              18
-#define UOBJ_DC                  19
-#define UOBJ_CURSOR              20
-#define UOBJ_APP                 21
-#define UOBJ_ICON                22
-
 /* INTERNAL ONLY */
 
 struct path {

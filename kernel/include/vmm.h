@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <allocvirt.h>
 #include <mutex.h>
+#include <cpz.h>
 
 #define PF_PRESENT  1   /* protection violation, rather than a missing page */
 #define PF_WRITE    2   /* the access was a write */
@@ -141,6 +142,7 @@ void* AllocFixedMemory(size_t phys, size_t bytes, int flags);
 /* 'loader' may be NULL (plain demand-load from the file); it is copied. */
 void* AllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
                       int flags, const struct virt_loader* loader);
+void* AllocCompressedFileMemory(struct cpz_image* image, size_t offset, size_t bytes, int flags);
 void FreeMemory(void* ptr, size_t bytes);
 
 /*

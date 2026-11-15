@@ -361,14 +361,11 @@ _Noreturn void WmMainloop(void) {
     size_t prev_kb_free = 0;
     while (true) {
         extern bool anything_happened;
-        LogPrintf("Getting sysmsg...\n");
         KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
         ProcessMessage(msg);
 
-        LogPrintf("Getting desktop...\n");
         int r = WmAppGetMessage(WmGetDesktop()->app, &msg, true);
         if (r == 0) {
-            LogPrintf("Dispatching desktop...\n");
             WmDispatchMessage(msg);
         }
 

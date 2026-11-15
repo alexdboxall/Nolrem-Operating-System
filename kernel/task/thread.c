@@ -58,6 +58,7 @@ export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void*
     }
     
     thr->next_ready = NULL;
+    thr->flags = 0;
     thr->next_waiting_timer = NULL;
     thr->next_waiting_sem = NULL;
     thr->waiting_sem_or_clot = NULL;
@@ -107,6 +108,27 @@ export void SetThreadPriority(struct thread* thr, uint8_t priority) {
 static void CleanupThread(void* _thr) {
     struct thread* thr = _thr;
     FreeHeap(thr);
+}
+
+void KeStartDelayTermination(void) {
+    AcquireScheduler();
+    /* TODO: probably some process-side things too once that's implemented */
+    struct thread* thr = GetCurrentThread();
+    RefObject(thr);
+    thr->flags |= TF_DELAY_TERMINATE;
+    ReleaseScheduler();
+}
+
+void KeEndDelayTermination(void) {
+     AcquireScheduler();
+    /* TODO: probably some process-side things too once that's implemented */
+    struct thread* thr = GetCurrentThread();
+    thr->flags &= ~TF_DELAY_TERMINATE;
+    if (thr->flags & TF_MARKED_TERMINATION) {
+        // TODO: terminate however that's done
+    }
+    DerefObject(thr);
+    ReleaseScheduler();
 }
 
 void InitThread(void) { 

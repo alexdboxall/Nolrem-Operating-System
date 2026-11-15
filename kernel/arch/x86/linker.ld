@@ -46,6 +46,11 @@ SECTIONS
 		__end_pageablekuser = .;
 
 		. = ALIGN(4096);
+		__start_peruserdata = .;
+		*(.kperuserdata)
+		__end_peruserdata = .;
+
+		. = ALIGN(4096);
 	}
 	
 	.bss ALIGN(4096) : AT (ADDR (.bss) - 0xC0000000)

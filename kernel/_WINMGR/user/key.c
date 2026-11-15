@@ -189,10 +189,9 @@ export pageableuserexec bool ProcessKeyboardShortcut(struct window* win, struct 
         return false;
     }
 
-    (void )st;
-    return false;
-    /*
-    struct uapp* uapp = ...;
+    static volatile struct uapp dummy;
+    struct uapp* uapp = (struct uapp*) &dummy;
+    
     bool ctrl = IsControlHeld(uapp);
     bool alt = IsAltHeld(uapp);
     bool shift = IsShiftHeld(uapp);
@@ -216,5 +215,5 @@ export pageableuserexec bool ProcessKeyboardShortcut(struct window* win, struct 
             return true;
         }
     }
-    */
+    return false;
 }

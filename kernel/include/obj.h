@@ -18,6 +18,7 @@
 #define OBJTYPE_MSGBOX          9
 #define OBJTYPE_WAITCLOT        10
 #define OBJTYPE_AIO             11
+#define OBJTYPE_CPZ_INST        12
 
 struct obj_header {
 #ifndef NDEBUG

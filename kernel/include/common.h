@@ -31,6 +31,7 @@
 #define pageableuserrodata __attribute__((section(".pageablekuserrodata")))
 #define userexec __attribute__((section(".kuser")))
 #define userrodata __attribute__((section(".kuserrodata")))
+#define peruserdata __attribute__((section(".kperuserdata")))
 
 #define pageable __attribute__((section(".pageable")))
 #define pageablerodata __attribute__((section(".pageablerodata")))

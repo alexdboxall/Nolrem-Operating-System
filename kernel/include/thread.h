@@ -14,6 +14,9 @@ struct sem;
 #define PRIORITY_LOW            240
 #define PRIORITY_IDLE           255
 
+#define TF_DELAY_TERMINATE      (1 << 0)
+#define TF_MARKED_TERMINATION   (1 << 1)
+
 struct thread {
     struct obj_header hdr;
 
@@ -42,6 +45,7 @@ struct thread {
     bool saved_interrupt_enabled;
 
     int last_error;
+    int flags;
 };
 
 struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size);
@@ -56,3 +60,11 @@ void BlockThread(void);
 void UnblockThread(struct thread* thr, int retv);
 
 void InitThread();
+
+/* 
+ * Can be used for the kernel side of system calls (or elsewhere), to ensure we 
+ * don't get terminated in between allocating an object and registering it to
+ * the process.
+ */
+void KeStartDelayTermination(void);
+void KeEndDelayTermination(void);

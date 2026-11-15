@@ -28,7 +28,6 @@ export void* KeAllocHeap(size_t bytes) {
     bytes = (bytes + ALIGN - 1) & ~(ALIGN - 1);
     void* retv = AllocHeapEx(&kernel_heap, bytes);
     ReleaseSpinlock(&heap_lock);
-    LogPrintf("KeAllocHeap: 0x%X (bytes 0x%X)\n", retv, bytes);
     return retv;
 }
 
@@ -72,8 +71,6 @@ export void KeFreeHeap(void* ptr) {
     // for debugging
     size_t s = KeGetAllocationSize(ptr);
     memset(ptr, 0xCC, s);
-
-    LogPrintf("KeFreeHeap: 0x%X\n", ptr);
 
     AcquireSpinlock(&heap_lock);
     FreeHeapEx(&kernel_heap, ptr);

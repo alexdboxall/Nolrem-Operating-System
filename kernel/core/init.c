@@ -12,6 +12,7 @@
 #include <vnode.h>
 #include <vfs.h>
 #include <cpu.h>
+#include <cpz.h>
 #include <file.h>
 #include <filesystem.h>
 #include <module.h>
@@ -81,6 +82,7 @@ export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
     CreateInitialVas();
     InitScheduler();
     ArchEnableInterrupts();
+    InitCpzImages();
     InitMessageBox();
     InitModule();
     InitVnode();

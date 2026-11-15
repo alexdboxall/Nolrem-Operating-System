@@ -6,6 +6,32 @@
 
 #include <keycodes.h>
 
+#define UOBJ_ANYTYPE            (-1)
+
+#define UOBJ_INVALID             0
+#define UOBJ_MUTEX               1
+#define UOBJ_THREAD              2
+#define UOBJ_PROCESS             3
+#define UOBJ_FILE                4
+#define UOBJ_DIRECTORY           5
+#define UOBJ_TIMER               6
+#define UOBJ_MEMORY_REGION       7
+#define UOBJ_SOUND               8
+#define UOBJ_DYNAMIC_LIBRARY     9
+#define UOBJ_WINDOW              10
+#define UOBJ_WINDOW_CLASS        11
+#define UOBJ_BRUSH               12
+#define UOBJ_PEN                 13
+#define UOBJ_BITMAP              14
+#define UOBJ_TYPEFACE            15
+#define UOBJ_FONT                16
+#define UOBJ_MAILBOX             17
+#define UOBJ_REGION              18
+#define UOBJ_DC                  19
+#define UOBJ_CURSOR              20
+#define UOBJ_APP                 21
+#define UOBJ_ICON                22
+
 struct region {
     void* data;
     size_t used_length;     
@@ -39,27 +65,30 @@ void Ref(any_t);
 void Deref(any_t);
 
 int GetObjectType(any_t handle);
-
-bool IsMailbox(any_t handle);
-bool IsMutex(any_t handle);
-bool IsThread(any_t handle);
-bool IsProcess(any_t handle);
-bool IsFile(any_t handle);
-bool IsDirectory(any_t handle);
-bool IsTimer(any_t handle);
-bool IsMemoryRegion(any_t handle);
-bool IsSound(any_t handle);
-bool IsDynamicLibrary(any_t handle);
-bool IsWindow(any_t handle);
-bool IsWindowClass(any_t handle);
-bool IsBrush(any_t handle);
-bool IsPen(any_t handle);
-bool IsBitmap(any_t handle);
-bool IsTypeface(any_t handle);
-bool IsFont(any_t handle);
-bool IsRegion(any_t handle);
-bool IsDc(any_t handle);
 bool IsAnything(any_t handle);
+
+#define IsMutex(handle)           (GetObjectType(handle) == UOBJ_MUTEX)
+#define IsThread(handle)          (GetObjectType(handle) == UOBJ_THREAD)
+#define IsProcess(handle)         (GetObjectType(handle) == UOBJ_PROCESS)
+#define IsFile(handle)            (GetObjectType(handle) == UOBJ_FILE)
+#define IsDirectory(handle)       (GetObjectType(handle) == UOBJ_DIRECTORY)
+#define IsTimer(handle)           (GetObjectType(handle) == UOBJ_TIMER)
+#define IsMemoryRegion(handle)    (GetObjectType(handle) == UOBJ_MEMORY_REGION)
+#define IsSound(handle)           (GetObjectType(handle) == UOBJ_SOUND)
+#define IsDynamicLibrary(handle)  (GetObjectType(handle) == UOBJ_DYNAMIC_LIBRARY)
+#define IsWindow(handle)          (GetObjectType(handle) == UOBJ_WINDOW)
+#define IsWindowClass(handle)     (GetObjectType(handle) == UOBJ_WINDOW_CLASS)
+#define IsBrush(handle)           (GetObjectType(handle) == UOBJ_BRUSH)
+#define IsPen(handle)             (GetObjectType(handle) == UOBJ_PEN)
+#define IsBitmap(handle)          (GetObjectType(handle) == UOBJ_BITMAP)
+#define IsTypeface(handle)        (GetObjectType(handle) == UOBJ_TYPEFACE)
+#define IsFont(handle)            (GetObjectType(handle) == UOBJ_FONT)
+#define IsMailbox(handle)         (GetObjectType(handle) == UOBJ_MAILBOX)
+#define IsRegion(handle)          (GetObjectType(handle) == UOBJ_REGION)
+#define IsDc(handle)              (GetObjectType(handle) == UOBJ_DC)
+#define IsCursor(handle)          (GetObjectType(handle) == UOBJ_CURSOR)
+#define IsApp(handle)             (GetObjectType(handle) == UOBJ_APP)
+#define IsIcon(handle)            (GetObjectType(handle) == UOBJ_ICON)
 
 /* Helper Functions */
 int IntegerSqrt(int x);
@@ -354,6 +383,7 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_KEYUP                10
 #define WM_ACTIVATE_APP         11
 #define WM_ACTIVATE             12
+#define WM_COMMAND              13
 
 #define HIT_TOP_BORDER      (1 << 0)
 #define HIT_LEFT_BORDER     (1 << 1)

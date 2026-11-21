@@ -9,7 +9,8 @@ struct vas;
 struct thread;
 
 static struct cpu_data cpus[ARCH_MAX_CPUS];
-int num_cpus_started = 1;
+_Atomic int num_cpus_attempt_started = 1;
+_Atomic int num_cpus_reported_started = 1;
 
 struct cpu_data* GetCpu(void) {
     return &cpus[ArchGetCpuNum()];
@@ -20,4 +21,14 @@ void InitCpuTable(void) {
         cpus[i].cpu_num = i;
     }
     ArchInitPlatformSpecificData(&cpus[0]); 
+}
+
+export int KeRegisterNewCpu() {
+    int idx = num_cpus_reported_started++;
+    ArchInitPlatformSpecificData(&cpus[idx]);
+    return idx;
+}
+
+export int KeGetNumActiveCpus() {
+    return num_cpus_reported_started;
 }

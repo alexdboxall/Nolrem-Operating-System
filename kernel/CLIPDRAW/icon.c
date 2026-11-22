@@ -33,16 +33,16 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     ico->ico_offsets_bitmap = NULL;
     ico->ico_types = NULL;
     
-    uint8_t sig1 = OmfRead8AndAdvance(&ico->omf);
-    uint8_t sig2 = OmfRead8AndAdvance(&ico->omf);
-    uint8_t sig3 = OmfRead8AndAdvance(&ico->omf);
-    uint8_t ver  = OmfRead8AndAdvance(&ico->omf);
+    uint8_t sig1 = KeOmfRead8AndAdvance(&ico->omf);
+    uint8_t sig2 = KeOmfRead8AndAdvance(&ico->omf);
+    uint8_t sig3 = KeOmfRead8AndAdvance(&ico->omf);
+    uint8_t ver  = KeOmfRead8AndAdvance(&ico->omf);
     if (sig1 != 'I' || sig2 != 'C' || sig3 != 'O' || ver != 0x00) {
         goto fail_after_open;
     }
 
-    ico->num_icons = OmfRead8AndAdvance(&ico->omf);
-    ico->shift = OmfRead8AndAdvance(&ico->omf);
+    ico->num_icons = KeOmfRead8AndAdvance(&ico->omf);
+    ico->shift = KeOmfRead8AndAdvance(&ico->omf);
     if (ico->omf.error || ico->num_icons == 0) {
         goto fail_after_open;
     }
@@ -54,11 +54,11 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     if (ico->ico_types == NULL || ico->ico_offsets_mask == NULL || ico->ico_offsets_bitmap == NULL) {
         goto fail_after_open;
     }
-    OmfJump(&ico->omf, 8);
+    KeOmfJump(&ico->omf, 8);
     for (int i = 0; i < ico->num_icons; ++i) {
-        ico->ico_offsets_bitmap[i] = OmfRead16AndAdvanceLE(&ico->omf);
-        ico->ico_offsets_mask[i] = OmfRead16AndAdvanceLE(&ico->omf);
-        ico->ico_types[i] = OmfRead8AndAdvance(&ico->omf);
+        ico->ico_offsets_bitmap[i] = KeOmfRead16AndAdvanceLE(&ico->omf);
+        ico->ico_offsets_mask[i] = KeOmfRead16AndAdvanceLE(&ico->omf);
+        ico->ico_types[i] = KeOmfRead8AndAdvance(&ico->omf);
     }
 
     if (ico->omf.error || ico->num_icons == 0) {
@@ -78,7 +78,7 @@ static void CleanupIcon(void* _ico) {
     if (ico == NULL) {
         return;
     }
-    OmfClose(&ico->omf);
+    KeOmfClose(&ico->omf);
     FreeHeap(ico->ico_offsets_bitmap);
     FreeHeap(ico->ico_offsets_mask);
     FreeHeap(ico->ico_types);

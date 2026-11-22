@@ -160,7 +160,7 @@ export struct dc* CdCreateDc(void) {
     dc->cliprgn = CdEverythingRegion();
     dc->trans_x = 0;
     dc->trans_y = 0;
-    AddGraphicsFallbacksWhereNeeded(dc->drv);
+    CdAddGraphicsFallbacksWhereNeeded(dc->drv);
     return dc;
 }
 
@@ -173,7 +173,7 @@ void CdResetDC(struct dc* dc) {
     dc->trans_y = 0;
 
     dc->drv = KeGetKernelGraphicsDriver();
-    AddGraphicsFallbacksWhereNeeded(dc->drv);
+    CdAddGraphicsFallbacksWhereNeeded(dc->drv);
 
     KeDerefObject(dc->brush);
     KeDerefObject(dc->pen);

@@ -600,7 +600,7 @@ c0010637: 77 07                        	ja	0xc0010640 <CdGetStockPen+0x12>
 c0010639: 8b 04 95 40 17 03 c0         	mov	eax, dword ptr [4*edx - 0x3ffce8c0]
 c0010640: c3                           	ret
 
-c0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>:
+c0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>:
 c0010641: 8b 00                        	mov	eax, dword ptr [eax]
 c0010643: c3                           	ret
 
@@ -2361,7 +2361,7 @@ c00118a8: 74 33                        	je	0xc00118dd <ApplyCursorRecord+0xb8>
 c00118aa: 80 7c 24 0e 10               	cmp	byte ptr [esp + 0xe], 0x10
 c00118af: 76 0c                        	jbe	0xc00118bd <ApplyCursorRecord+0x98>
 c00118b1: 89 d0                        	mov	eax, edx
-c00118b3: e8 89 ed ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c00118b3: e8 89 ed ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c00118b8: 83 c2 04                     	add	edx, 0x4
 c00118bb: eb 09                        	jmp	0xc00118c6 <ApplyCursorRecord+0xa1>
 c00118bd: 66 8b 02                     	mov	ax, word ptr [edx]
@@ -6899,7 +6899,7 @@ c0014cf4: f3 a5                        	rep		movsd	dword ptr es:[edi], dword ptr
 c0014cf6: 31 d2                        	xor	edx, edx
 c0014cf8: 89 53 24                     	mov	dword ptr [ebx + 0x24], edx
 c0014cfb: ff 73 0c                     	push	dword ptr [ebx + 0xc]
-c0014cfe: e8 19 4e 00 00               	call	0xc0019b1c <AddGraphicsFallbacksWhereNeeded>
+c0014cfe: e8 19 4e 00 00               	call	0xc0019b1c <CdAddGraphicsFallbacksWhereNeeded>
 c0014d03: 83 c4 10                     	add	esp, 0x10
 c0014d06: 89 d8                        	mov	eax, ebx
 c0014d08: 83 c4 10                     	add	esp, 0x10
@@ -8194,7 +8194,7 @@ c0015bfd: 31 c0                        	xor	eax, eax
 c0015bff: 89 43 24                     	mov	dword ptr [ebx + 0x24], eax
 c0015c02: c7 43 0c 60 fe 02 c0         	mov	dword ptr [ebx + 0xc], 0xc002fe60
 c0015c09: 68 60 fe 02 c0               	push	0xc002fe60
-c0015c0e: e8 09 3f 00 00               	call	0xc0019b1c <AddGraphicsFallbacksWhereNeeded>
+c0015c0e: e8 09 3f 00 00               	call	0xc0019b1c <CdAddGraphicsFallbacksWhereNeeded>
 c0015c13: 5a                           	pop	edx
 c0015c14: ff 73 10                     	push	dword ptr [ebx + 0x10]
 c0015c17: e8 b5 ad ff ff               	call	0xc00109d1 <KeDerefObject>
@@ -10399,7 +10399,7 @@ c00175c4: eb 74                        	jmp	0xc001763a <KeOpenCpzImage+0x189>
 c00175c6: 89 ea                        	mov	edx, ebp
 c00175c8: 31 c9                        	xor	ecx, ecx
 c00175ca: 89 d0                        	mov	eax, edx
-c00175cc: e8 70 90 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c00175cc: e8 70 90 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c00175d1: 89 02                        	mov	dword ptr [edx], eax
 c00175d3: 41                           	inc	ecx
 c00175d4: 83 c2 04                     	add	edx, 0x4
@@ -13680,19 +13680,19 @@ c0019b19: 5f                           	pop	edi
 c0019b1a: 5d                           	pop	ebp
 c0019b1b: c3                           	ret
 
-c0019b1c <AddGraphicsFallbacksWhereNeeded>:
+c0019b1c <CdAddGraphicsFallbacksWhereNeeded>:
 c0019b1c: 8b 44 24 04                  	mov	eax, dword ptr [esp + 0x4]
 c0019b20: 83 78 08 00                  	cmp	dword ptr [eax + 0x8], 0x0
-c0019b24: 75 07                        	jne	0xc0019b2d <AddGraphicsFallbacksWhereNeeded+0x11>
+c0019b24: 75 07                        	jne	0xc0019b2d <CdAddGraphicsFallbacksWhereNeeded+0x11>
 c0019b26: c7 40 08 a2 90 01 c0         	mov	dword ptr [eax + 0x8], 0xc00190a2
 c0019b2d: 83 78 30 00                  	cmp	dword ptr [eax + 0x30], 0x0
-c0019b31: 75 07                        	jne	0xc0019b3a <AddGraphicsFallbacksWhereNeeded+0x1e>
+c0019b31: 75 07                        	jne	0xc0019b3a <CdAddGraphicsFallbacksWhereNeeded+0x1e>
 c0019b33: c7 40 30 5b 9b 01 c0         	mov	dword ptr [eax + 0x30], 0xc0019b5b
 c0019b3a: 83 78 2c 00                  	cmp	dword ptr [eax + 0x2c], 0x0
-c0019b3e: 75 07                        	jne	0xc0019b47 <AddGraphicsFallbacksWhereNeeded+0x2b>
+c0019b3e: 75 07                        	jne	0xc0019b47 <CdAddGraphicsFallbacksWhereNeeded+0x2b>
 c0019b40: c7 40 2c 08 a1 01 c0         	mov	dword ptr [eax + 0x2c], 0xc001a108
 c0019b47: 83 78 28 00                  	cmp	dword ptr [eax + 0x28], 0x0
-c0019b4b: 75 07                        	jne	0xc0019b54 <AddGraphicsFallbacksWhereNeeded+0x38>
+c0019b4b: 75 07                        	jne	0xc0019b54 <CdAddGraphicsFallbacksWhereNeeded+0x38>
 c0019b4d: c7 40 28 8c 8d 01 c0         	mov	dword ptr [eax + 0x28], 0xc0018d8c
 c0019b54: c3                           	ret
 
@@ -18176,7 +18176,7 @@ c001ce87: 83 e9 04                     	sub	ecx, 0x4
 c001ce8a: 39 c1                        	cmp	ecx, eax
 c001ce8c: 72 08                        	jb	0xc001ce96 <OmfRead32LE+0x24>
 c001ce8e: 03 42 08                     	add	eax, dword ptr [edx + 0x8]
-c001ce91: e9 ab 37 ff ff               	jmp	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001ce91: e9 ab 37 ff ff               	jmp	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001ce96: c6 42 10 01                  	mov	byte ptr [edx + 0x10], 0x1
 c001ce9a: 31 c0                        	xor	eax, eax
 c001ce9c: c3                           	ret
@@ -18421,16 +18421,16 @@ c001d0e5: 80 7e 01 4d                  	cmp	byte ptr [esi + 0x1], 0x4d
 c001d0e9: 0f 85 4b 02 00 00            	jne	0xc001d33a <BmpParse+0x27a>
 c001d0ef: 8d 46 0e                     	lea	eax, [esi + 0xe]
 c001d0f2: 89 44 24 28                  	mov	dword ptr [esp + 0x28], eax
-c001d0f6: e8 46 35 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d0f6: e8 46 35 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d0fb: 89 44 24 0c                  	mov	dword ptr [esp + 0xc], eax
 c001d0ff: ba 05 00 00 00               	mov	edx, 0x5
 c001d104: 83 f8 27                     	cmp	eax, 0x27
 c001d107: 0f 86 2d 02 00 00            	jbe	0xc001d33a <BmpParse+0x27a>
 c001d10d: 8d 46 12                     	lea	eax, [esi + 0x12]
-c001d110: e8 2c 35 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d110: e8 2c 35 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d115: 89 44 24 1c                  	mov	dword ptr [esp + 0x1c], eax
 c001d119: 8d 46 16                     	lea	eax, [esi + 0x16]
-c001d11c: e8 20 35 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d11c: e8 20 35 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d121: 89 44 24 14                  	mov	dword ptr [esp + 0x14], eax
 c001d125: ba 07 00 00 00               	mov	edx, 0x7
 c001d12a: 83 7c 24 1c 00               	cmp	dword ptr [esp + 0x1c], 0x0
@@ -18444,21 +18444,21 @@ c001d142: 0f 84 f2 01 00 00            	je	0xc001d33a <BmpParse+0x27a>
 c001d148: 8b 44 24 14                  	mov	eax, dword ptr [esp + 0x14]
 c001d14c: 89 44 24 20                  	mov	dword ptr [esp + 0x20], eax
 c001d150: 8d 46 02                     	lea	eax, [esi + 0x2]
-c001d153: e8 e9 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d153: e8 e9 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d158: 89 44 24 24                  	mov	dword ptr [esp + 0x24], eax
 c001d15c: 8d 46 0a                     	lea	eax, [esi + 0xa]
-c001d15f: e8 dd 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d15f: e8 dd 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d164: 89 44 24 18                  	mov	dword ptr [esp + 0x18], eax
 c001d168: 66 8b 4e 1c                  	mov	cx, word ptr [esi + 0x1c]
 c001d16c: 89 4c 24 2c                  	mov	dword ptr [esp + 0x2c], ecx
 c001d170: 8d 46 1e                     	lea	eax, [esi + 0x1e]
-c001d173: e8 c9 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d173: e8 c9 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d178: 89 c5                        	mov	ebp, eax
 c001d17a: 8d 46 22                     	lea	eax, [esi + 0x22]
-c001d17d: e8 bf 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d17d: e8 bf 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d182: 89 c7                        	mov	edi, eax
 c001d184: 8d 46 2e                     	lea	eax, [esi + 0x2e]
-c001d187: e8 b5 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d187: e8 b5 34 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d18c: 89 44 24 10                  	mov	dword ptr [esp + 0x10], eax
 c001d190: 8d 55 ff                     	lea	edx, [ebp - 0x1]
 c001d193: 83 fa 01                     	cmp	edx, 0x1
@@ -18558,13 +18558,13 @@ c001d2da: 83 f8 37                     	cmp	eax, 0x37
 c001d2dd: 76 03                        	jbe	0xc001d2e2 <BmpParse+0x222>
 c001d2df: 8d 6e 36                     	lea	ebp, [esi + 0x36]
 c001d2e2: 89 e8                        	mov	eax, ebp
-c001d2e4: e8 58 33 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d2e4: e8 58 33 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d2e9: 89 43 1c                     	mov	dword ptr [ebx + 0x1c], eax
 c001d2ec: 8d 45 04                     	lea	eax, [ebp + 0x4]
-c001d2ef: e8 4d 33 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d2ef: e8 4d 33 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d2f4: 89 43 20                     	mov	dword ptr [ebx + 0x20], eax
 c001d2f7: 8d 45 08                     	lea	eax, [ebp + 0x8]
-c001d2fa: e8 42 33 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d2fa: e8 42 33 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d2ff: 89 43 24                     	mov	dword ptr [ebx + 0x24], eax
 c001d302: eb 15                        	jmp	0xc001d319 <BmpParse+0x259>
 c001d304: c7 43 1c 00 00 ff 00         	mov	dword ptr [ebx + 0x1c], 0xff0000
@@ -18642,7 +18642,7 @@ c001d3ed: 66 89 44 24 0c               	mov	word ptr [esp + 0xc], ax
 c001d3f2: 85 f6                        	test	esi, esi
 c001d3f4: 75 0e                        	jne	0xc001d404 <FatMount+0xc0>
 c001d3f6: 8d 84 24 80 00 00 00         	lea	eax, [esp + 0x80]
-c001d3fd: e8 3f 32 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d3fd: e8 3f 32 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d402: 89 c6                        	mov	esi, eax
 c001d404: 80 fb f0                     	cmp	bl, -0x10
 c001d407: 74 09                        	je	0xc001d412 <FatMount+0xce>
@@ -18668,11 +18668,11 @@ c001d451: 89 44 24 1c                  	mov	dword ptr [esp + 0x1c], eax
 c001d455: 85 c0                        	test	eax, eax
 c001d457: 75 78                        	jne	0xc001d4d1 <FatMount+0x18d>
 c001d459: 8d 84 24 84 00 00 00         	lea	eax, [esp + 0x84]
-c001d460: e8 dc 31 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d460: e8 dc 31 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d465: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
 c001d469: 8b 9c 24 88 00 00 00         	mov	ebx, dword ptr [esp + 0x88]
 c001d470: 8d 84 24 8c 00 00 00         	lea	eax, [esp + 0x8c]
-c001d477: e8 c5 31 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d477: e8 c5 31 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d47c: 89 44 24 0c                  	mov	dword ptr [esp + 0xc], eax
 c001d480: 66 83 bc 24 8a 00 00 00 00   	cmp	word ptr [esp + 0x8a], 0x0
 c001d489: 0f 85 d1 fe ff ff            	jne	0xc001d360 <FatMount+0x1c>
@@ -19075,7 +19075,7 @@ c001d962: 89 13                        	mov	dword ptr [ebx], edx
 c001d964: 80 7c 24 0f 00               	cmp	byte ptr [esp + 0xf], 0x0
 c001d969: 75 0a                        	jne	0xc001d975 <FatDecodeEntry+0x4d>
 c001d96b: 83 c0 1c                     	add	eax, 0x1c
-c001d96e: e8 ce 2c ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001d96e: e8 ce 2c ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001d973: eb 10                        	jmp	0xc001d985 <FatDecodeEntry+0x5d>
 c001d975: 83 3b 00                     	cmp	dword ptr [ebx], 0x0
 c001d978: 74 04                        	je	0xc001d97e <FatDecodeEntry+0x56>
@@ -19168,7 +19168,7 @@ c001da5e: 0f b7 c2                     	movzx	eax, dx
 c001da61: c1 e8 04                     	shr	eax, 0x4
 c001da64: eb 0c                        	jmp	0xc001da72 <FatReadEntry+0xaf>
 c001da66: 89 e8                        	mov	eax, ebp
-c001da68: e8 d4 2b ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001da68: e8 d4 2b ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001da6d: 25 ff ff ff 0f               	and	eax, 0xfffffff
 c001da72: 89 07                        	mov	dword ptr [edi], eax
 c001da74: 8b 44 24 08                  	mov	eax, dword ptr [esp + 0x8]
@@ -19709,7 +19709,7 @@ c001e0a8: 83 c4 10                     	add	esp, 0x10
 c001e0ab: 85 c0                        	test	eax, eax
 c001e0ad: 0f 85 c9 00 00 00            	jne	0xc001e17c <FatWriteEntry+0x1ae>
 c001e0b3: 89 e8                        	mov	eax, ebp
-c001e0b5: e8 87 25 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001e0b5: e8 87 25 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001e0ba: 25 00 00 00 f0               	and	eax, 0xf0000000
 c001e0bf: 81 e6 ff ff ff 0f            	and	esi, 0xfffffff
 c001e0c5: 09 f0                        	or	eax, esi
@@ -19923,23 +19923,23 @@ c001e2fe: 83 c4 10                     	add	esp, 0x10
 c001e301: 85 c0                        	test	eax, eax
 c001e303: 0f 85 84 00 00 00            	jne	0xc001e38d <FatInvalidateFsinfo+0xc7>
 c001e309: 89 e0                        	mov	eax, esp
-c001e30b: e8 31 23 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001e30b: e8 31 23 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001e310: 3d 52 52 61 41               	cmp	eax, 0x41615252
 c001e315: 75 70                        	jne	0xc001e387 <FatInvalidateFsinfo+0xc1>
 c001e317: 8d 84 24 e4 01 00 00         	lea	eax, [esp + 0x1e4]
-c001e31e: e8 1e 23 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001e31e: e8 1e 23 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001e323: 3d 72 72 41 61               	cmp	eax, 0x61417272
 c001e328: 75 5d                        	jne	0xc001e387 <FatInvalidateFsinfo+0xc1>
 c001e32a: 8d 84 24 fc 01 00 00         	lea	eax, [esp + 0x1fc]
-c001e331: e8 0b 23 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001e331: e8 0b 23 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001e336: 3d 00 00 55 aa               	cmp	eax, 0xaa550000
 c001e33b: 75 4a                        	jne	0xc001e387 <FatInvalidateFsinfo+0xc1>
 c001e33d: 8d 84 24 e8 01 00 00         	lea	eax, [esp + 0x1e8]
-c001e344: e8 f8 22 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001e344: e8 f8 22 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001e349: 40                           	inc	eax
 c001e34a: 75 0f                        	jne	0xc001e35b <FatInvalidateFsinfo+0x95>
 c001e34c: 8d 84 24 ec 01 00 00         	lea	eax, [esp + 0x1ec]
-c001e353: e8 e9 22 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c001e353: e8 e9 22 ff ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c001e358: 40                           	inc	eax
 c001e359: 74 2c                        	je	0xc001e387 <FatInvalidateFsinfo+0xc1>
 c001e35b: c7 84 24 e8 01 00 00 ff ff ff ff     	mov	dword ptr [esp + 0x1e8], 0xffffffff
@@ -27553,7 +27553,7 @@ c0023dbb: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
 c0023dbf: eb 14                        	jmp	0xc0023dd5 <BuildPlaneByte+0xf5>
 c0023dc1: 89 54 24 1c                  	mov	dword ptr [esp + 0x1c], edx
 c0023dc5: 8d 04 87                     	lea	eax, [edi + 4*eax]
-c0023dc8: e8 74 c8 fe ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.1.lto_priv.0>
+c0023dc8: e8 74 c8 fe ff               	call	0xc0010641 <ReadUnaligned32LE.lto_priv.4.lto_priv.0>
 c0023dcd: 89 44 24 08                  	mov	dword ptr [esp + 0x8], eax
 c0023dd1: 8b 54 24 1c                  	mov	edx, dword ptr [esp + 0x1c]
 c0023dd5: e8 b9 5a ff ff               	call	0xc0019893 <ExpandComponent.lto_priv.0>

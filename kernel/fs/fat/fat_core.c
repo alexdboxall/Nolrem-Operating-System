@@ -9,6 +9,7 @@
 
 #include <common.h>
 #include <errno.h>
+#include <unaligned.h>
 #include <vfs.h>
 #include <string.h>
 #include <assert.h>
@@ -173,17 +174,17 @@ int FatMount(struct file* disk, struct fat** out) {
         return ENOTSUP;
     }
 
-    uint32_t bytes_per_sector = Le16(boot + 11);
+    uint32_t bytes_per_sector = ReadUnaligned16LE(boot + 11);
     uint32_t sectors_per_cluster = boot[13];
-    uint32_t reserved_sectors = Le16(boot + 14);
+    uint32_t reserved_sectors = ReadUnaligned16LE(boot + 14);
     uint32_t fat_count = boot[16];
-    uint32_t root_entries = Le16(boot + 17);
-    uint32_t total_sectors = Le16(boot + 19);
+    uint32_t root_entries = ReadUnaligned16LE(boot + 17);
+    uint32_t total_sectors = ReadUnaligned16LE(boot + 19);
     uint8_t media = boot[21];
-    uint32_t fat_sectors = Le16(boot + 22);
+    uint32_t fat_sectors = ReadUnaligned16LE(boot + 22);
 
     if (total_sectors == 0) {
-        total_sectors = Le32(boot + 32);
+        total_sectors = ReadUnaligned32LE(boot + 32);
     }
 
     if (media != 0xF0 && media < 0xF8) {
@@ -206,11 +207,11 @@ int FatMount(struct file* disk, struct fat** out) {
     bool mirrored = true;
 
     if (is_fat32) {
-        fat_sectors = Le32(boot + 36);
+        fat_sectors = ReadUnaligned32LE(boot + 36);
 
-        uint16_t ext_flags = Le16(boot + 40);
-        uint16_t version = Le16(boot + 42);
-        root_cluster = Le32(boot + 44);
+        uint16_t ext_flags = ReadUnaligned16LE(boot + 40);
+        uint16_t version = ReadUnaligned16LE(boot + 42);
+        root_cluster = ReadUnaligned32LE(boot + 44);
 
         /*
         * A version we don't know about might have a different layout.
@@ -240,7 +241,7 @@ int FatMount(struct file* disk, struct fat** out) {
         * something we have to tell the next user of the volume to ignore them
         * (see FatAllocCluster).
         */
-        uint16_t fsinfo = Le16(boot + 48);
+        uint16_t fsinfo = ReadUnaligned16LE(boot + 48);
         if (fsinfo != 0 && fsinfo != 0xFFFF && fsinfo < reserved_sectors) {
             fsinfo_sector = fsinfo;
         }

@@ -6,29 +6,29 @@
 #include <common.h>
 #include <endian.h>
 
-static inline uint8_t ReadUnaligned8(void* ptr) {
+static inline uint8_t ReadUnaligned8(const void* ptr) {
     return *((uint8_t*) ptr);
 }
 
-static inline uint16_t ReadUnaligned16(void* ptr) {
+static inline uint16_t ReadUnaligned16(const void* ptr) {
     uint16_t val;
     __builtin_memcpy(&val, ptr, sizeof(val));
     return val;
 }
 
-static inline uint32_t ReadUnaligned32(void* ptr) {
+static inline uint32_t ReadUnaligned32(const void* ptr) {
     uint32_t val;
     __builtin_memcpy(&val, ptr, sizeof(val));
     return val;
 }
 
-static inline uint64_t ReadUnaligned64(void* ptr) {
+static inline uint64_t ReadUnaligned64(const void* ptr) {
     uint64_t val;
     __builtin_memcpy(&val, ptr, sizeof(val));
     return val;
 }
 
-static inline size_t ReadUnalignedSizeT(void* ptr) {
+static inline size_t ReadUnalignedSizeT(const void* ptr) {
     size_t val;
     __builtin_memcpy(&val, ptr, sizeof(val));
     return val;
@@ -68,16 +68,16 @@ static inline size_t ReadUnalignedSizeTAndAdvance(void** ptr) {
     return val;
 }
 
-static inline uint8_t ReadUnaligned8LE(void* ptr) {
+static inline uint8_t ReadUnaligned8LE(const void* ptr) {
     return ReadUnaligned8(ptr);
 }
 
-static inline uint16_t ReadUnaligned16LE(void* ptr) {
+static inline uint16_t ReadUnaligned16LE(const void* ptr) {
     uint8_t* p = (uint8_t*) ptr;
     return (uint16_t) ((uint16_t) p[0] | ((uint16_t) p[1] << 8));
 }
 
-static inline uint32_t ReadUnaligned32LE(void* ptr) {
+static inline uint32_t ReadUnaligned32LE(const void* ptr) {
     uint8_t* p = (uint8_t*) ptr;
     return ((uint32_t) p[0])
          | ((uint32_t) p[1] << 8)
@@ -85,7 +85,7 @@ static inline uint32_t ReadUnaligned32LE(void* ptr) {
          | ((uint32_t) p[3] << 24);
 }
 
-static inline uint64_t ReadUnaligned64LE(void* ptr) {
+static inline uint64_t ReadUnaligned64LE(const void* ptr) {
     uint8_t* p = (uint8_t*) ptr;
     return ((uint64_t) p[0])
          | ((uint64_t) p[1] << 8)
@@ -97,7 +97,7 @@ static inline uint64_t ReadUnaligned64LE(void* ptr) {
          | ((uint64_t) p[7] << 56);
 }
 
-static inline size_t ReadUnalignedSizeTLE(void* ptr) {
+static inline size_t ReadUnalignedSizeTLE(const void* ptr) {
     if (sizeof(size_t) == 8) {
         return (size_t) ReadUnaligned64LE(ptr);
     }

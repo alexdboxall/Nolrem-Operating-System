@@ -15,6 +15,7 @@
 */
 
 #include <common.h>
+#include <unaligned.h>
 #include <errno.h>
 #include <vfs.h>
 #include <string.h>
@@ -244,12 +245,12 @@ static int FatReadEntry(struct fat* fat, uint32_t cluster, uint32_t* value) {
     }
 
     case FAT_TYPE_16:
-        *value = Le16(bytes);
+        *value = ReadUnaligned16LE(bytes);
         break;
 
     default:
         /* The top 4 bits of a FAT32 entry are reserved and must be ignored. */
-        *value = Le32(bytes) & 0x0FFFFFFF;
+        *value = ReadUnaligned32LE(bytes) & 0x0FFFFFFF;
         break;
     }
 
@@ -307,7 +308,7 @@ static int FatWriteEntry(struct fat* fat, uint32_t cluster, uint32_t value) {
     default:
         status = FatTableRead(fat, offset, length, bytes);
         if (status == 0) {
-            FatPut32(bytes, (Le32(bytes) & 0xF0000000u) | (value & 0x0FFFFFFFu));
+            FatPut32(bytes, (ReadUnaligned32LE(bytes) & 0xF0000000u) | (value & 0x0FFFFFFFu));
         }
         break;
     }
@@ -432,11 +433,11 @@ static int FatInvalidateFsinfo(struct fat* fat) {
             return status;
         }
 
-        bool valid = Le32(sector) == 0x41615252u
-                  && Le32(sector + 484) == 0x61417272u
-                  && Le32(sector + 508) == 0xAA550000u;
+        bool valid = ReadUnaligned32LE(sector) == 0x41615252u
+                  && ReadUnaligned32LE(sector + 484) == 0x61417272u
+                  && ReadUnaligned32LE(sector + 508) == 0xAA550000u;
 
-        if (valid && (Le32(sector + 488) != 0xFFFFFFFFu || Le32(sector + 492) != 0xFFFFFFFFu)) {
+        if (valid && (ReadUnaligned32LE(sector + 488) != 0xFFFFFFFFu || ReadUnaligned32LE(sector + 492) != 0xFFFFFFFFu)) {
             FatPut32(sector + 488, 0xFFFFFFFFu);
             FatPut32(sector + 492, 0xFFFFFFFFu);
 

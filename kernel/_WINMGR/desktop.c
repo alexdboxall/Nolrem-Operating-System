@@ -34,7 +34,7 @@ int DesktopWinProc(struct window* win, struct msg msg) {
             struct open_mapped_file omf;
             KeOpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", OMF_TRANSPARENT_DECOMPRESS, &omf);
             desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, omf.f, 640, 480);
-            OmfClose(&omf);
+            KeOmfClose(&omf);
         }
         if (KeIsOutOfMemory() || oom > 0 || desktop_bitmap == NULL) {
             if (KeIsOutOfMemory() && oom == 0) {

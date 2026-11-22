@@ -12,7 +12,7 @@
  *
  * flags:
  *   OMF_TRANSPARENT_DECOMPRESS   if the file starts with the CPZ signature it is opened as a CPZ image and what is
- *                                mapped is the DECOMPRESSED data: out->ptr / out->len / every OmfRead*() see the
+ *                                mapped is the DECOMPRESSED data: out->ptr / out->len / every KeOmfRead*() see the
  *                                original file's contents and size, as if it had never been compressed. Pages are
  *                                expanded on demand as they are touched. out->f is still the file on disk.
  *                                A file that has the signature but is not a sound CPZ image is an error (EINVAL),
@@ -40,7 +40,7 @@ export int KeOpenAndMapFile(const char* path, int flags, struct open_mapped_file
     off_t full_size = out->f->node->stat.st_size;
     size_t len = (size_t) full_size;
     if (full_size <= 0 || (uintmax_t) len != (uintmax_t) full_size) {
-        OmfClose(out);
+        KeOmfClose(out);
         return EINVAL;
     }
 
@@ -52,14 +52,14 @@ export int KeOpenAndMapFile(const char* path, int flags, struct open_mapped_file
     if (flags & OMF_TRANSPARENT_DECOMPRESS) {
         res = KeCheckCpzSignature(out->f, &is_cpz);
         if (res != 0) {                 /* couldn't even look: don't guess "plain file" and hand back compressed bytes */
-            OmfClose(out);
+            KeOmfClose(out);
             return res;
         }
     }
     if (is_cpz) {
         out->cpz = KeOpenCpzImage(out->f);
         if (out->cpz == NULL) {
-            OmfClose(out);
+            KeOmfClose(out);
             return EINVAL;
         }
         len = KeGetCpzImageSize(out->cpz);
@@ -71,7 +71,7 @@ export int KeOpenAndMapFile(const char* path, int flags, struct open_mapped_file
         out->ptr = KeAllocFileMemory(out->f, 0, len, 0, 0);
     }
     if (out->ptr == NULL) {
-        OmfClose(out);
+        KeOmfClose(out);
         return ENOMEM;
     }
     out->len = len;
@@ -80,7 +80,7 @@ export int KeOpenAndMapFile(const char* path, int flags, struct open_mapped_file
 }
 
 /* DOUBLE CLOSE IS ALLOWED! */
-export void OmfClose(struct open_mapped_file* omf) {
+export void KeOmfClose(struct open_mapped_file* omf) {
     if (omf == NULL) {
         return;
     }
@@ -101,7 +101,7 @@ export void OmfClose(struct open_mapped_file* omf) {
     omf->cursor = 0;
 }
 
-export void OmfAdvance(struct open_mapped_file* omf, size_t amount) {
+export void KeOmfAdvance(struct open_mapped_file* omf, size_t amount) {
     if (omf->cursor + amount < omf->cursor) {
         omf->error = true;
         return;
@@ -112,14 +112,14 @@ export void OmfAdvance(struct open_mapped_file* omf, size_t amount) {
     }
 }
 
-export void OmfJump(struct open_mapped_file* omf, size_t offset) {
+export void KeOmfJump(struct open_mapped_file* omf, size_t offset) {
     omf->cursor = offset;
     if (omf->cursor > omf->len) {
         omf->error = true;
     }
 }
 
-export uint8_t OmfRead8(struct open_mapped_file* omf) {
+export uint8_t KeOmfRead8(struct open_mapped_file* omf) {
     if (omf->error || omf->cursor >= omf->len) {
         omf->error = true;
         return 0;
@@ -127,7 +127,7 @@ export uint8_t OmfRead8(struct open_mapped_file* omf) {
     return ReadUnaligned8LE(AddVoidPtr(omf->ptr, omf->cursor));
 }
 
-export uint16_t OmfRead16LE(struct open_mapped_file* omf) {
+export uint16_t KeOmfRead16LE(struct open_mapped_file* omf) {
     if (omf->error || omf->len < 2 || (omf->cursor > omf->len - 2)) {
         omf->error = true;
         return 0;
@@ -135,7 +135,7 @@ export uint16_t OmfRead16LE(struct open_mapped_file* omf) {
     return ReadUnaligned16LE(AddVoidPtr(omf->ptr, omf->cursor));
 }
 
-export uint32_t OmfRead32LE(struct open_mapped_file* omf) {
+export uint32_t KeOmfRead32LE(struct open_mapped_file* omf) {
     if (omf->error || omf->len < 4 || (omf->cursor > omf->len - 4)) {
         omf->error = true;
         return 0;
@@ -143,26 +143,26 @@ export uint32_t OmfRead32LE(struct open_mapped_file* omf) {
     return ReadUnaligned32LE(AddVoidPtr(omf->ptr, omf->cursor));
 }
 
-export uint8_t OmfRead8AndAdvance(struct open_mapped_file* omf) {
-    uint8_t rv = OmfRead8(omf);
-    OmfAdvance(omf, 1);
+export uint8_t KeOmfRead8AndAdvance(struct open_mapped_file* omf) {
+    uint8_t rv = KeOmfRead8(omf);
+    KeOmfAdvance(omf, 1);
     return rv;
 }
 
-export uint16_t OmfRead16AndAdvanceLE(struct open_mapped_file* omf) {
-    uint16_t rv = OmfRead16LE(omf);
-    OmfAdvance(omf, 2);
+export uint16_t KeOmfRead16AndAdvanceLE(struct open_mapped_file* omf) {
+    uint16_t rv = KeOmfRead16LE(omf);
+    KeOmfAdvance(omf, 2);
     return rv;
 }
 
-export uint32_t OmfRead32AndAdvanceLE(struct open_mapped_file* omf) {
-    uint32_t rv = OmfRead32LE(omf);
-    OmfAdvance(omf, 4);
+export uint32_t KeOmfRead32AndAdvanceLE(struct open_mapped_file* omf) {
+    uint32_t rv = KeOmfRead32LE(omf);
+    KeOmfAdvance(omf, 4);
     return rv;
 }
 
 
-export uint16_t OmfRead16BE(struct open_mapped_file* omf) {
+export uint16_t KeOmfRead16BE(struct open_mapped_file* omf) {
     if (omf->error || omf->len < 2 || (omf->cursor > omf->len - 2)) {
         omf->error = true;
         return 0;
@@ -170,7 +170,7 @@ export uint16_t OmfRead16BE(struct open_mapped_file* omf) {
     return ReadUnaligned16BE(AddVoidPtr(omf->ptr, omf->cursor));
 }
 
-export uint32_t OmfRead32BE(struct open_mapped_file* omf) {
+export uint32_t KeOmfRead32BE(struct open_mapped_file* omf) {
     if (omf->error || omf->len < 4 || (omf->cursor > omf->len - 4)) {
         omf->error = true;
         return 0;
@@ -178,14 +178,14 @@ export uint32_t OmfRead32BE(struct open_mapped_file* omf) {
     return ReadUnaligned32BE(AddVoidPtr(omf->ptr, omf->cursor));
 }
 
-export uint16_t OmfRead16AndAdvanceBE(struct open_mapped_file* omf) {
-    uint16_t rv = OmfRead16BE(omf);
-    OmfAdvance(omf, 2);
+export uint16_t KeOmfRead16AndAdvanceBE(struct open_mapped_file* omf) {
+    uint16_t rv = KeOmfRead16BE(omf);
+    KeOmfAdvance(omf, 2);
     return rv;
 }
 
-export uint32_t OmfRead32AndAdvanceBE(struct open_mapped_file* omf) {
-    uint32_t rv = OmfRead32BE(omf);
-    OmfAdvance(omf, 4);
+export uint32_t KeOmfRead32AndAdvanceBE(struct open_mapped_file* omf) {
+    uint32_t rv = KeOmfRead32BE(omf);
+    KeOmfAdvance(omf, 4);
     return rv;
 }

@@ -27,7 +27,7 @@ struct path {
 };
 
 struct graphics_driver;
-void AddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv);
+void CdAddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv);
 
 void CdMapDCCoordinates(struct dc* dc, int* x1, int* y1, int* x2, int* y2);
 void CdLogicalToDevice(struct dc* dc, int* x, int* y);

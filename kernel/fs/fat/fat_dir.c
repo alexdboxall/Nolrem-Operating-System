@@ -13,6 +13,7 @@
 */
 
 #include <common.h>
+#include <unaligned.h>
 #include <errno.h>
 #include <vfs.h>
 #include <string.h>
@@ -134,10 +135,10 @@ static uint32_t FatMakeIno(const struct fat* fat, uint32_t first_cluster, bool d
 static void FatDecodeEntry(const struct fat* fat, const uint8_t* entry, uint64_t position, struct fat_node_info* info) {
     info->directory = (entry[11] & ATTR_DIRECTORY) != 0;
 
-    info->first_cluster = Le16(entry + 26);
+    info->first_cluster = ReadUnaligned16LE(entry + 26);
     if (fat->type == FAT_TYPE_32) {
         /* The high half is only valid on FAT32. */
-        info->first_cluster |= (uint32_t) Le16(entry + 20) << 16;
+        info->first_cluster |= (uint32_t) ReadUnaligned16LE(entry + 20) << 16;
     }
 
     /*
@@ -149,7 +150,7 @@ static void FatDecodeEntry(const struct fat* fat, const uint8_t* entry, uint64_t
         info->first_cluster = fat->root_cluster;
     }
 
-    info->size = info->directory ? 0 : Le32(entry + 28);
+    info->size = info->directory ? 0 : ReadUnaligned32LE(entry + 28);
     info->ino = FatMakeIno(fat, info->first_cluster, info->directory, position);
     info->entry_byte = position * FAT_ENTRY_SIZE;
 }

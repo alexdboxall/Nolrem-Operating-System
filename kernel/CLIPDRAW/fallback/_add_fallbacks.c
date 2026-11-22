@@ -6,7 +6,7 @@ extern void PenLineFallback(struct graphics_driver*, int x1, int y1, int x2, int
 extern void SolidLineFallback(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour, int thickness);
 extern void ThinLineFallback(struct graphics_driver*, int x1, int y1, int x2, int y2, uint32_t colour);
 
-export void AddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv) {
+export void CdAddGraphicsFallbacksWhereNeeded(struct graphics_driver* drv) {
     if (drv->brush_rect == NULL) {
         drv->brush_rect = BrushRectFallback;
     }

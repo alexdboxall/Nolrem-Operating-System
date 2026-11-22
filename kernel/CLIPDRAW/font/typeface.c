@@ -18,15 +18,15 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
         return NULL;
     }
 
-    uint8_t sig1 = OmfRead8AndAdvance(&tf->omf);
-    uint8_t sig2 = OmfRead8AndAdvance(&tf->omf);
-    uint8_t sig3 = OmfRead8AndAdvance(&tf->omf);
-    uint8_t ver  = OmfRead8AndAdvance(&tf->omf);
+    uint8_t sig1 = KeOmfRead8AndAdvance(&tf->omf);
+    uint8_t sig2 = KeOmfRead8AndAdvance(&tf->omf);
+    uint8_t sig3 = KeOmfRead8AndAdvance(&tf->omf);
+    uint8_t ver  = KeOmfRead8AndAdvance(&tf->omf);
     if (sig1 != 'T' || sig2 != 'Y' || sig3 != 'P' || ver != 0x00) {
         goto fail_after_open;
     }
 
-    tf->num_fonts = OmfRead8AndAdvance(&tf->omf);
+    tf->num_fonts = KeOmfRead8AndAdvance(&tf->omf);
     if (tf->omf.error || tf->num_fonts == 0) {
         goto fail_after_open;
     }
@@ -58,24 +58,24 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
 
     /* Both of these are absolute positions in the file, so they are jumps,
      * not advances from wherever the cursor happens to be. */
-    OmfJump(&tf->omf, 32 + fn->index * 12);
-    font_style_id underlying_again = OmfRead32AndAdvanceLE(&tf->omf);
-    fn->file_offset = OmfRead32AndAdvanceLE(&tf->omf);
-    fn->font_length = OmfRead32AndAdvanceLE(&tf->omf);
+    KeOmfJump(&tf->omf, 32 + fn->index * 12);
+    font_style_id underlying_again = KeOmfRead32AndAdvanceLE(&tf->omf);
+    fn->file_offset = KeOmfRead32AndAdvanceLE(&tf->omf);
+    fn->font_length = KeOmfRead32AndAdvanceLE(&tf->omf);
 
-    OmfJump(&tf->omf, fn->file_offset);
-    fn->min_char = OmfRead32AndAdvanceLE(&tf->omf);
-    fn->num_chars = OmfRead32AndAdvanceLE(&tf->omf);
-    fn->fixed_width = OmfRead16AndAdvanceLE(&tf->omf);
-    fn->avg_advance = OmfRead16AndAdvanceLE(&tf->omf);
-    fn->ascend_px = OmfRead16AndAdvanceLE(&tf->omf);
-    fn->height_px = OmfRead16AndAdvanceLE(&tf->omf);
-    fn->lineheight_px = OmfRead16AndAdvanceLE(&tf->omf);
-    fn->is_large_font = OmfRead8AndAdvance(&tf->omf);
-    fn->is_32bit_glyph_offsets = OmfRead8AndAdvance(&tf->omf);
-    fn->gap_table_offset = OmfRead32AndAdvanceLE(&tf->omf);
-    fn->kern_table_offset = OmfRead32AndAdvanceLE(&tf->omf);
-    fn->glyph_table_offset = OmfRead32AndAdvanceLE(&tf->omf);
+    KeOmfJump(&tf->omf, fn->file_offset);
+    fn->min_char = KeOmfRead32AndAdvanceLE(&tf->omf);
+    fn->num_chars = KeOmfRead32AndAdvanceLE(&tf->omf);
+    fn->fixed_width = KeOmfRead16AndAdvanceLE(&tf->omf);
+    fn->avg_advance = KeOmfRead16AndAdvanceLE(&tf->omf);
+    fn->ascend_px = KeOmfRead16AndAdvanceLE(&tf->omf);
+    fn->height_px = KeOmfRead16AndAdvanceLE(&tf->omf);
+    fn->lineheight_px = KeOmfRead16AndAdvanceLE(&tf->omf);
+    fn->is_large_font = KeOmfRead8AndAdvance(&tf->omf);
+    fn->is_32bit_glyph_offsets = KeOmfRead8AndAdvance(&tf->omf);
+    fn->gap_table_offset = KeOmfRead32AndAdvanceLE(&tf->omf);
+    fn->kern_table_offset = KeOmfRead32AndAdvanceLE(&tf->omf);
+    fn->glyph_table_offset = KeOmfRead32AndAdvanceLE(&tf->omf);
     
     if (fn->num_chars > 0xFFFF) {
         fn->codepoint_size = FNT_CODEPOINT_SIZE_32;
@@ -101,8 +101,8 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
     return fn;
 }
 
-#define ADV_OMF(off, failret)  OmfAdvance(&tf->omf, off); if (tf->omf.error) {return failret;} 
-#define JUMP_OMF(pos, failret) OmfJump(&tf->omf, pos); if (tf->omf.error) {return failret;} 
+#define ADV_OMF(off, failret)  KeOmfAdvance(&tf->omf, off); if (tf->omf.error) {return failret;} 
+#define JUMP_OMF(pos, failret) KeOmfJump(&tf->omf, pos); if (tf->omf.error) {return failret;} 
 #define FAIL_ERR(failret)      if (tf->omf.error) {return failret;} 
 
 export pageable int CdGetTypefaceName(struct typeface* tf, char* out_buffer, size_t buffer_len) {
@@ -111,7 +111,7 @@ export pageable int CdGetTypefaceName(struct typeface* tf, char* out_buffer, siz
     }
     JUMP_OMF(5, EINVAL);
     for (int i = 0; i < 27; ++i) {
-        uint8_t c = OmfRead8AndAdvance(&tf->omf);
+        uint8_t c = KeOmfRead8AndAdvance(&tf->omf);
         FAIL_ERR(EINVAL);
         out_buffer[i] = c;
         if (i == 26 && c != 0) {
@@ -130,7 +130,7 @@ export pageable font_style_id CdEnumerateTypefaceStyle(struct typeface* tf, int 
         return INVALID_FONT_STYLE;
     }
     JUMP_OMF(32 + index * 12, INVALID_FONT_STYLE);
-    font_style_id val = OmfRead32LE(&tf->omf);
+    font_style_id val = KeOmfRead32LE(&tf->omf);
     FAIL_ERR(INVALID_FONT_STYLE);
     return val;
 }
@@ -152,7 +152,7 @@ export pageable font_style_id CdGetTypefaceClosestStyle(struct typeface* tf, fon
 
     JUMP_OMF(32, INVALID_FONT_STYLE);
     for (int i = 0; i < tf->num_fonts; ++i) {
-        font_style_id val = OmfRead32LE(&tf->omf);
+        font_style_id val = KeOmfRead32LE(&tf->omf);
         FAIL_ERR(INVALID_FONT_STYLE);
         /* Entries are 12 bytes (style, file_offset, font_length), so step 
          * over the other two fields to reach the next style. */
@@ -193,22 +193,22 @@ export pageable bool CdCheckTypefaceForStyle(struct typeface* tf, font_style_id 
 
 static uint32_t ReadAndAdvanceCodePointSize(struct font* fn) {
     if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
-        return OmfRead8AndAdvance(&fn->tf->omf);
+        return KeOmfRead8AndAdvance(&fn->tf->omf);
     } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
-        return OmfRead16AndAdvanceLE(&fn->tf->omf);
+        return KeOmfRead16AndAdvanceLE(&fn->tf->omf);
     } else {
-        return OmfRead32AndAdvanceLE(&fn->tf->omf);
+        return KeOmfRead32AndAdvanceLE(&fn->tf->omf);
     }
 }
 
 /* Same width as ReadAndAdvanceCodePointSize, but sign-extended. */
 static int32_t ReadAndAdvanceSignedCodePointSize(struct font* fn) {
     if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
-        return (int8_t)OmfRead8AndAdvance(&fn->tf->omf);
+        return (int8_t)KeOmfRead8AndAdvance(&fn->tf->omf);
     } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
-        return (int16_t)OmfRead16AndAdvanceLE(&fn->tf->omf);
+        return (int16_t)KeOmfRead16AndAdvanceLE(&fn->tf->omf);
     } else {
-        return (int32_t)OmfRead32AndAdvanceLE(&fn->tf->omf);
+        return (int32_t)KeOmfRead32AndAdvanceLE(&fn->tf->omf);
     }
 }
 
@@ -230,8 +230,8 @@ static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
     }
     c -= fn->min_char;
     if (fn->gap_table_offset != 0) {
-        OmfJump(&fn->tf->omf, fn->file_offset + fn->gap_table_offset);
-        uint32_t num_gaps = OmfRead32AndAdvanceLE(&fn->tf->omf);
+        KeOmfJump(&fn->tf->omf, fn->file_offset + fn->gap_table_offset);
+        uint32_t num_gaps = KeOmfRead32AndAdvanceLE(&fn->tf->omf);
         if (fn->tf->omf.error) {
             return BAD_GLYPH_CHAR;
         }
@@ -271,20 +271,20 @@ static bool AdvanceToGlyphData(struct font* fn, uint32_t c) {
         return false;
     }
     uint32_t table_pos = fn->file_offset + fn->glyph_table_offset;
-    OmfJump(&fn->tf->omf, 
+    KeOmfJump(&fn->tf->omf, 
         table_pos + (fn->is_32bit_glyph_offsets ? 4 : 2) * index);
 
     /* Offsets in the glyph table are relative to the start of the table. */
     uint32_t pos = table_pos;
     if (fn->is_32bit_glyph_offsets) {
-        pos += OmfRead32LE(&fn->tf->omf);
+        pos += KeOmfRead32LE(&fn->tf->omf);
     } else {
-        pos += OmfRead16LE(&fn->tf->omf);
+        pos += KeOmfRead16LE(&fn->tf->omf);
     }
     if (fn->tf->omf.error) {
         return false;
     }
-    OmfJump(&fn->tf->omf, pos);
+    KeOmfJump(&fn->tf->omf, pos);
     return !fn->tf->omf.error;
 }
 
@@ -388,11 +388,11 @@ export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
         data.width_px = fn->fixed_width;
         data.advance = fn->avg_advance;
     } else if (fn->is_large_font) {
-        data.width_px = OmfRead16AndAdvanceLE(&fn->tf->omf);
-        data.advance = OmfRead16AndAdvanceLE(&fn->tf->omf);
+        data.width_px = KeOmfRead16AndAdvanceLE(&fn->tf->omf);
+        data.advance = KeOmfRead16AndAdvanceLE(&fn->tf->omf);
     } else {
-        data.width_px = OmfRead8AndAdvance(&fn->tf->omf);
-        data.advance = OmfRead8AndAdvance(&fn->tf->omf);
+        data.width_px = KeOmfRead8AndAdvance(&fn->tf->omf);
+        data.advance = KeOmfRead8AndAdvance(&fn->tf->omf);
     }
     data.absolute_offset_to_bitmap = fn->tf->omf.cursor;
     if (fn->tf->omf.error) {
@@ -415,8 +415,8 @@ static int32_t LookupKernByGlyphIndex(struct font* fn, uint32_t left, uint32_t r
         return 0;
     }
 
-    OmfJump(omf, (uint32_t)table_pos);
-    uint32_t num_pairs = OmfRead32AndAdvanceLE(omf);
+    KeOmfJump(omf, (uint32_t)table_pos);
+    uint32_t num_pairs = KeOmfRead32AndAdvanceLE(omf);
     if (omf->error) {
         return 0;
     }
@@ -431,7 +431,7 @@ static int32_t LookupKernByGlyphIndex(struct font* fn, uint32_t left, uint32_t r
         if (pos > UINT32_MAX) {
             return 0;
         }
-        OmfJump(omf, (uint32_t)pos);
+        KeOmfJump(omf, (uint32_t)pos);
         uint32_t entry_left  = ReadAndAdvanceCodePointSize(fn);
         uint32_t entry_right = ReadAndAdvanceCodePointSize(fn);
         int32_t  amount      = ReadAndAdvanceSignedCodePointSize(fn);
@@ -471,7 +471,7 @@ static void CleanupTypeface(void* _tf) {
     if (tf == NULL) {
         return;
     }
-    OmfClose(&tf->omf);
+    KeOmfClose(&tf->omf);
     FreeHeap(tf);
 }
 

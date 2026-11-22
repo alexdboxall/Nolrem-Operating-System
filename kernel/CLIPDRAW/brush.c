@@ -67,7 +67,12 @@ export int CdSetBrushPattern(struct brush* br, int pattern) {
         return EINVAL;
     }
     LockUserObject(br);
-    br->pattern_type = br->pattern_type;
+    /* Can't change a custom brush to a standard pattern. */
+    if (br->pattern_type == BRUSH_PATTERN_CUSTOM) {
+        UnlockUserObject(br);
+        return EINVAL;
+    }
+    br->pattern_type = pattern;
     memcpy(br->pattern, standard_brush_patterns[pattern], sizeof(br->pattern));
     UnlockUserObject(br);
     return 0;
@@ -134,6 +139,15 @@ export struct brush* CdGetStockBrush(int type) {
     } else {
         return NULL;
     }
+}
+
+export bool CdIsStockBrush(struct brush* br) {
+    for (int i = 0; i < 4; ++i) {
+        if (stock_brushes[i] == br) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void CdInitBrushSubsystem(void) {

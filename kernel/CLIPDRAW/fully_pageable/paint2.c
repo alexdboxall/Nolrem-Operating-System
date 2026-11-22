@@ -5,9 +5,9 @@
 export pageable int CdPaintRoundedRectWithBrush(struct dc* dc, int x, int y, int width, int height, 
     int radius, struct brush* brush) {
     struct region rgn = CdCreateRoundedRectRegion(x, y, width, height, radius);
-    CdPaintRegionWithBrush(dc, rgn, brush);
+    int retv = CdPaintRegionWithBrush(dc, rgn, brush);
     CdFreeRegion(rgn);
-    return 0;
+    return retv;
 }
 
 export pageable int CdPaintRoundedRect(struct dc* dc, int x, int y, int width, int height, 
@@ -21,9 +21,9 @@ export pageable int CdPaintRoundedRect(struct dc* dc, int x, int y, int width, i
 export pageable int CdPaintEllipseWithBrush(struct dc* dc, int x, int y, int width, int height, 
     struct brush* brush) {
     struct region rgn = CdCreateEllipseRegion(x, y, width, height);
-    CdPaintRegionWithBrush(dc, rgn, brush);
+    int retv = CdPaintRegionWithBrush(dc, rgn, brush);
     CdFreeRegion(rgn);
-    return 0;
+    return retv;
 }
 
 export pageable int CdPaintEllipse(struct dc* dc, int x, int y, int width, int height) {
@@ -37,9 +37,9 @@ export pageable int CdPaintPolygonWithBrush(struct dc* dc, int* x, int* y, int p
     struct brush* brush) {
     int count = points;
     struct region rgn = CdCreatePolyPolygonRegion(x, y, &count, 1, mode);
-    CdPaintRegionWithBrush(dc, rgn, brush);
+    int retv = CdPaintRegionWithBrush(dc, rgn, brush);
     CdFreeRegion(rgn);
-    return 0;
+    return retv;
 }
 
 export pageable int CdPaintPolygon(struct dc* dc, int* x, int* y, int points, int mode) {

@@ -21,11 +21,27 @@ export void SignalDoneIO(struct aio* aio, int result_code) {
     ReleaseMutex(&aio->mtx);
 }
 
+export int KeCreateTruncateIO(struct aio* aio, void* node_or_file, off_t pos, void(*callback)(void*), void* callback_ctxt) {
+    InitStaticMutex(&aio->mtx);
+    int res = AcquireMutex(&aio->mtx, TIMEOUT_INSTANT);
+    (void) res; assert(res == 0);
+    aio->operation = AIO_OP_TRUNCATE;
+    aio->completed = false;
+    aio->node_or_file = node_or_file;
+    aio->sub = NULL;
+    aio->args.truncate.size = pos;
+    RefObject(node_or_file);
+    aio->callback = callback;
+    aio->callback_ctxt = callback_ctxt;
+    return 0;
+}
+
 export int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt) {
     InitStaticMutex(&aio->mtx);
     int res = AcquireMutex(&aio->mtx, TIMEOUT_INSTANT);
     (void) res; assert(res == 0);
     aio->transfer = tr;
+    aio->operation = tr.direction == TRANSFER_WRITE ? AIO_OP_WRITE : AIO_OP_READ;
     aio->completed = false;
     aio->node_or_file = node_or_file;
     aio->sub = NULL;

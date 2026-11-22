@@ -12,7 +12,7 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
     }
     InitUserObject(tf, UOBJ_TYPEFACE);
 
-    int res = OpenAndMapFile(file, &tf->omf);
+    int res = OpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &tf->omf);
     if (res != 0) {
         FreeHeap(tf);
         return NULL;

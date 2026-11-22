@@ -436,11 +436,15 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
 
 	if ((flags & O_TRUNC) && IFTODT(node->stat.st_mode) == DT_REG) {
 		if (can_write) {
-			status = VnodeTruncate(node, 0);
+			struct aio a;
+			status = KeCreateTruncateIO(&a, node, 0, NULL, NULL);
 			if (status) {
 				return status;
 			}
-			return ENOSYS;
+			status = WaitIO(&a, TIMEOUT_INFINITE);
+			if (status) {
+				return status;
+			}
 		} else {
 			return EINVAL;
 		}

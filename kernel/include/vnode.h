@@ -67,7 +67,7 @@ struct vnode_operations {
      * usermode!! it gives you a *RAW USERMODE POINTER*. 
      */
     int (*ioctl)(struct vnode* node, int command, void* buffer);
-    int (*truncate)(struct vnode* node, off_t offset);
+    int (*truncate)(struct aio* io);
     int (*create)(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode);
     int (*follow)(struct vnode* node, struct vnode** out, const char* name);
 
@@ -121,7 +121,7 @@ int VnodeCheckOpen(struct vnode* node, int flags);
 int VnodeRead(struct aio* aio);
 int VnodeWrite(struct aio* aio);
 int VnodeIoctl(struct vnode* node, int command, void* buffer);
-int VnodeTruncate(struct vnode* node, off_t offset);
+int VnodeTruncate(struct aio* aio);
 uint8_t VnodeDirentType(struct vnode* node);
 int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode);
 int VnodeFollow(struct vnode* node, struct vnode** out, const char* name);

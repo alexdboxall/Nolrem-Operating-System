@@ -727,6 +727,10 @@ void FloppyDriverThread(void* _flp) {
         struct aio* aio;
         int retv = KeGetMessage(flp->msgbox, &aio, next_timeout);
         bool have_request = retv == 0;
+        if (have_request && aio->operation != AIO_OP_READ && aio->operation != AIO_OP_WRITE) {
+            SignalDoneIO(aio, ENOTSUP);
+            continue;
+        }
         FloppyMotor(flp, have_request);
 
         if (have_request) {

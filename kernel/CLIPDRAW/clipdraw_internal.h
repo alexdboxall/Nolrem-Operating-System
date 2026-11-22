@@ -81,6 +81,40 @@ void CdSetTranslation(struct dc* dc, int x, int y);
 
 bool ValidateUserObjectAndAtomicallyRef(void* obj, int type);
 
+struct region CdBadRegion(void);
+bool CdIsRegionBad(struct region rgn);
+
+/* Set in `flags` of the paint syscalls: ignore `brush` and paint with whichever
+ * brush is currently selected into the DC. */
+#define PAINT_USE_DC_BRUSH  1
+
+/* Passed by pointer to the paint/invert syscalls that take more parameters than
+ * will fit in registers. The user-side wrappers and the kernel side share it. */
+struct user_shape_args {
+    int x;
+    int y;
+    int w;
+    int h;
+    int radius;             /* PaintRoundedRect only */
+    struct brush* brush;    /* ignored with PAINT_USE_DC_BRUSH, and by the invert calls */
+    int flags;
+};
+
+/* Regions only hold 16-bit coordinates, so shapes must fit in that range. This
+ * is also the extent of CdEverythingRegion(). */
+static inline bool CdIsShapeInRange(int x, int y, int w, int h) {
+    return x >= INT16_MIN && x <= INT16_MAX
+        && y >= INT16_MIN && y <= INT16_MAX
+        && w >= 0 && h >= 0
+        && x + w <= INT16_MAX && y + h <= INT16_MAX;
+}
+
+/* Helpers for the paint syscalls (syscall/paintcommon.c). All return 0 or an errno. */
+int CdReadShapeArgs(size_t user_ptr, struct user_shape_args* out);
+int CdAcquirePaintObjects(void* dc_ptr, struct brush* brush_ptr, int flags, 
+    struct dc** dc_out, struct brush** brush_out);
+void CdReleasePaintObjects(struct dc* dc, struct brush* brush);
+
 /* GCC can actually optimise some of the getter/setter functions if the 
  * same values are placed in the same spot. lol.
  */
@@ -160,6 +194,7 @@ int CdSetBrushSecondaryColour(struct brush* br, colour_t argb);
 colour_t CdGetBrushSecondaryColour(struct brush* br);
 
 struct brush* CdGetStockBrush(int type);
+bool CdIsStockBrush(struct brush* br);
 
 int CdSetBrushOrigin(struct brush* br, int x, int y);
 struct point CdGetBrushOrigin(struct brush* br);
@@ -195,6 +230,7 @@ int CdSetPenPattern(struct pen* pen, int pattern);
 int CdGetPenThickness(struct pen* pen);
 int CdSetPenThickness(struct pen* pen, int thickness);
 struct pen* CdGetStockPen(int type);
+bool CdIsStockPen(struct pen* pen);
 struct pen* CdCopyPen(struct pen* pen);
 int CdSetPenOrigin(struct pen* pen, int x, int y);
 struct point CdGetPenOrigin(struct pen* pen);

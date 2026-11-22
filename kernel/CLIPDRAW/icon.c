@@ -22,7 +22,7 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     }
     InitUserObject(ico, UOBJ_ICON);
 
-    int res = OpenAndMapFile(file, &ico->omf);
+    int res = OpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &ico->omf);
     if (res != 0) {
         FreeHeap(ico);
         return NULL;

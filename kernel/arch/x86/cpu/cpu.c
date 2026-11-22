@@ -21,7 +21,11 @@ int ArchGetCpuNum(void) {
 
 void ArchInitPlatformSpecificData(struct cpu_data* cpu) {
     cpu->platform_specific = AllocPermanentHeap(sizeof(platform_cpu_data_t));
-    cpu->platform_specific->tss = AllocPermanentHeap(sizeof(struct tss));
+    /* The TSS, GDT and IDT are allocated by x86InitTss/Gdt/Idt, which run on
+       the CPU that owns them. */
+    cpu->platform_specific->tss = NULL;
+    cpu->platform_specific->gdt = NULL;
+    cpu->platform_specific->idt = NULL;
     cpu->irq_disable_counter = 0;
     cpu->saved_interrupt_enabled = true;
 }

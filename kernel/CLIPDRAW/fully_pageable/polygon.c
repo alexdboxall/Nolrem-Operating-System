@@ -41,13 +41,17 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
 
     if (y_min >= y_max) return CdEmptyRegion();
 
+    // Temp buffer for current scanline spans (int16_t x0, x1 pairs)
+    // Max spans per line is total_points / 2
+    // (Allocated before building the region, so failing here has nothing to undo.)
+    int16_t* scanline_x = (int16_t*)AllocHeap(sizeof(int16_t) * total_points);
+    if (scanline_x == NULL) {
+        return CdBadRegion();
+    }
+
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
     BuildNewRegion(&rgn, (int16_t)y_min, &ctxt);
-
-    // Temp buffer for current scanline spans (int16_t x0, x1 pairs)
-    // Max spans per line is total_points / 2
-    int16_t* scanline_x = (int16_t*)AllocHeap(sizeof(int16_t) * total_points);
 
     // 2. Process each scanline row by row
     for (int y = y_min; y < y_max; ++y) {

@@ -17,11 +17,21 @@
 
 #define FAT_QUEUE_DEPTH 16
 
+/*
+* What the request is for is in aio->operation. (So that there's one place that
+* says what the kinds of request are.)
+*
+* Files are identified by the vnode's fat_file rather than by copies of its
+* values, as an earlier request might change them before this one runs.
+*
+* The aio keeps the vnode (and so the fat_file) alive until it's signalled.
+*/
 struct fat_request {
-    bool is_directory;
-    uint32_t cluster;       /* The file's or directory's first cluster. */
-    uint32_t file_size;     /* Files only. */
     struct aio* aio;
+    bool directory;
+    uint32_t cluster;       /* Directories: the first cluster. */
+    struct fat_file* file;  /* Files. */
+    struct vnode* node;     /* Files: whose st_size to keep up to date. */
 };
 
 static void FatDriverThread(void* _fat) {
@@ -36,23 +46,51 @@ static void FatDriverThread(void* _fat) {
         }
 
         int status;
-        if (req.is_directory) {
-            status = fat_read_directory_entry_sync(fat, req.cluster, &req.aio->transfer);
+        if (req.directory) {
+            /* Directories can only be read, and the vnode doesn't let anything else get this far. */
+            status = FatReadDirectoryEntrySync(fat, req.cluster, &req.aio->transfer);
         } else {
-            status = fat_read_file_sync(fat, req.cluster, req.file_size, &req.aio->transfer);
+            switch (req.aio->operation) {
+            case AIO_OP_READ:
+                status = FatReadFileSync(fat, req.file, &req.aio->transfer);
+                break;
+
+            case AIO_OP_WRITE:
+                status = FatWriteFileSync(fat, req.file, &req.aio->transfer);
+
+                /* Even if it failed, some of it might have been written. */
+                req.node->stat.st_size = req.file->size;
+                break;
+
+            case AIO_OP_TRUNCATE:
+                status = FatTruncateFileSync(fat, req.file, (uint64_t) req.aio->args.truncate.size);
+                req.node->stat.st_size = req.file->size;
+                break;
+
+            default:
+                status = EINVAL;
+                break;
+            }
         }
         SignalDoneIO(req.aio, status);
     }
 }
 
-int fat_start_driver(struct fat* fat) {
+int FatStartDriver(struct fat* fat) {
     fat->table_lock = CreateMutex();
     if (fat->table_lock == NULL) {
         return ENOMEM;
     }
 
+    fat->write_lock = CreateMutex();
+    if (fat->write_lock == NULL) {
+        DerefObject(fat->table_lock);
+        return ENOMEM;
+    }
+
     fat->msgbox = CreateMessageBox(sizeof(struct fat_request), FAT_QUEUE_DEPTH);
     if (fat->msgbox == NULL) {
+        DerefObject(fat->write_lock);
         DerefObject(fat->table_lock);
         return ENOMEM;
     }
@@ -61,23 +99,42 @@ int fat_start_driver(struct fat* fat) {
     return 0;
 }
 
-int fat_read_file(struct fat* fat, uint32_t first_cluster, uint32_t file_size, struct aio* aio) {
+/*
+* These queue the work for the filesystem thread, which signals the aio when
+* it's done. A non-zero return means it couldn't be queued (and so it will never
+* be signalled).
+*/
+static int FatPostFileRequest(struct fat* fat, struct vnode* node, struct fat_file* file, struct aio* aio) {
     struct fat_request req = {
-        .is_directory = false,
-        .cluster = first_cluster,
-        .file_size = file_size,
         .aio = aio,
+        .directory = false,
+        .cluster = 0,
+        .file = file,
+        .node = node,
     };
 
     return KePostMessage(fat->msgbox, (const void*) &req, TIMEOUT_INSTANT);
 }
 
-int fat_read_directory_entry(struct fat* fat, uint32_t dir_cluster, struct aio* aio) {
+int FatReadFile(struct fat* fat, struct fat_file* file, struct aio* aio) {
+    return FatPostFileRequest(fat, NULL, file, aio);
+}
+
+int FatWriteFile(struct fat* fat, struct vnode* node, struct fat_file* file, struct aio* aio) {
+    return FatPostFileRequest(fat, node, file, aio);
+}
+
+int FatTruncateFile(struct fat* fat, struct vnode* node, struct fat_file* file, struct aio* aio) {
+    return FatPostFileRequest(fat, node, file, aio);
+}
+
+int FatReadDirectoryEntry(struct fat* fat, uint32_t dir_cluster, struct aio* aio) {
     struct fat_request req = {
-        .is_directory = true,
-        .cluster = dir_cluster,
-        .file_size = 0,
         .aio = aio,
+        .directory = true,
+        .cluster = dir_cluster,
+        .file = NULL,
+        .node = NULL,
     };
 
     return KePostMessage(fat->msgbox, (const void*) &req, TIMEOUT_INSTANT);

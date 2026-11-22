@@ -3,6 +3,8 @@
 #include <log.h>
 #include <arch.h>
 #include <cpu.h>
+#include <heap.h>
+#include <machine/x86.h>
 
 struct gdt_entry
 {
@@ -34,8 +36,20 @@ static struct gdt_entry CreateGdtEntry(size_t base, size_t limit, uint8_t access
 	};
 }
 
-static struct gdt_entry gdt[6];
-static struct gdt_ptr gdtr;
+/*
+ * One of these is allocated for each CPU, and hangs off of the CPU's
+ * platform_cpu_data_t. Only this file knows the layout (the pointer in
+ * platform_cpu_data_t is to an opaque `struct gdt`).
+ */
+struct gdt
+{
+	struct gdt_entry entries[6];
+	struct gdt_ptr ptr;
+};
+
+static struct gdt* x86GetGdt(void) {
+	return GetCpu()->platform_specific->gdt;
+}
 
 void x86LoadGdt(size_t gdtPtr) {
     __asm__ volatile (
@@ -53,19 +67,26 @@ void x86LoadGdt(size_t gdtPtr) {
 }
 
 void x86InitGdt(void) {
-	gdt[0] = CreateGdtEntry(0, 0, 0, 0);			   // null segment
-	gdt[1] = CreateGdtEntry(0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code
-	gdt[2] = CreateGdtEntry(0, 0xFFFFFFFF, 0x92, 0xC); // kernel data
-	gdt[3] = CreateGdtEntry(0, 0xFFFFFFFF, 0xFA, 0xC); // user code
-	gdt[4] = CreateGdtEntry(0, 0xFFFFFFFF, 0xF2, 0xC); // user data
+	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
 
-	gdtr.size = sizeof(gdt) - 1;
-	gdtr.location = (size_t) &gdt;
+	cpu_data->gdt = AllocPermanentHeap(sizeof(struct gdt));
+	struct gdt* gdt = cpu_data->gdt;
 
-	x86LoadGdt((size_t) &gdtr);
+	gdt->entries[0] = CreateGdtEntry(0, 0, 0, 0);			   // null segment
+	gdt->entries[1] = CreateGdtEntry(0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code
+	gdt->entries[2] = CreateGdtEntry(0, 0xFFFFFFFF, 0x92, 0xC); // kernel data
+	gdt->entries[3] = CreateGdtEntry(0, 0xFFFFFFFF, 0xFA, 0xC); // user code
+	gdt->entries[4] = CreateGdtEntry(0, 0xFFFFFFFF, 0xF2, 0xC); // user data
+	gdt->entries[5] = CreateGdtEntry(0, 0, 0, 0);			   // TSS (filled in by x86AddTssToGdt)
+
+	gdt->ptr.size = sizeof(gdt->entries) - 1;
+	gdt->ptr.location = (size_t) &gdt->entries;
+
+	x86LoadGdt((size_t) &gdt->ptr);
 }
 
 uint16_t x86AddTssToGdt(struct tss* tss) {
-	gdt[5] = CreateGdtEntry((size_t) tss, sizeof(struct tss), 0x89, 0x0);
+	struct gdt* gdt = x86GetGdt();
+	gdt->entries[5] = CreateGdtEntry((size_t) tss, sizeof(struct tss) - 1, 0x89, 0x0);
 	return 5 * 0x8;
 }

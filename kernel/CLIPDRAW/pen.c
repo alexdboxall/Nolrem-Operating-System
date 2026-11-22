@@ -48,8 +48,14 @@ export struct pen* CdCopyPen(struct pen* pen) {
 }
 
 export struct pen* CdCreatePatternedPen(colour_t colour, int thickness, int pattern) {
-    uint8_t dummy;
+    if (pattern < 0 || pattern > _HIGHEST_USED_PEN_TYPE) {
+        return NULL;
+    }
+    uint8_t dummy = 0;
     struct pen* pen = CdCreateCustomPen(colour, 1, 1, &dummy);
+    if (pen == NULL) {
+        return NULL;
+    }
     CdSetPenPattern(pen, pattern);
     pen->thickness = thickness;
     return pen;
@@ -85,6 +91,10 @@ export int CdGetPenPattern(struct pen* pen) {
 }
 
 export int CdSetPenPattern(struct pen* pen, int pattern) {
+    /* Check first, so a bad pattern can't leave the pen half-modified. */
+    if (pattern < 0 || pattern > _HIGHEST_USED_PEN_TYPE) {
+        return EINVAL;
+    }
     LockUserObject(pen);
     pen->pattern_type = pattern;
     pen->is_custom = false;
@@ -184,6 +194,15 @@ export struct pen* CdGetStockPen(int type) {
     }
 }
 
+export bool CdIsStockPen(struct pen* pen) {
+    for (int i = 0; i < _NUM_STOCK_PENS; ++i) {
+        if (stock_pens[i] == pen) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void CdInitPenSubsystem(void) {
     uint8_t double_pattern[3] = {0xFF, 0x00, 0xFF};
 
@@ -198,7 +217,7 @@ void CdInitPenSubsystem(void) {
     stock_pens[STOCK_PEN_SYSTEM_2] = CdCreateSolidPen(SystemColour(), 2);
     stock_pens[STOCK_PEN_SYSTEM_3] = CdCreateSolidPen(SystemColour(), 3);
     stock_pens[STOCK_PEN_TRANSPARENT] = CdCreateSolidPen(TransparentColour(), 1);
-    stock_pens[STOCK_PEN_SQUIGGLY] = CdCreateSolidPen(BlackColour(), PEN_PATTERN_SQUIGGLY);
+    stock_pens[STOCK_PEN_SQUIGGLY] = CdCreatePatternedPen(BlackColour(), 1, PEN_PATTERN_SQUIGGLY);
     stock_pens[STOCK_PEN_DOUBLE] = CdCreateCustomPen(
         BlackColour(), 8, 3, double_pattern
     );

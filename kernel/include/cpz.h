@@ -37,6 +37,8 @@ struct cpz_image* OpenCpzImage(struct file* file);
 /* Size of the decompressed image in bytes: a whole number of pages, so it includes the zero padding. */
 size_t GetCpzImageSize(struct cpz_image* image);
 
+int CheckCpzSignature(struct file* file, bool* is_cpz);
+
 /*
  * Like AllocFileMemory(), but memory reads as the DECOMPRESSED image. Each page is decompressed by the
  * page-fault handler when first touched, and again after a DiscardPage(). Nothing is read from the file here.

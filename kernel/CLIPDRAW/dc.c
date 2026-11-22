@@ -136,6 +136,7 @@ void CleanupDc(void* _dc) {
     }
     DerefObject(dc->brush);
     DerefObject(dc->pen);
+    CdFreeRegion(dc->cliprgn);
     FreeHeap(dc);
 }
 

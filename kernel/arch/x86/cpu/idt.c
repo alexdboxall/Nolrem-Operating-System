@@ -1,6 +1,9 @@
 
 #include <common.h>
 #include <log.h>
+#include <arch.h>
+#include <cpu.h>
+#include <heap.h>
 
 struct idt_entry
 {
@@ -20,16 +23,24 @@ struct idt_ptr
 
 extern size_t isr_vectors_first_33;
 
-static struct idt_entry idt[256];
-static struct idt_ptr idtr;
-
-static void x86SetIdtEntry(int num, size_t isr_addr, uint8_t type)
+/*
+ * One of these is allocated for each CPU, and hangs off of the CPU's
+ * platform_cpu_data_t. Only this file knows the layout (the pointer in
+ * platform_cpu_data_t is to an opaque `struct idt`).
+ */
+struct idt
 {
-	idt[num].isr_offset_low = (isr_addr & 0xFFFF);
-	idt[num].isr_offset_high = (isr_addr >> 16) & 0xFFFF;
-	idt[num].segment_selector = 0x08;
-	idt[num].reserved = 0;
-	idt[num].type = type;
+	struct idt_entry entries[256];
+	struct idt_ptr ptr;
+};
+
+static void x86SetIdtEntry(struct idt* idt, int num, size_t isr_addr, uint8_t type)
+{
+	idt->entries[num].isr_offset_low = (isr_addr & 0xFFFF);
+	idt->entries[num].isr_offset_high = (isr_addr >> 16) & 0xFFFF;
+	idt->entries[num].segment_selector = 0x08;
+	idt->entries[num].reserved = 0;
+	idt->entries[num].type = type;
 }
 
 void x86LoadIdt(size_t idtPtr) {
@@ -42,18 +53,23 @@ void x86LoadIdt(size_t idtPtr) {
 }
 
 void x86InitIdt(void) {
+	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
+
+	cpu_data->idt = AllocPermanentHeap(sizeof(struct idt));
+	struct idt* idt = cpu_data->idt;
+
 	size_t* isr_vectors = &isr_vectors_first_33;
 
 	for (int i = 0; i < 32; ++i) {
-		x86SetIdtEntry(i, isr_vectors[i], 0x8E);
+		x86SetIdtEntry(idt, i, isr_vectors[i], 0x8E);
 	}
 	for (int i = 32; i < 256; ++i) {
 		size_t vector = ((size_t)isr_vectors[32]) + 4 * (i - 32) + 6 * ((i - 16) / 32);
-		x86SetIdtEntry(i, vector, i == 96 ? 0xEE : 0x8E);
+		x86SetIdtEntry(idt, i, vector, i == 96 ? 0xEE : 0x8E);
 	}
 
-	idtr.location = (size_t) &idt;
-	idtr.size = sizeof(idt) - 1;
+	idt->ptr.location = (size_t) &idt->entries;
+	idt->ptr.size = sizeof(idt->entries) - 1;
 	
-	x86LoadIdt((size_t) &idtr);
+	x86LoadIdt((size_t) &idt->ptr);
 }

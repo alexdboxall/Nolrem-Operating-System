@@ -6,6 +6,7 @@ comments = 0
 clipdraw = 0
 platlines = 0
 kernel = 0
+winmgr = 0
 ext = ['c', 'h', 'cpp', 'hpp', 'asm', 's']
 
 for path, subdirs, files in os.walk(os.getcwd()):
@@ -45,9 +46,12 @@ for path, subdirs, files in os.walk(os.getcwd()):
                 kernel += j
             if n.find('CLIPDRAW') != -1:
                 clipdraw += j
+            if n.find('WINMGR') != -1:
+                winmgr += j
             if n.find('arch/') != -1 or n.find('arch\\') != -1 or n.find('x86/') != -1 or n.find('x86\\') != -1:
                 platlines += j
         
 print('{} lines (of those, {}, or {}% are platform specific)'.format(lines, platlines, round(platlines * 100 / lines, 1)))
 print('{} lines come from the kernel (non-tests)'.format(kernel))
 print('{} lines come from CLIPDRAW (non-tests)'.format(clipdraw))
+print('{} lines come from WINMGR (non-tests)'.format(winmgr))

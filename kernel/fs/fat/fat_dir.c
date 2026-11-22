@@ -8,7 +8,8 @@
 * has been deleted.
 *
 * Long file names are stored in extra entries in front of the real one. We just
-* skip over them.
+* skip over them (and so a new file can only be created with a name that fits in
+* "8.3").
 */
 
 #include <common.h>
@@ -17,6 +18,7 @@
 #include <string.h>
 #include <assert.h>
 #include <transfer.h>
+#include <mutex.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <fs/fat/fat_private.h>
@@ -105,27 +107,31 @@ static void FatEntryName(const uint8_t* entry, char* out) {
 
 /*
 * FAT has no inodes, so make something up that's unique per file and directory.
-* Anything with data is identified by its first cluster. That also means "." and
-* ".." entries agree with the directory they point to. Empty files have no
-* cluster, so they use the position of their directory entry instead. Those have
-* the top bit set, which the cluster based numbers (at most 28 bits) never do.
+*
+* A directory is identified by its first cluster, which means that "." and ".."
+* entries agree with the directory they point to.
+*
+* A file is identified by the position of its directory entry. (Not its first
+* cluster, as that would change when a file that was empty has some data written
+* to it, and a file must keep its number while it's open.) Those have the top
+* bit set, which the cluster based numbers (at most 28 bits) never do.
 *
 * 'position' is the entry's position on the volume, in units of directory
 * entries (so the sector number * 16 + the index within the sector).
 */
-static uint32_t fat_make_ino(const struct fat* fat, uint32_t first_cluster, bool directory, uint64_t position) {
-    if (directory && first_cluster == fat->root_cluster) {
-        return FAT_ROOT_INO;
-    }
+static uint32_t FatMakeIno(const struct fat* fat, uint32_t first_cluster, bool directory, uint64_t position) {
+    if (directory) {
+        if (first_cluster == fat->root_cluster) {
+            return FAT_ROOT_INO;
+        }
 
-    if (first_cluster != 0) {
         return first_cluster + 1;
     }
 
     return 0x80000000u | ((uint32_t) position & 0x7FFFFFFFu);
 }
 
-static void fat_decode_entry(const struct fat* fat, const uint8_t* entry, uint64_t position, struct fat_node_info* info) {
+static void FatDecodeEntry(const struct fat* fat, const uint8_t* entry, uint64_t position, struct fat_node_info* info) {
     info->directory = (entry[11] & ATTR_DIRECTORY) != 0;
 
     info->first_cluster = Le16(entry + 26);
@@ -144,7 +150,8 @@ static void fat_decode_entry(const struct fat* fat, const uint8_t* entry, uint64
     }
 
     info->size = info->directory ? 0 : Le32(entry + 28);
-    info->ino = fat_make_ino(fat, info->first_cluster, info->directory, position);
+    info->ino = FatMakeIno(fat, info->first_cluster, info->directory, position);
+    info->entry_byte = position * FAT_ENTRY_SIZE;
 }
 
 /*
@@ -166,7 +173,7 @@ struct fat_dir_cursor {
     bool advance;               /* The cluster is used up and we must follow the chain to the next one. */
 };
 
-static int fat_dir_start(struct fat* fat, uint32_t dir_cluster, struct fat_dir_cursor* cursor) {
+static int FatDirStart(struct fat* fat, uint32_t dir_cluster, struct fat_dir_cursor* cursor) {
     cursor->fat = fat;
     cursor->sector = 0;
     cursor->sector_in_cluster = 0;
@@ -185,7 +192,7 @@ static int fat_dir_start(struct fat* fat, uint32_t dir_cluster, struct fat_dir_c
 * Reads the next sector (16 entries) of the directory. Returns FAT_END if the
 * directory has no more sectors. byte_out is where the sector is on the volume.
 */
-static int fat_dir_next_sector(struct fat_dir_cursor* cursor, uint8_t* buffer, uint64_t* byte_out) {
+static int FatDirNextSector(struct fat_dir_cursor* cursor, uint8_t* buffer, uint64_t* byte_out) {
     struct fat* fat = cursor->fat;
 
     if (cursor->sector >= FAT_MAX_DIR_SECTORS) {
@@ -204,7 +211,7 @@ static int fat_dir_next_sector(struct fat_dir_cursor* cursor, uint8_t* buffer, u
     } else {
         if (cursor->advance) {
             uint32_t next;
-            int status = fat_next_cluster(fat, cursor->cluster, &next);
+            int status = FatNextCluster(fat, cursor->cluster, &next);
             if (status != 0) {
                 return status;      /* Includes FAT_END: ran out of clusters. */
             }
@@ -214,10 +221,10 @@ static int fat_dir_next_sector(struct fat_dir_cursor* cursor, uint8_t* buffer, u
             cursor->advance = false;
         }
 
-        byte = fat_cluster_to_byte(fat, cursor->cluster) + (uint64_t) cursor->sector_in_cluster * FAT_SECTOR_SIZE;
+        byte = FatClusterToByte(fat, cursor->cluster) + (uint64_t) cursor->sector_in_cluster * FAT_SECTOR_SIZE;
     }
 
-    int status = fat_disk_read(fat->disk, buffer, FAT_SECTOR_SIZE, byte);
+    int status = FatDiskRead(fat->disk, buffer, FAT_SECTOR_SIZE, byte);
     if (status != 0) {
         return status;
     }
@@ -240,13 +247,13 @@ static int fat_dir_next_sector(struct fat_dir_cursor* cursor, uint8_t* buffer, u
 * Otherwise, finds the nth entry that should be shown (counting from 0).
 *
 * Returns ENOENT if there is no such entry. On success, the raw entry is copied
-* to entry_out and its position on the volume (see fat_make_ino) goes in
+* to entry_out and its position on the volume (see FatMakeIno) goes in
 * position_out.
 */
-static int fat_dir_scan(struct fat* fat, uint32_t dir_cluster, const char* name, uint32_t nth,
+static int FatDirScan(struct fat* fat, uint32_t dir_cluster, const char* name, uint32_t nth,
                         uint8_t* entry_out, uint64_t* position_out) {
     struct fat_dir_cursor cursor;
-    int status = fat_dir_start(fat, dir_cluster, &cursor);
+    int status = FatDirStart(fat, dir_cluster, &cursor);
     if (status != 0) {
         return status;
     }
@@ -256,7 +263,7 @@ static int fat_dir_scan(struct fat* fat, uint32_t dir_cluster, const char* name,
 
     while (true) {
         uint64_t sector_byte;
-        status = fat_dir_next_sector(&cursor, buffer, &sector_byte);
+        status = FatDirNextSector(&cursor, buffer, &sector_byte);
         if (status == FAT_END) {
             return ENOENT;
         } else if (status != 0) {
@@ -294,7 +301,7 @@ static int fat_dir_scan(struct fat* fat, uint32_t dir_cluster, const char* name,
     }
 }
 
-int fat_follow(struct fat* fat, uint32_t dir_cluster, const char* name, struct fat_node_info* out) {
+int FatFollow(struct fat* fat, uint32_t dir_cluster, const char* name, struct fat_node_info* out) {
     assert(fat);
     assert(name);
     assert(out);
@@ -309,12 +316,12 @@ int fat_follow(struct fat* fat, uint32_t dir_cluster, const char* name, struct f
     uint8_t entry[FAT_ENTRY_SIZE];
     uint64_t position;
 
-    int status = fat_dir_scan(fat, dir_cluster, name, 0, entry, &position);
+    int status = FatDirScan(fat, dir_cluster, name, 0, entry, &position);
     if (status != 0) {
         return status;
     }
 
-    fat_decode_entry(fat, entry, position, out);
+    FatDecodeEntry(fat, entry, position, out);
     return 0;
 }
 
@@ -322,7 +329,7 @@ int fat_follow(struct fat* fat, uint32_t dir_cluster, const char* name, struct f
 * Does the actual work of reading a directory entry into the transfer. Runs on
 * the filesystem thread.
 */
-int fat_read_directory_entry_sync(struct fat* fat, uint32_t dir_cluster, struct transfer* io) {
+int FatReadDirectoryEntrySync(struct fat* fat, uint32_t dir_cluster, struct transfer* io) {
     struct dirent dir;
     memset(&dir, 0, sizeof(dir));
 
@@ -352,7 +359,7 @@ int fat_read_directory_entry_sync(struct fat* fat, uint32_t dir_cluster, struct 
     uint8_t entry[FAT_ENTRY_SIZE];
     uint64_t position;
 
-    int status = fat_dir_scan(fat, dir_cluster, NULL, (uint32_t) entry_number, entry, &position);
+    int status = FatDirScan(fat, dir_cluster, NULL, (uint32_t) entry_number, entry, &position);
     if (status == ENOENT) {
         /* Gone past the end of the directory, so there is nothing to transfer. */
         return 0;
@@ -361,7 +368,7 @@ int fat_read_directory_entry_sync(struct fat* fat, uint32_t dir_cluster, struct 
     }
 
     struct fat_node_info info;
-    fat_decode_entry(fat, entry, position, &info);
+    FatDecodeEntry(fat, entry, position, &info);
 
     char name[13];
     FatEntryName(entry, name);
@@ -374,4 +381,311 @@ int fat_read_directory_entry_sync(struct fat* fat, uint32_t dir_cluster, struct 
 
     /* Perform the transfer to the correct location */
     return PerformTransfer(&dir, io, sizeof(struct dirent));
+}
+
+/*
+* ---------------------------------------------------------------------------
+* Changing directories
+* ---------------------------------------------------------------------------
+*
+* Everything here needs write_lock.
+*/
+
+/*
+* Replaces the directory entry that is at the given place on the volume.
+*/
+static int FatPutEntry(struct fat* fat, uint64_t entry_byte, const uint8_t* entry) {
+    uint8_t sector[FAT_SECTOR_SIZE];
+    uint64_t sector_byte = entry_byte - entry_byte % FAT_SECTOR_SIZE;
+
+    int status = FatDiskRead(fat->disk, sector, FAT_SECTOR_SIZE, sector_byte);
+    if (status != 0) {
+        return status;
+    }
+
+    memcpy(sector + entry_byte % FAT_SECTOR_SIZE, entry, FAT_ENTRY_SIZE);
+
+    return FatDiskWrite(fat->disk, sector, FAT_SECTOR_SIZE, sector_byte);
+}
+
+/*
+* Writes a file's first cluster and size to its directory entry. Done after
+* either has changed.
+*
+* (The modification time isn't updated, as there's nothing to get the time from.)
+*/
+int FatUpdateEntry(struct fat* fat, const struct fat_file* file) {
+    uint8_t sector[FAT_SECTOR_SIZE];
+    uint64_t sector_byte = file->entry_byte - file->entry_byte % FAT_SECTOR_SIZE;
+    uint8_t* entry = sector + file->entry_byte % FAT_SECTOR_SIZE;
+
+    int status = FatDiskRead(fat->disk, sector, FAT_SECTOR_SIZE, sector_byte);
+    if (status != 0) {
+        return status;
+    }
+
+    /* It should still be the entry of a file, as nothing ever moves or removes one. */
+    if (entry[0] == 0 || entry[0] == 0xE5 || (entry[11] & (ATTR_DIRECTORY | ATTR_VOLUME_ID)) != 0) {
+        return EIO;
+    }
+
+    FatPut16(entry + 26, file->first_cluster & 0xFFFF);
+    if (fat->type == FAT_TYPE_32) {
+        FatPut16(entry + 20, file->first_cluster >> 16);
+    }
+
+    FatPut32(entry + 28, file->size);
+    entry[11] |= ATTR_ARCHIVE;
+
+    return FatDiskWrite(fat->disk, sector, FAT_SECTOR_SIZE, sector_byte);
+}
+
+/*
+* Characters that can't be in a short name. (As well as the dot, which has a
+* special meaning there, and the lower case letters, which are made upper case.)
+*/
+static bool FatNameCharValid(uint8_t c) {
+    if (c <= ' ' || c == 0x7F) {
+        return false;
+    }
+
+    switch (c) {
+    case '"': case '*': case '+': case ',': case '/': case ':': case ';':
+    case '<': case '=': case '>': case '?': case '[': case '\\': case ']': case '|':
+        return false;
+    }
+
+    return true;
+}
+
+/*
+* Copies one half of a name (the name or the extension) into its place in the
+* padded form, as upper case. Notes whether any lower and upper case letters
+* were seen. Returns false if there's a character that isn't allowed.
+*/
+static bool FatCopyNamePart(const char* source, size_t length, uint8_t* dest, bool* has_lower, bool* has_upper) {
+    for (size_t i = 0; i < length; ++i) {
+        uint8_t c = (uint8_t) source[i];
+        if (!FatNameCharValid(c)) {
+            return false;
+        }
+
+        if (c >= 'a' && c <= 'z') {
+            *has_lower = true;
+            c = (uint8_t) (c - 'a' + 'A');
+        } else if (c >= 'A' && c <= 'Z') {
+            *has_upper = true;
+        }
+
+        dest[i] = c;
+    }
+
+    return true;
+}
+
+/*
+* Turns a name into the space padded "NAME    EXT" form that's stored in an
+* entry (the opposite of FatEntryName), and the Windows NT flags that say which
+* parts to show in lower case. Returns EINVAL if the name can't be stored in an
+* entry: more than 8 characters before the dot or 3 after, more than one dot,
+* nothing before or after the dot, or a character that isn't allowed.
+*
+* A name or extension that is all lower case is shown as such, as is one that is
+* all upper case. Mixed case is stored as upper case (as names aren't case
+* sensitive, it can still be found with any case).
+*/
+static int FatMakeShortName(const char* name, uint8_t* padded, uint8_t* nt_flags) {
+    const char* dot = NULL;
+    for (const char* p = name; *p != 0; ++p) {
+        if (*p == '.') {
+            if (dot != NULL) {
+                return EINVAL;
+            }
+            dot = p;
+        }
+    }
+
+    size_t name_length = (dot != NULL) ? (size_t) (dot - name) : strlen(name);
+    size_t ext_length = (dot != NULL) ? strlen(dot + 1) : 0;
+
+    if (name_length == 0 || name_length > 8 || ext_length > 3 || (dot != NULL && ext_length == 0)) {
+        return EINVAL;
+    }
+
+    memset(padded, ' ', 11);
+
+    bool name_lower = false, name_upper = false;
+    bool ext_lower = false, ext_upper = false;
+
+    if (!FatCopyNamePart(name, name_length, padded, &name_lower, &name_upper)) {
+        return EINVAL;
+    }
+
+    if (ext_length != 0 && !FatCopyNamePart(dot + 1, ext_length, padded + 8, &ext_lower, &ext_upper)) {
+        return EINVAL;
+    }
+
+    /* The reverse of what FatEntryName does. */
+    if (padded[0] == 0xE5) {
+        padded[0] = 0x05;
+    }
+
+    *nt_flags = 0;
+    if (name_lower && !name_upper) {
+        *nt_flags |= NT_LOWER_NAME;
+    }
+    if (ext_lower && !ext_upper) {
+        *nt_flags |= NT_LOWER_EXT;
+    }
+
+    return 0;
+}
+
+/*
+* Makes a directory longer by one (cleared) cluster. The place of the first entry
+* in the new cluster is returned.
+*/
+static int FatDirGrow(struct fat* fat, uint32_t last_cluster, uint64_t* entry_byte_out) {
+    uint32_t fresh;
+    int status = FatAllocCluster(fat, last_cluster + 1, &fresh);
+    if (status != 0) {
+        return status;
+    }
+
+    /*
+    * It has to be cleared first (an entry starting with zero ends the directory,
+    * and the cluster has old data in it), and only then added to the directory.
+    */
+    uint64_t byte = FatClusterToByte(fat, fresh);
+
+    status = FatDiskZero(fat->disk, byte, fat->cluster_bytes);
+    if (status == 0) {
+        status = FatSetNext(fat, last_cluster, fresh);
+    }
+
+    if (status != 0) {
+        FatFreeCluster(fat, fresh);
+        return status;
+    }
+
+    *entry_byte_out = byte;
+    return 0;
+}
+
+/*
+* Finds a place in a directory for a new entry: a deleted one, or the one that
+* ends the directory. (Making the directory longer if it's full.) Returns the
+* place of it on the volume, or ENOSPC if the directory can't get any bigger.
+*/
+static int FatDirFindFree(struct fat* fat, uint32_t dir_cluster, uint64_t* entry_byte_out) {
+    struct fat_dir_cursor cursor;
+    int status = FatDirStart(fat, dir_cluster, &cursor);
+    if (status != 0) {
+        return status;
+    }
+
+    uint8_t buffer[FAT_SECTOR_SIZE];
+
+    while (true) {
+        uint64_t sector_byte;
+        status = FatDirNextSector(&cursor, buffer, &sector_byte);
+        if (status == FAT_END) {
+            break;
+        } else if (status != 0) {
+            return status;
+        }
+
+        for (uint32_t i = 0; i < FAT_ENTRIES_PER_SECTOR; ++i) {
+            uint8_t first = buffer[i * FAT_ENTRY_SIZE];
+            if (first == 0 || first == 0xE5) {
+                *entry_byte_out = sector_byte + (uint64_t) i * FAT_ENTRY_SIZE;
+                return 0;
+            }
+        }
+    }
+
+    /*
+    * Full. The FAT12/FAT16 root directory can't be made bigger, and no other
+    * directory can have more than FAT_MAX_DIR_SECTORS sectors.
+    */
+    if (cursor.fixed_root || cursor.sector >= FAT_MAX_DIR_SECTORS) {
+        return ENOSPC;
+    }
+
+    /* Otherwise the cursor stopped at the end of the chain, so this is its last cluster. */
+    return FatDirGrow(fat, cursor.cluster, entry_byte_out);
+}
+
+static int FatCreateLocked(struct fat* fat, uint32_t dir_cluster, const char* name, const uint8_t* padded,
+                             uint8_t nt_flags, struct fat_node_info* out) {
+    /*
+    * Whoever called us has probably just looked for it, but that was before we
+    * had the lock.
+    */
+    uint8_t existing[FAT_ENTRY_SIZE];
+    uint64_t existing_position;
+
+    int status = FatDirScan(fat, dir_cluster, name, 0, existing, &existing_position);
+    if (status == 0) {
+        return EEXIST;
+    } else if (status != ENOENT) {
+        return status;
+    }
+
+    uint64_t entry_byte;
+    status = FatDirFindFree(fat, dir_cluster, &entry_byte);
+    if (status != 0) {
+        return status;
+    }
+
+    /*
+    * An empty file: no clusters (they come with the first write) and no size.
+    */
+    uint8_t entry[FAT_ENTRY_SIZE];
+    memset(entry, 0, sizeof(entry));
+    memcpy(entry, padded, 11);
+    entry[11] = ATTR_ARCHIVE;
+    entry[12] = nt_flags;
+    FatPut16(entry + 14, FAT_DEFAULT_TIME);     /* Created. */
+    FatPut16(entry + 16, FAT_DEFAULT_DATE);
+    FatPut16(entry + 18, FAT_DEFAULT_DATE);     /* Last accessed. */
+    FatPut16(entry + 22, FAT_DEFAULT_TIME);     /* Last modified. */
+    FatPut16(entry + 24, FAT_DEFAULT_DATE);
+
+    status = FatPutEntry(fat, entry_byte, entry);
+    if (status != 0) {
+        return status;
+    }
+
+    out->first_cluster = 0;
+    out->size = 0;
+    out->directory = false;
+    out->ino = FatMakeIno(fat, 0, false, entry_byte / FAT_ENTRY_SIZE);
+    out->entry_byte = entry_byte;
+    return 0;
+}
+
+/*
+* Creates an empty file in a directory. Returns EEXIST if there's already
+* something with that name (in any case) and EINVAL if the name is no good (see
+* FatMakeShortName), and ENOSPC if the directory has no room for it.
+*/
+int FatCreate(struct fat* fat, uint32_t dir_cluster, const char* name, struct fat_node_info* out) {
+    assert(fat);
+    assert(name);
+    assert(out);
+
+    uint8_t padded[11];
+    uint8_t nt_flags;
+
+    int status = FatMakeShortName(name, padded, &nt_flags);
+    if (status != 0) {
+        return status;
+    }
+
+    AcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    status = FatCreateLocked(fat, dir_cluster, name, padded, nt_flags, out);
+    ReleaseMutex(fat->write_lock);
+
+    return status;
 }

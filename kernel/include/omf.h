@@ -1,17 +1,21 @@
 #pragma once
 
+struct cpz_image;
 
 struct open_mapped_file {
     struct file* f;
+    struct cpz_image* cpz;
     void* ptr;
     off_t len;
     bool error;
     off_t cursor;
 };
 
-int OpenAndMapFile(const char* path, struct open_mapped_file* out);
+#define OMF_TRANSPARENT_DECOMPRESS  (1 << 0)
 
-/* DOUBBE CLOSE IS ALLOWED! */
+int OpenAndMapFile(const char* path, int flags, struct open_mapped_file* out);
+
+/* DOUBLE CLOSE IS ALLOWED! */
 void OmfClose(struct open_mapped_file* omf); 
 
 void OmfAdvance(struct open_mapped_file* omf, size_t amount);

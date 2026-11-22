@@ -71,6 +71,16 @@ int VnodeWrite(struct aio* aio) {
     return node->ops.write(aio);
 }
 
+int VnodeTruncate(struct aio* aio) {
+    struct vnode* node = aio->node;
+    CheckVnode(node);
+
+    if (node->ops.truncate == NULL) {
+        return EINVAL;
+    }
+    return node->ops.truncate(aio);
+}
+
 int VnodeIoctl(struct vnode* node, int command, void* buffer) {
     CheckVnode(node);
     if (node->ops.ioctl == NULL) {
@@ -89,14 +99,6 @@ int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int fl
         return EINVAL;
     }
     return node->ops.create(node, out, name, flags, mode);
-}
-
-int VnodeTruncate(struct vnode* node, off_t offset) {
-    CheckVnode(node);
-    if (node->ops.truncate == NULL) {
-        return EINVAL;
-    }
-    return node->ops.truncate(node, offset);
 }
 
 int VnodeFollow(struct vnode* node, struct vnode** new_node, const char* name) {

@@ -54,6 +54,9 @@ export int CdPaintRegionWithBrush(struct dc* dc, struct region rgn, struct brush
     ctxt.dc = dc;
     ctxt.brush = brush;
     struct region clipped = CdIntersectWithClipRegion(dc, rgn);
+    if (CdIsRegionBad(clipped)) {
+        return ENOMEM;
+    }
     int retv = IterateRegion(
         clipped, 
         PaintRectCallbackPreTransformed,
@@ -64,14 +67,22 @@ export int CdPaintRegionWithBrush(struct dc* dc, struct region rgn, struct brush
     return retv;
 }
 
-export int CdInvertRegion(struct dc* dc, struct region rgn) {
-    struct region clipped = CdIntersectWithClipRegion(dc, rgn);
-    int retv = IterateRegion(
+/* `rgn` must already be clipped to the DC, and be in device coordinates. */
+static int CdInvertRegionPreTransformed(struct dc* dc, struct region rgn) {
+    return IterateRegion(
         rgn, 
         InvertRectCallback,
         dc,
         0
     );
+}
+
+export int CdInvertRegion(struct dc* dc, struct region rgn) {
+    struct region clipped = CdIntersectWithClipRegion(dc, rgn);
+    if (CdIsRegionBad(clipped)) {
+        return ENOMEM;
+    }
+    int retv = CdInvertRegionPreTransformed(dc, clipped);
     CdFreeRegion(clipped);
     return retv;
 }
@@ -141,9 +152,12 @@ export int CdInvertRect(struct dc* dc, int x, int y, int width, int height) {
     struct region rr = CdCreateRectRegion(x, y, width, height);
     struct region rgn = CdIntersectWithClipRegion(dc, rr);
     CdFreeRegion(rr);
-    CdInvertRegion(dc, rgn);
+    if (CdIsRegionBad(rgn)) {
+        return ENOMEM;
+    }
+    int retv = CdInvertRegionPreTransformed(dc, rgn);
     CdFreeRegion(rgn);
-    return 0;
+    return retv;
 }
 
 export int CdPaintRectWithBrush(struct dc* dc, int x, int y, int width, int height, 
@@ -151,9 +165,12 @@ export int CdPaintRectWithBrush(struct dc* dc, int x, int y, int width, int heig
     struct region rr = CdCreateRectRegion(x, y, width, height);
     struct region rgn = CdIntersectWithClipRegion(dc, rr);
     CdFreeRegion(rr);
-    CdPaintRegionWithBrushPreTransformed(dc, rgn, brush);
+    if (CdIsRegionBad(rgn)) {
+        return ENOMEM;
+    }
+    int retv = CdPaintRegionWithBrushPreTransformed(dc, rgn, brush);
     CdFreeRegion(rgn);
-    return 0;
+    return retv;
 }
 
 

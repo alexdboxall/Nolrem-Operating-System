@@ -32,7 +32,7 @@ int DesktopWinProc(struct window* win, struct msg msg) {
         struct dc* dc = WmBeginPaint(win);
         if (desktop_bitmap == NULL) {
             struct open_mapped_file omf;
-            OpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", &omf);
+            OpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", OMF_TRANSPARENT_DECOMPRESS, &omf);
             desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, omf.f, 640, 480);
             OmfClose(&omf);
         }

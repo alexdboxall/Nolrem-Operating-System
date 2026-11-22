@@ -9,6 +9,10 @@ static bool IsValidUserOwnedObject(void* obj) {
 }
 
 bool ValidateUserObjectAndAtomicallyRef(void* obj, int type) {
+    /* Don't dereference NULL below to read the type. */
+    if (obj == NULL) {
+        return false;
+    }
     bool ok = IsValidUserOwnedObject(obj);
     if (type != UOBJ_ANYTYPE) {
         ok = ok && ((struct user_obj_header*) obj)->user_type == type;

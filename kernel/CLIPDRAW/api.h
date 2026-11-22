@@ -198,6 +198,15 @@ bool IsOpaqueColour(colour_t argb);
 
 /* Painting Functions */
 
+// All of these return 0 on success, or an errno. Drawing is clipped to the DC's
+// clip region, so it can't escape the window the DC belongs to.
+//
+// Shapes (and polygon points) must fit in 16-bit coordinates, as regions do:
+// x and y from -32768 to 32767, width and height non-negative, and x + width
+// and y + height no more than 32767. Anything else fails with EINVAL.
+//
+// The versions without 'WithBrush' use the brush currently selected into the DC.
+
 #define FLOOD_FILL_SURFACE  0
 #define FLOOD_FILL_BORDER   1
 
@@ -301,6 +310,8 @@ colour_t GetBrushSecondaryColour(brush_t br);
 // need to free it. the stock brushes are used *to* avoid allocating and freeing
 // new ones often
 brush_t GetStockBrush(int type);
+// stock brushes are shared by everyone and are read-only: SetBrush*() on one
+// fails with EACCES, so use CopyBrush() first if you want to change it
 
 int SetBrushOrigin(brush_t br, int x, int y);
 struct point GetBrushOrigin(brush_t br);
@@ -311,7 +322,13 @@ brush_t CopyBrush(brush_t br);
 
 
 /* DC Functions */
+// Only brushes and pens can be selected into a DC. The DC keeps its own
+// reference, so you can Deref() the object straight after selecting it.
 int SetGraphicsObject(dc_t dc, void* obj);
+
+// `type` is UOBJ_BRUSH or UOBJ_PEN. You get your own reference, so Deref() it
+// when you're done (stock brushes/pens excepted, as with GetStockBrush). Fails
+// with EGONE if the object's only owner is the DC, i.e. you already Deref()'d it.
 any_t GetGraphicsObject(dc_t dc, int type);
 
 
@@ -328,6 +345,9 @@ any_t GetGraphicsObject(dc_t dc, int type);
 #define PEN_PATTERN_SQUIGGLY        6
 #define PEN_PATTERN_DOUBLE          7
 #define _HIGHEST_USED_PEN_TYPE      (PEN_PATTERN_DOUBLE)
+
+// valid thickness range is 1 to PEN_MAX_THICKNESS inclusive
+#define PEN_MAX_THICKNESS           1024
 
 pen_t CreateSolidPen(colour_t colour, int thickness);
 pen_t CreatePatternedPen(colour_t colour, int thickness, int pattern);
@@ -358,6 +378,7 @@ int SetPenThickness(pen_t pen, int thickness);
 
 // again, like brushes this doesn't increase the ref count, so no need to free
 pen_t GetStockPen(int type);
+// stock pens are read-only in the same way: use CopyPen() first to change one
 
 // unlike DuplicateHandle, makes a new pen object itself with duplicate data
 // e.g. so you can take a stock pen and change its colour

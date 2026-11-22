@@ -1,13 +1,16 @@
 #pragma once
 
 /*
-* Internal header for the FAT driver (FAT12, FAT16 and FAT32, read only, no long
-* file names). The files that make up the driver are:
+* Internal header for the FAT driver (FAT12, FAT16 and FAT32, no long file
+* names). Files can be read, written (including growing them), created and
+* truncated. Deleting, renaming and making directories are not supported. The
+* files that make up the driver are:
 *
 *   fat_core.c    synchronous disk access, mounting
-*   fat_table.c   the File Allocation Table: the sector cache and cluster chains
-*   fat_dir.c     directories: scanning, name matching, Follow, readdir
-*   fat_file.c    reading file data
+*   fat_table.c   the File Allocation Table: the sector cache, cluster chains
+*                 and cluster allocation
+*   fat_dir.c     directories: scanning, name matching, Follow, readdir, Create
+*   fat_file.c    reading, writing and truncating file data
 *   fat_driver.c  the filesystem thread and the queueing of requests
 *   fat_vnode.c   the VFS glue
 */
@@ -55,11 +58,38 @@ struct mutex;
 
 #define ATTR_VOLUME_ID  0x08
 #define ATTR_DIRECTORY  0x10
+#define ATTR_ARCHIVE    0x20    /* "Changed since the last backup". Set on new and modified files, like everyone else does. */
 #define ATTR_LFN_MASK   0x3F
 #define ATTR_LFN        0x0F    /* Read only + hidden + system + volume ID. Marks a long file name entry. */
 
 #define NT_LOWER_NAME   0x08    /* Windows NT: the name is lower case. */
 #define NT_LOWER_EXT    0x10    /* Windows NT: the extension is lower case. */
+
+/*
+* The size of a file is stored in 32 bits, so this is the most a file can hold.
+*/
+#define FAT_MAX_FILE_SIZE 0xFFFFFFFFu
+
+/*
+* Directory entries have a date and time on them. Until the kernel has a clock
+* to take them from, new files are stamped with 1 January 1980, midnight (the
+* earliest date that FAT can store).
+*/
+#define FAT_DEFAULT_DATE 0x0021
+#define FAT_DEFAULT_TIME 0x0000
+
+/* Store a little endian value (the counterparts of Le16 and Le32). */
+static inline void FatPut16(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t) v;
+    p[1] = (uint8_t) (v >> 8);
+}
+
+static inline void FatPut32(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t) v;
+    p[1] = (uint8_t) (v >> 8);
+    p[2] = (uint8_t) (v >> 16);
+    p[3] = (uint8_t) (v >> 24);
+}
 
 /*
 * Only a small part of the FAT is ever kept in memory: the two most recently
@@ -77,8 +107,18 @@ struct fat_cache_slot {
 /*
 * Nearly everything in here is set up when the volume is mounted and never
 * modified afterwards, so it can be used from any thread without locking. The
-* exceptions are the sector cache (protected by table_lock) and the seek hint
-* (only touched by the filesystem thread).
+* exceptions are:
+*
+*   - the sector cache (protected by table_lock),
+*   - the seek hint (only touched by the filesystem thread),
+*   - the allocation state (alloc_hint and fsinfo_done, protected by write_lock).
+*
+* Anything that changes the volume (writing to a file, creating one) holds
+* write_lock for the whole operation. That keeps two cluster allocations from
+* picking the same cluster, and stops two read-modify-writes of the same
+* directory sector from losing each other's changes. Reads (including looking
+* names up in a directory) don't need it. The order of locking is always
+* write_lock and then table_lock.
 *
 * All sector numbers are in units of FAT_SECTOR_SIZE, relative to the start of
 * the volume (i.e. the partition).
@@ -101,15 +141,28 @@ struct fat {
     uint32_t max_cluster;               /* Highest valid cluster number. */
     uint32_t fat_start_sector;          /* The copy of the FAT that we read from. */
     uint32_t fat_sectors;               /* How many sectors that copy has. */
+    uint32_t fat_count;                 /* How many copies of the FAT there are. */
+
+    /*
+    * Normally every copy of the FAT is kept the same, so a write has to go to
+    * all of them (fat_start_sector is then the first copy). FAT32 can instead
+    * say that only one copy is in use, in which case that's the only one to write.
+    */
+    bool fat_mirrored;
+
+    uint32_t fsinfo_sector;             /* FAT32 only: the FSInfo sector, 0 if there isn't a valid looking one. */
+    bool fsinfo_done;                   /* The FSInfo sector has been marked as out of date (see FatAllocCluster). */
+    uint32_t alloc_hint;                /* Where to start looking for a free cluster. */
 
     struct msgbox* msgbox;              /* Requests for the filesystem thread. */
 
+    struct mutex* write_lock;           /* Held for the whole of anything that changes the volume. */
     struct mutex* table_lock;           /* Held while looking at or changing the cache. */
     struct fat_cache_slot cache[FAT_CACHE_SLOTS];
     int cache_mru;                      /* Index of the most recently used slot. */
 
     /*
-    * Remembers the last cluster of the last file that was read from, so a
+    * Remembers the last cluster of the last file that was looked at, so a
     * sequence of reads of a file doesn't have to walk the chain from the start
     * each time. Only used by the filesystem thread.
     */
@@ -129,32 +182,64 @@ struct fat_node_info {
     uint32_t size;          /* Zero for directories. */
     bool directory;
     uint32_t ino;
+    uint64_t entry_byte;    /* Where the directory entry is, in bytes from the start of the volume. */
+};
+
+/*
+* The parts of a file that change when it is written to or truncated. This lives
+* in the file's vnode. It is only changed by the filesystem thread, with
+* write_lock held, so the filesystem thread can read it without locking.
+*
+* For a directory, first_cluster is the directory's cluster (see above) and the
+* rest is unused.
+*/
+struct fat_file {
+    uint32_t first_cluster;     /* 0 for a file that has no data yet. */
+    uint32_t size;
+    uint64_t entry_byte;        /* Where our directory entry is (see fat_node_info). It has to be updated when the above change. */
 };
 
 /* ---- Used by the rest of the filesystem (fat_vnode.c) ---- */
 
-int fat_mount(struct file* disk, struct fat** out);
-void fat_destroy(struct fat* fat);
-int fat_start_driver(struct fat* fat);
+int FatMount(struct file* disk, struct fat** out);
+void FatDestroy(struct fat* fat);
+int FatStartDriver(struct fat* fat);
 
-int fat_read_file(struct fat* fat, uint32_t first_cluster, uint32_t file_size, struct aio* aio);
-int fat_read_directory_entry(struct fat* fat, uint32_t dir_cluster, struct aio* aio);
-int fat_follow(struct fat* fat, uint32_t dir_cluster, const char* name, struct fat_node_info* out);
+int FatReadFile(struct fat* fat, struct fat_file* file, struct aio* aio);
+int FatWriteFile(struct fat* fat, struct vnode* node, struct fat_file* file, struct aio* aio);
+int FatTruncateFile(struct fat* fat, struct vnode* node, struct fat_file* file, struct aio* aio);
+int FatReadDirectoryEntry(struct fat* fat, uint32_t dir_cluster, struct aio* aio);
+int FatFollow(struct fat* fat, uint32_t dir_cluster, const char* name, struct fat_node_info* out);
+int FatCreate(struct fat* fat, uint32_t dir_cluster, const char* name, struct fat_node_info* out);
 
 /* ---- Shared between the files of the driver ---- */
 
 /* fat_core.c */
-int fat_disk_transfer(struct file* disk, struct transfer* io);
-int fat_disk_read(struct file* disk, void* buffer, size_t length, uint64_t offset);
+int FatDiskTransfer(struct file* disk, struct transfer* io);
+int FatDiskWriteTransfer(struct file* disk, struct transfer* io);
+int FatDiskRead(struct file* disk, void* buffer, size_t length, uint64_t offset);
+int FatDiskWrite(struct file* disk, const void* buffer, size_t length, uint64_t offset);
+int FatDiskZero(struct file* disk, uint64_t offset, uint64_t length);
 
 /* fat_table.c */
-int fat_next_cluster(struct fat* fat, uint32_t cluster, uint32_t* next);
-int fat_cluster_at(struct fat* fat, uint32_t first_cluster, uint32_t index, uint32_t* out);
-void fat_set_hint(struct fat* fat, uint32_t first_cluster, uint32_t index, uint32_t cluster);
-uint64_t fat_cluster_to_byte(const struct fat* fat, uint32_t cluster);
+int FatNextCluster(struct fat* fat, uint32_t cluster, uint32_t* next);
+int FatClusterAt(struct fat* fat, uint32_t first_cluster, uint32_t index, uint32_t* out);
+void FatSetHint(struct fat* fat, uint32_t first_cluster, uint32_t index, uint32_t cluster);
+uint64_t FatClusterToByte(const struct fat* fat, uint32_t cluster);
+
+/* fat_table.c, for changing the FAT. Only with write_lock held. */
+int FatAllocCluster(struct fat* fat, uint32_t near, uint32_t* out);
+int FatSetNext(struct fat* fat, uint32_t cluster, uint32_t next);
+void FatFreeCluster(struct fat* fat, uint32_t cluster);
+int FatAppendCluster(struct fat* fat, uint32_t last, uint32_t* out);
+int FatClusterAtExtend(struct fat* fat, uint32_t* first_cluster, uint32_t index, uint32_t* out);
+int FatTrimChain(struct fat* fat, uint32_t* first_cluster, uint32_t keep);
 
 /* fat_dir.c */
-int fat_read_directory_entry_sync(struct fat* fat, uint32_t dir_cluster, struct transfer* io);
+int FatReadDirectoryEntrySync(struct fat* fat, uint32_t dir_cluster, struct transfer* io);
+int FatUpdateEntry(struct fat* fat, const struct fat_file* file);    /* With write_lock held. */
 
 /* fat_file.c */
-int fat_read_file_sync(struct fat* fat, uint32_t first_cluster, uint32_t file_size, struct transfer* io);
+int FatReadFileSync(struct fat* fat, struct fat_file* file, struct transfer* io);
+int FatWriteFileSync(struct fat* fat, struct fat_file* file, struct transfer* io);
+int FatTruncateFileSync(struct fat* fat, struct fat_file* file, uint64_t new_size);

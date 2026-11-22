@@ -3,19 +3,33 @@
 #include <vfs.h>
 #include <fcntl.h>
 #include <omf.h>
+#include <cpz.h>
 #include <errno.h>
 #include <unaligned.h>
 
-export int OpenAndMapFile(const char* path, struct open_mapped_file* out) {
+/*
+ * Opens 'path' read-only and maps all of it at out->ptr, out->len bytes.
+ *
+ * flags:
+ *   OMF_TRANSPARENT_DECOMPRESS   if the file starts with the CPZ signature it is opened as a CPZ image and what is
+ *                                mapped is the DECOMPRESSED data: out->ptr / out->len / every OmfRead*() see the
+ *                                original file's contents and size, as if it had never been compressed. Pages are
+ *                                expanded on demand as they are touched. out->f is still the file on disk.
+ *                                A file that has the signature but is not a sound CPZ image is an error (EINVAL),
+ *                                not a plain file that happens to start with those letters.
+ *   0                            the file is mapped as it is, CPZ or not.
+ */
+export int OpenAndMapFile(const char* path, int flags, struct open_mapped_file* out) {
     if (out == NULL) {
         return EINVAL;
     }
     out->f = NULL;
+    out->cpz = NULL;
     out->error = true;
     out->ptr = NULL;
     out->cursor = 0;
     out->len = 0;
-    if (path == NULL) {
+    if (path == NULL || (flags & ~OMF_TRANSPARENT_DECOMPRESS) != 0) {
         return EINVAL;
     }
     int res = OpenFile(path, O_RDONLY, 0, &out->f);
@@ -26,19 +40,41 @@ export int OpenAndMapFile(const char* path, struct open_mapped_file* out) {
     off_t full_size = out->f->node->stat.st_size;
     size_t len = (size_t) full_size;
     if (full_size <= 0 || (uintmax_t) len != (uintmax_t) full_size) {
-        DerefObject(out->f);
-        out->f = NULL;
+        OmfClose(out);
         return EINVAL;
     }
-    /* TODO: we also want to lock the file so that no-one can modify it under
-     * us if a part of it gets paged out. */
-    out->len = len;
-    out->ptr = AllocFileMemory(out->f, 0, out->len, 0, 0);
+
+    /*
+     * A CPZ image takes its own reference on the file, so there is no need to close and reopen it: the file we
+     * already have open IS the one the image reads its pages from, and nothing can swap it for another in between.
+     */
+    bool is_cpz = false;
+    if (flags & OMF_TRANSPARENT_DECOMPRESS) {
+        res = CheckCpzSignature(out->f, &is_cpz);
+        if (res != 0) {                 /* couldn't even look: don't guess "plain file" and hand back compressed bytes */
+            OmfClose(out);
+            return res;
+        }
+    }
+    if (is_cpz) {
+        out->cpz = OpenCpzImage(out->f);
+        if (out->cpz == NULL) {
+            OmfClose(out);
+            return EINVAL;
+        }
+        len = GetCpzImageSize(out->cpz);
+        /* TODO: lock the file as below; for a CPZ image it matters more, the page table was read once at open. */
+        out->ptr = AllocCompressedFileMemory(out->cpz, 0, len, 0);
+    } else {
+        /* TODO: we also want to lock the file so that no-one can modify it under
+         * us if a part of it gets paged out. */
+        out->ptr = AllocFileMemory(out->f, 0, len, 0, 0);
+    }
     if (out->ptr == NULL) {
-        DerefObject(out->f);
-        out->f = NULL;
+        OmfClose(out);
         return ENOMEM;
     }
+    out->len = len;
     out->error = false;
     return 0;
 }
@@ -51,6 +87,10 @@ export void OmfClose(struct open_mapped_file* omf) {
     if (omf->ptr != NULL) {
         FreeMemory(omf->ptr, omf->len);
         omf->ptr = NULL;
+    }
+    if (omf->cpz != NULL) {
+        DerefObject(omf->cpz);
+        omf->cpz = NULL;
     }
     if (omf->f != NULL) {
         DerefObject(omf->f);

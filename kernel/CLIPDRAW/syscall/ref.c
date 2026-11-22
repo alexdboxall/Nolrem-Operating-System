@@ -14,6 +14,16 @@ pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
+
+    /* Stock brushes/pens are shared and permanent. A user Deref must never be
+       able to free them, so Ref/Deref on them is a no-op. */
+    struct user_obj_header* hdr = uo;
+    if ((hdr->user_type == UOBJ_BRUSH && CdIsStockBrush(uo))
+        || (hdr->user_type == UOBJ_PEN && CdIsStockPen(uo))) {
+        DerefObject(uo);
+        return 0;
+    }
+
     int retv;
     if (type == TYPE_REF) {
         retv = UserRef(uo);

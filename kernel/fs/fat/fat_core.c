@@ -1,5 +1,5 @@
 /*
-* fat_core.c - FAT12/FAT16/FAT32 (read only)
+* fat_core.c - FAT12/FAT16/FAT32
 *
 * Synchronous access to the underlying disk, and mounting.
 *
@@ -23,7 +23,7 @@
 * start (so it will never be signalled). Signalling it ourselves lets WaitIO
 * drop the reference to the file and destroy the mutex.
 */
-static void fat_io_abort(struct aio* aio, int status) {
+static void FatIoAbort(struct aio* aio, int status) {
     aio->callback = NULL;
     aio->sub = NULL;
     SignalDoneIO(aio, status);
@@ -31,15 +31,17 @@ static void fat_io_abort(struct aio* aio, int status) {
 }
 
 /*
-* Synchronous read from the disk.
+* Synchronous transfer to or from the disk. Which way the data goes is decided by
+* the transfer itself (it was made with TRANSFER_READ or TRANSFER_WRITE), 'write'
+* just has to agree with it.
 */
-int fat_disk_transfer(struct file* disk, struct transfer* io) {
+static int FatDiskDo(struct file* disk, struct transfer* io, bool write) {
     struct aio aio;
     CreateIO(&aio, disk, *io, NULL, NULL);
 
-    int status = ReadFile(&aio);
+    int status = write ? WriteFile(&aio) : ReadFile(&aio);
     if (status != 0) {
-        fat_io_abort(&aio, status);
+        FatIoAbort(&aio, status);
         return status;
     }
 
@@ -52,13 +54,27 @@ int fat_disk_transfer(struct file* disk, struct transfer* io) {
 }
 
 /*
+* Synchronous read from the disk.
+*/
+int FatDiskTransfer(struct file* disk, struct transfer* io) {
+    return FatDiskDo(disk, io, false);
+}
+
+/*
+* Synchronous write to the disk.
+*/
+int FatDiskWriteTransfer(struct file* disk, struct transfer* io) {
+    return FatDiskDo(disk, io, true);
+}
+
+/*
 * Synchronous read of exactly 'length' bytes from the disk into a kernel buffer.
 * The offset and length must be multiples of the sector size.
 */
-int fat_disk_read(struct file* disk, void* buffer, size_t length, uint64_t offset) {
+int FatDiskRead(struct file* disk, void* buffer, size_t length, uint64_t offset) {
     struct transfer io = CreateKernelTransfer(buffer, length, offset, TRANSFER_READ);
 
-    int status = fat_disk_transfer(disk, &io);
+    int status = FatDiskTransfer(disk, &io);
     if (status == 0 && io.length_remaining != 0) {
         /* A short read means something is wrong with the disk. */
         status = EIO;
@@ -67,12 +83,48 @@ int fat_disk_read(struct file* disk, void* buffer, size_t length, uint64_t offse
     return status;
 }
 
+/*
+* Synchronous write of exactly 'length' bytes from a kernel buffer to the disk.
+* The offset and length must be multiples of the sector size.
+*/
+int FatDiskWrite(struct file* disk, const void* buffer, size_t length, uint64_t offset) {
+    /* The transfer is only ever read from, but it has no way to say so. */
+    struct transfer io = CreateKernelTransfer((void*) buffer, length, offset, TRANSFER_WRITE);
+
+    int status = FatDiskWriteTransfer(disk, &io);
+    if (status == 0 && io.length_remaining != 0) {
+        /* A short write means something is wrong with the disk. */
+        status = EIO;
+    }
+
+    return status;
+}
+
+/*
+* Fills a stretch of the disk with zeros. The offset and length must be multiples
+* of the sector size.
+*/
+int FatDiskZero(struct file* disk, uint64_t offset, uint64_t length) {
+    static const uint8_t zero_sector[FAT_SECTOR_SIZE] = { 0 };
+
+    assert(offset % FAT_SECTOR_SIZE == 0);
+    assert(length % FAT_SECTOR_SIZE == 0);
+
+    for (uint64_t done = 0; done < length; done += FAT_SECTOR_SIZE) {
+        int status = FatDiskWrite(disk, zero_sector, FAT_SECTOR_SIZE, offset + done);
+        if (status != 0) {
+            return status;
+        }
+    }
+
+    return 0;
+}
 
 /*
 * The largest cluster number whose FAT entry lies entirely inside a FAT that is
 * 'fat_bytes' long.
 */
-static uint64_t fat_table_capacity(int type, uint64_t fat_bytes) {
+static uint64_t FatTableCapacity(int type, uint64_t fat_bytes) {
     switch (type) {
     case FAT_TYPE_16:
         return fat_bytes / 2 - 1;
@@ -100,14 +152,14 @@ static uint64_t fat_table_capacity(int type, uint64_t fat_bytes) {
 * Checks that the disk holds a FAT12, FAT16 or FAT32 volume. Returns ENOTSUP if
 * it doesn't. Only the boot sector is read, nothing of the FAT is loaded here.
 */
-int fat_mount(struct file* disk, struct fat** out) {
+int FatMount(struct file* disk, struct fat** out) {
     uint32_t block_size = disk->node->stat.st_blksize;
     if (block_size == 0 || FAT_SECTOR_SIZE % block_size != 0) {
         return ENOTSUP;
     }
 
     uint8_t boot[FAT_SECTOR_SIZE];
-    if (fat_disk_read(disk, boot, FAT_SECTOR_SIZE, 0) != 0) {
+    if (FatDiskRead(disk, boot, FAT_SECTOR_SIZE, 0) != 0) {
         return ENOTSUP;
     }
 
@@ -150,6 +202,8 @@ int fat_mount(struct file* disk, struct fat** out) {
     uint32_t root_cluster = 0;
     uint32_t root_dir_sectors = 0;
     uint32_t active_fat = 0;
+    uint32_t fsinfo_sector = 0;
+    bool mirrored = true;
 
     if (is_fat32) {
         fat_sectors = Le32(boot + 36);
@@ -175,6 +229,20 @@ int fat_mount(struct file* disk, struct fat** out) {
             if (active_fat >= fat_count) {
                 return ENOTSUP;
             }
+
+            /* So when we write, only that copy is to be updated. */
+            mirrored = false;
+        }
+
+        /*
+        * The FSInfo sector holds a count of free clusters and a hint for where
+        * to find one. We don't keep those up to date, so when we first allocate
+        * something we have to tell the next user of the volume to ignore them
+        * (see FatAllocCluster).
+        */
+        uint16_t fsinfo = Le16(boot + 48);
+        if (fsinfo != 0 && fsinfo != 0xFFFF && fsinfo < reserved_sectors) {
+            fsinfo_sector = fsinfo;
         }
     } else {
         /* FAT12/FAT16 have a fixed size root directory. */
@@ -217,7 +285,7 @@ int fat_mount(struct file* disk, struct fat** out) {
 
     uint64_t type_limit = (type == FAT_TYPE_12) ? 0xFF6 : (type == FAT_TYPE_16) ? 0xFFF6 : 0x0FFFFFF6;
     max_cluster = MIN(max_cluster, type_limit);
-    max_cluster = MIN(max_cluster, fat_table_capacity(type, (uint64_t) fat_sectors * FAT_SECTOR_SIZE));
+    max_cluster = MIN(max_cluster, FatTableCapacity(type, (uint64_t) fat_sectors * FAT_SECTOR_SIZE));
 
     if (max_cluster < 2) {
         return ENOTSUP;
@@ -245,7 +313,13 @@ int fat_mount(struct file* disk, struct fat** out) {
     fat->max_cluster = (uint32_t) max_cluster;
     fat->fat_start_sector = reserved_sectors + active_fat * fat_sectors;
     fat->fat_sectors = fat_sectors;
+    fat->fat_count = fat_count;
+    fat->fat_mirrored = mirrored;
+    fat->fsinfo_sector = fsinfo_sector;
+    fat->fsinfo_done = false;
+    fat->alloc_hint = 2;
     fat->msgbox = NULL;
+    fat->write_lock = NULL;
     fat->table_lock = NULL;
     fat->cache_mru = 0;
 
@@ -262,8 +336,8 @@ int fat_mount(struct file* disk, struct fat** out) {
 }
 
 /*
-* Only valid before fat_start_driver (there is no way to stop the thread).
+* Only valid before FatStartDriver (there is no way to stop the thread).
 */
-void fat_destroy(struct fat* fat) {
+void FatDestroy(struct fat* fat) {
     FreeHeap(fat);
 }

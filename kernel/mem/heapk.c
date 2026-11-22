@@ -7,7 +7,7 @@
 #include <phys.h>
 #include <arch.h>
 #include <vmm.h>
-#include <scheduler.h>          // IsSchedulingInitialised
+#include <scheduler.h>          // KeIsSchedulingInitialised
 
 #define ALIGN       (sizeof(size_t))    // must be power of 2
 
@@ -20,21 +20,21 @@ export void* KeAllocHeap(size_t bytes) {
     if (bytes == 0) {
         return NULL;
     }
-    AcquireSpinlock(&heap_lock);
-    if (IsOutOfMemory() && IsSchedulingInitialised()) {
-        ReleaseSpinlock(&heap_lock);
+    KeAcquireSpinlock(&heap_lock);
+    if (KeIsOutOfMemory() && KeIsSchedulingInitialised()) {
+        KeReleaseSpinlock(&heap_lock);
         return NULL;
     }
     bytes = (bytes + ALIGN - 1) & ~(ALIGN - 1);
     void* retv = AllocHeapEx(&kernel_heap, bytes);
-    ReleaseSpinlock(&heap_lock);
+    KeReleaseSpinlock(&heap_lock);
     return retv;
 }
 
-void* AllocPermanentHeap(size_t bytes) {
+void* KeAllocPermanentHeap(size_t bytes) {
     static size_t sum = 0;
     sum += bytes;
-    LogPrintf("Alloc 0x%X bytes permanently... sum = 0x%X\n", bytes, sum);
+    KeLogPrintf("Alloc 0x%X bytes permanently... sum = 0x%X\n", bytes, sum);
     return KeAllocHeap(bytes);
 }
 
@@ -43,9 +43,9 @@ export size_t KeGetAllocationSize(void* ptr) {
 }
 
 export void KePurgeFreeAreasFromHeap(void) {
-    AcquireSpinlock(&heap_lock);
+    KeAcquireSpinlock(&heap_lock);
     PurgeFreeAreasFromHeapEx(&kernel_heap);
-    ReleaseSpinlock(&heap_lock);
+    KeReleaseSpinlock(&heap_lock);
 }
 
 export void* KeReallocHeap(void* ptr, size_t new_size) {
@@ -57,9 +57,9 @@ export void* KeReallocHeap(void* ptr, size_t new_size) {
         return NULL;
     }
 
-    AcquireSpinlock(&heap_lock);
+    KeAcquireSpinlock(&heap_lock);
     void* retv = ReallocHeapEx(&kernel_heap, ptr, new_size);
-    ReleaseSpinlock(&heap_lock);
+    KeReleaseSpinlock(&heap_lock);
     return retv;
 }
 
@@ -72,12 +72,12 @@ export void KeFreeHeap(void* ptr) {
     size_t s = KeGetAllocationSize(ptr);
     memset(ptr, 0xCC, s);
 
-    AcquireSpinlock(&heap_lock);
+    KeAcquireSpinlock(&heap_lock);
     FreeHeapEx(&kernel_heap, ptr);
-    ReleaseSpinlock(&heap_lock);
+    KeReleaseSpinlock(&heap_lock);
 }
 
-void KernelHeapReturnMemory(void* ptr, size_t size) {
+void KeHeapReturnMemory(void* ptr, size_t size) {
     if ((uintptr_t) ptr == (uintptr_t) bootstrap_heap) {
         return;
     }
@@ -88,30 +88,30 @@ void KernelHeapReturnMemory(void* ptr, size_t size) {
     if ((size & (PAGE_SIZE - 1)) != 0) {
         return;
     }
-    LogPrintf("Returning: ptr=0x%X, size=0x%X\n", ptr, size);
-    FreeMemory(ptr, size);
+    KeLogPrintf("Returning: ptr=0x%X, size=0x%X\n", ptr, size);
+    KeFreeMemory(ptr, size);
 }
 
-void* KernelHeapRequestMemory(size_t* size) {
+void* KeHeapRequestMemory(size_t* size) {
     if (!given_bootstrap_heap) {
         given_bootstrap_heap = true;
         *size = sizeof(bootstrap_heap);
         return bootstrap_heap;
     }
-    void* retv = AllocAnonMemory(*size, VP_WRITE);
+    void* retv = KeAllocAnonMemory(*size, VP_WRITE);
     *size = (*size + PAGE_SIZE - 1) & (~(PAGE_SIZE - 1));
     return retv;
 }
 
-void InitBootstrapHeap(void) {
+void KeInitBootstrapHeap(void) {
     memset(bootstrap_heap, 0xEE, sizeof(bootstrap_heap));
-    InitSpinlock(&heap_lock);
-    InitHeapEx(&kernel_heap, KernelHeapRequestMemory, KernelHeapReturnMemory);
+    KeInitSpinlock(&heap_lock);
+    InitHeapEx(&kernel_heap, KeHeapRequestMemory, KeHeapReturnMemory);
 }
 
-size_t GetHeapAllocatedAmount(void) {
-    AcquireSpinlock(&heap_lock);
+size_t KeGetHeapAllocatedAmount(void) {
+    KeAcquireSpinlock(&heap_lock);
     size_t retv = kernel_heap.outstanding_allocated_memory;
-    ReleaseSpinlock(&heap_lock);
+    KeReleaseSpinlock(&heap_lock);
     return retv;
 }

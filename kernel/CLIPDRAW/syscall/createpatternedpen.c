@@ -6,7 +6,7 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysCreatePatternedPen(size_t colour, size_t thickness, size_t pattern, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }

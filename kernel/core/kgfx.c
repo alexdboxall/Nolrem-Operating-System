@@ -6,21 +6,21 @@
 
 static struct graphics_driver kgfx_driver = {0};
 
-void RegisterPrimaryGraphicsDriver(struct graphics_driver drv) {
+void KeRegisterPrimaryGraphicsDriver(struct graphics_driver drv) {
     kgfx_driver = drv;
 }
 
-struct graphics_driver* GetKernelGraphicsDriver(void) {
+struct graphics_driver* KeGetKernelGraphicsDriver(void) {
     return &kgfx_driver;
 }
 
-void KernelDisplayPanic(const char* s) {
+void KeDisplayPanic(const char* s) {
     if (kgfx_driver.panic != NULL) {
         kgfx_driver.panic(s);
     }
 }
 
-void KernelDisplayLog(char c) {
+void KeDisplayLog(char c) {
     if (kgfx_driver.log != NULL) {
         kgfx_driver.log(c);
     }

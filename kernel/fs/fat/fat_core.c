@@ -19,15 +19,15 @@
 #include <fs/fat/fat_private.h>
 
 /*
-* Tear down an aio that was created with CreateIO but which the driver failed to
-* start (so it will never be signalled). Signalling it ourselves lets WaitIO
+* Tear down an aio that was created with KeCreateIO but which the driver failed to
+* start (so it will never be signalled). Signalling it ourselves lets KeWaitIO
 * drop the reference to the file and destroy the mutex.
 */
 static void FatIoAbort(struct aio* aio, int status) {
     aio->callback = NULL;
     aio->sub = NULL;
-    SignalDoneIO(aio, status);
-    WaitIO(aio, TIMEOUT_INFINITE);
+    KeSignalDoneIO(aio, status);
+    KeWaitIO(aio, TIMEOUT_INFINITE);
 }
 
 /*
@@ -37,15 +37,15 @@ static void FatIoAbort(struct aio* aio, int status) {
 */
 static int FatDiskDo(struct file* disk, struct transfer* io, bool write) {
     struct aio aio;
-    CreateIO(&aio, disk, *io, NULL, NULL);
+    KeCreateIO(&aio, disk, *io, NULL, NULL);
 
-    int status = write ? WriteFile(&aio) : ReadFile(&aio);
+    int status = write ? KeWriteFile(&aio) : KeReadFile(&aio);
     if (status != 0) {
         FatIoAbort(&aio, status);
         return status;
     }
 
-    status = WaitIO(&aio, TIMEOUT_INFINITE);
+    status = KeWaitIO(&aio, TIMEOUT_INFINITE);
     if (status == 0) {
         *io = aio.transfer;
     }
@@ -72,7 +72,7 @@ int FatDiskWriteTransfer(struct file* disk, struct transfer* io) {
 * The offset and length must be multiples of the sector size.
 */
 int FatDiskRead(struct file* disk, void* buffer, size_t length, uint64_t offset) {
-    struct transfer io = CreateKernelTransfer(buffer, length, offset, TRANSFER_READ);
+    struct transfer io = KeCreateKernelTransfer(buffer, length, offset, TRANSFER_READ);
 
     int status = FatDiskTransfer(disk, &io);
     if (status == 0 && io.length_remaining != 0) {
@@ -89,7 +89,7 @@ int FatDiskRead(struct file* disk, void* buffer, size_t length, uint64_t offset)
 */
 int FatDiskWrite(struct file* disk, const void* buffer, size_t length, uint64_t offset) {
     /* The transfer is only ever read from, but it has no way to say so. */
-    struct transfer io = CreateKernelTransfer((void*) buffer, length, offset, TRANSFER_WRITE);
+    struct transfer io = KeCreateKernelTransfer((void*) buffer, length, offset, TRANSFER_WRITE);
 
     int status = FatDiskWriteTransfer(disk, &io);
     if (status == 0 && io.length_remaining != 0) {
@@ -329,7 +329,7 @@ int FatMount(struct file* disk, struct fat** out) {
 
     fat->hint_first_cluster = 0;
 
-    LogPrintf("[fat]: FAT%d volume, %d clusters of %d bytes\n", type, (int) (max_cluster - 1), (int) fat->cluster_bytes);
+    KeLogPrintf("[fat]: FAT%d volume, %d clusters of %d bytes\n", type, (int) (max_cluster - 1), (int) fat->cluster_bytes);
 
     *out = fat;
     return 0;

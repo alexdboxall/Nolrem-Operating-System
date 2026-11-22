@@ -17,7 +17,7 @@
 // page reloader finds everything it needs here.
 //
 //   - `planes`: the actual pixel data. A file-backed VMM region
-//     (AllocFileMemory with BitmapReload as its reload_func). It is NEVER
+//     (KeAllocFileMemory with BitmapReload as its reload_func). It is NEVER
 //     filled in by VGACreateCompatibleBitmap - each page is generated on
 //     demand by the page-fault handler the first time it is touched, and
 //     again after it has been discarded. The VMM stores which page is
@@ -48,8 +48,8 @@
 // struct); then the source mapping; then the bookkeeping itself.
 static void FreeStorage(compat_bitmap_storage_t* storage) {
     if (!storage) return;
-    if (storage->planes) FreeMemory(storage->planes, storage->total_len);
-    if (storage->src)    FreeMemory(storage->src, storage->src_size);
+    if (storage->planes) KeFreeMemory(storage->planes, storage->total_len);
+    if (storage->src)    KeFreeMemory(storage->src, storage->src_size);
     if (storage->reload) {
         if (storage->reload->state) FreeHeap(storage->reload->state);
         FreeHeap(storage->reload);
@@ -428,7 +428,7 @@ static int BitmapReload(size_t frame, struct virt_loader* vr, struct page_origin
     compat_bitmap_storage_t* storage = (compat_bitmap_storage_t*)vr->context_p;
     if (!storage || !po->is_file) return EINVAL;
 
-    LogPrintf("BitmapReload...\n");
+    KeLogPrintf("BitmapReload...\n");
     size_t offset = po->file_offset;
     size_t size = 0;
     if (offset < storage->total_len) {
@@ -438,7 +438,7 @@ static int BitmapReload(size_t frame, struct virt_loader* vr, struct page_origin
 
     uint8_t* out = (uint8_t*)VmmMapFrame(frame);
     if (!out) {
-        LogPrintf("..!\n");
+        KeLogPrintf("..!\n");
         return ENOMEM;
     }
     
@@ -447,7 +447,7 @@ static int BitmapReload(size_t frame, struct virt_loader* vr, struct page_origin
                    offset, size, out);
 
     VmmUnmapFrame(out);
-    LogPrintf("BitmapReload done...\n");
+    KeLogPrintf("BitmapReload done...\n");
     return 0;
 }
 
@@ -462,7 +462,7 @@ static int BitmapReload(size_t frame, struct virt_loader* vr, struct page_origin
 //
 // TODO: if your VFS can stat a struct file for its size, use that instead.
 static size_t ReadBmpFileSize(struct file* file) {
-    uint8_t* hdr = (uint8_t*)AllocFileMemory(file, 0, PAGE_SIZE, 0, NULL);
+    uint8_t* hdr = (uint8_t*)KeAllocFileMemory(file, 0, PAGE_SIZE, 0, NULL);
     if (!hdr) return 0;
 
     size_t size = 0;
@@ -470,7 +470,7 @@ static size_t ReadBmpFileSize(struct file* file) {
         size = (size_t)hdr[2] | ((size_t)hdr[3] << 8) | ((size_t)hdr[4] << 16) | ((size_t)hdr[5] << 24);
         if (size < 14) size = 0;
     }
-    FreeMemory(hdr, PAGE_SIZE);
+    KeFreeMemory(hdr, PAGE_SIZE);
     return size;
 }
 
@@ -510,19 +510,19 @@ struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, struct 
     size_t src_size = ReadBmpFileSize(file);
     if (src_size == 0) return NULL;
 
-    uint8_t* src = (uint8_t*)AllocFileMemory(file, 0, src_size, 0, NULL);
+    uint8_t* src = (uint8_t*)KeAllocFileMemory(file, 0, src_size, 0, NULL);
     if (!src) return NULL;
 
     bmp_info_t info;
     if (BmpParse(src, &info) != 0) {
-        FreeMemory(src, src_size);
+        KeFreeMemory(src, src_size);
         return NULL;
     }
 
     int target_width  = (target_w == -1) ? info.width  : target_w;
     int target_height = (target_h == -1) ? info.height : target_h;
     if (target_width <= 0 || target_height <= 0) {
-        FreeMemory(src, src_size);
+        KeFreeMemory(src, src_size);
         return NULL;
     }
 
@@ -532,14 +532,14 @@ struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, struct 
 
     struct compat_bitmap* bmp = (struct compat_bitmap*)AllocHeap(sizeof(struct compat_bitmap));
     if (!bmp) {
-        FreeMemory(src, src_size);
+        KeFreeMemory(src, src_size);
         return NULL;
     }
 
     compat_bitmap_storage_t* storage = (compat_bitmap_storage_t*)AllocHeap(sizeof(compat_bitmap_storage_t));
     if (!storage) {
         FreeHeap(bmp);
-        FreeMemory(src, src_size);
+        KeFreeMemory(src, src_size);
         return NULL;
     }
     storage->reload = NULL;
@@ -563,7 +563,7 @@ struct compat_bitmap* VGACreateCompatibleBitmap(struct graphics_driver*, struct 
     loader.context_s = sizeof(*storage);
     loader.context_p = storage;
 
-    storage->planes = (uint8_t*)AllocFileMemory(file, 0, total_len, 0, &loader);
+    storage->planes = (uint8_t*)KeAllocFileMemory(file, 0, total_len, 0, &loader);
     if (!storage->planes) {
         FreeStorage(storage);
         FreeHeap(bmp);

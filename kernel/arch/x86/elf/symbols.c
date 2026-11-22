@@ -12,7 +12,7 @@
 /*
  * Whether a symbol gets registered. Used by BOTH the counting pass and the
  * registering pass, so they can never disagree about how many symbols there
- * are (CreateSymbolList() needs the exact count up front).
+ * are (KeCreateSymbolList() needs the exact count up front).
  */
 static bool IsVisibleSymbol(const struct Elf32_Sym* symbol) {
     if (symbol->st_value == 0) {
@@ -34,7 +34,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
      * Read-only, kernel-only (flags == 0), demand-loaded from 'file' by the
      * page fault handler as we touch it. Not relocated, so reloc_base is 0.
      */
-    void* map = AllocFileMemory(file, 0, size, 0, 0);
+    void* map = KeAllocFileMemory(file, 0, size, 0, 0);
     if (map == NULL) {
         return NULL;
     }
@@ -109,7 +109,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
         }
     }
 
-    struct symbol_list* sym_list = CreateSymbolList(total_syms);
+    struct symbol_list* sym_list = KeCreateSymbolList(total_syms);
     if (sym_list == NULL) {
         return NULL;
     }
@@ -118,7 +118,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
      * Pass 2: register them. The index is the slot in the symbol list, i.e.
      * the Nth *visible* symbol, not the position in the ELF symbol table.
      *
-     * NOTE: this assumes AddToSymbolList() copies the name (as AddSymbol() did
+     * NOTE: this assumes KeAddToSymbolList() copies the name (as AddSymbol() did
      * with strdup), because the mapping holding 'string_table' goes away below.
      */
     int next = 0;
@@ -127,7 +127,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
         if (!IsVisibleSymbol(symbol)) {
             continue;
         }
-        AddToSymbolList(sym_list, next++, string_table + symbol->st_name,
+        KeAddToSymbolList(sym_list, next++, string_table + symbol->st_name,
                         use_hash, symbol->st_value + adjust);
     }
     assert(next == total_syms);

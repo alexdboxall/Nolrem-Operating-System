@@ -350,7 +350,7 @@ int FatReadDirectoryEntrySync(struct fat* fat, uint32_t dir_cluster, struct tran
             dir.d_ino = FAT_ROOT_INO;
             dir.d_disk = (size_t) fat->disk->node->stat.st_dev;
             dir.d_type = DT_DIR;
-            return PerformTransfer(&dir, io, sizeof(struct dirent));
+            return KePerformTransfer(&dir, io, sizeof(struct dirent));
         }
 
         --entry_number;
@@ -380,7 +380,7 @@ int FatReadDirectoryEntrySync(struct fat* fat, uint32_t dir_cluster, struct tran
     dir.d_type = info.directory ? DT_DIR : DT_REG;
 
     /* Perform the transfer to the correct location */
-    return PerformTransfer(&dir, io, sizeof(struct dirent));
+    return KePerformTransfer(&dir, io, sizeof(struct dirent));
 }
 
 /*
@@ -683,9 +683,9 @@ int FatCreate(struct fat* fat, uint32_t dir_cluster, const char* name, struct fa
         return status;
     }
 
-    AcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
     status = FatCreateLocked(fat, dir_cluster, name, padded, nt_flags, out);
-    ReleaseMutex(fat->write_lock);
+    KeReleaseMutex(fat->write_lock);
 
     return status;
 }

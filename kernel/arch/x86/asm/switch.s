@@ -6,7 +6,7 @@
 ; CPU will receive. The specific handlers are generated in x86/cpu/vectors.py.
 ;
 
-extern GetCpu
+extern KeGetCpu
 global ArchSwitchThread
 ArchSwitchThread:
     ; The old and new threads are passed in on the stack as arguments, in that order.
@@ -35,17 +35,17 @@ ArchSwitchThread:
     ; ESI is callee-saved, so no need to do anything here. We only need ESI and ESP
     ; at this point, so it's all good.
 
-    call GetCpu                         ; eax = GetCpu()
+    call KeGetCpu                         ; eax = KeGetCpu()
 	
 	; Get the top of the kernel stack, which needs to go in the TSS for
 	; user to kernel switches.
     mov ebx, [esi + 8]                  ; ebx = new_thread->kernel_stack_top
 	
 	; The third entry in current_cpu is a pointer to CPU specific data.
-    mov ecx, [eax + 8]                  ; ecx = GetCpu()->platform_specific
+    mov ecx, [eax + 8]                  ; ecx = KeGetCpu()->platform_specific
 
 	; The first entry in the CPU specific data is the TSS pointer
-    mov edx, [ecx + 0]                  ; edx = GetCpu()->platform_specific->tss
+    mov edx, [ecx + 0]                  ; edx = KeGetCpu()->platform_specific->tss
 
 	; Load the TSS's ESP0 with the new thread's stack
     mov [edx + 4], ebx

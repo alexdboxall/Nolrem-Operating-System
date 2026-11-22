@@ -32,7 +32,7 @@ export struct msgbox* WmGetSystemMessageBox(void) {
 }
 
 export void WmInitSystemMessageBox(void) {
-    sys_mbox = CreateMessageBox(sizeof(struct msg), SYSTEM_MSGBOX_SIZE);
+    sys_mbox = KeCreateMessageBox(sizeof(struct msg), SYSTEM_MSGBOX_SIZE);
 }
 
 bool wm_mainloop_started = false;
@@ -107,7 +107,7 @@ static struct rect WmApplyResizeDelta(struct rect base, int dx, int dy, int hit_
 }
 
 void WmStartDraggingWindow(struct window* win) {
-    RefObject(win);
+    KeRefObject(win);
     drag_mouse_start_x = mouse_x;
     drag_mouse_start_y = mouse_y;
     drag_win_og_bounds = win->local_client_bound;
@@ -115,7 +115,7 @@ void WmStartDraggingWindow(struct window* win) {
 }
 
 void WmStartResizingWindow(struct window* win, int hit_test_results) {
-    RefObject(win);
+    KeRefObject(win);
     drag_mouse_start_x = mouse_x;
     drag_mouse_start_y = mouse_y;
     drag_win_og_bounds = win->local_client_bound;
@@ -132,7 +132,7 @@ static void WmStopResizingWindow(void) {
                                 resize_hit_test_results);
         
         WmChangePosition(resizing_win, r, true); 
-        DerefObject(resizing_win);
+        KeDerefObject(resizing_win);
         resizing_win = NULL;
     }
 }
@@ -143,7 +143,7 @@ static void WmStopDraggingWindow(void) {
         r.x += mouse_x - drag_mouse_start_x;
         r.y += mouse_y - drag_mouse_start_y;
         WmChangePosition(dragging_win, r, true); 
-        DerefObject(dragging_win);
+        KeDerefObject(dragging_win);
         dragging_win = NULL;
     }
 }
@@ -241,7 +241,7 @@ static bool HandleMouse(int mx, int my, int click_bits) {
                     .y = mouse_y,
                 }
             });
-            DerefObject(win);
+            KeDerefObject(win);
         } else {
             WmSetForegroundWindow(NULL, true);
         }
@@ -272,10 +272,10 @@ struct window* win3;
 static void ProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
-        DiscardPage();
-        DiscardPage();
+        KeDiscardPage();
+        KeDiscardPage();
         PurgeScaledGlyphCacheIfNeeded();
-        PurgeOldVnodes();
+        KePurgeOldVnodes();
         KePurgeFreeAreasFromHeap();
         break;
 
@@ -296,35 +296,35 @@ static void RepaintIfNeeded(struct window* win) {
 
 /*
 static void TestDiskRead(void*) {
-    BeginNewThread();
+    KeBeginNewThread();
     struct file* f;
-    OpenFile("raw-fd0:", O_RDONLY, 0, &f);
-    uint8_t* fmm = AllocFileMemory(f, 0, 1440 * 1024, 0, 0);
+    KeOpenFile("raw-fd0:", O_RDONLY, 0, &f);
+    uint8_t* fmm = KeAllocFileMemory(f, 0, 1440 * 1024, 0, 0);
     for (int i = 0; i < 1440 * 2; ++i) {
         uint8_t* fm = fmm + i * 512;
-        LogPrintf("Sector %d: %X %X %X ... %X %X\n", i, fm[0], fm[1], fm[2], fm[510], fm[511]);
+        KeLogPrintf("Sector %d: %X %X %X ... %X %X\n", i, fm[0], fm[1], fm[2], fm[510], fm[511]);
     }
-    FreeMemory(fmm, 1440 * 1024);
-    LogPrintf("Freed memory.\n");
-    DerefObject(f);
+    KeFreeMemory(fmm, 1440 * 1024);
+    KeLogPrintf("Freed memory.\n");
+    KeDerefObject(f);
 
-    int res = OpenFile("drv0:/test3.c", O_RDONLY, 0, &f);
-    LogPrintf("OpenFile: res = %d\n", res);
-    fmm = AllocFileMemory(f, 0, 4096, 0, 0);
+    int res = KeOpenFile("drv0:/test3.c", O_RDONLY, 0, &f);
+    KeLogPrintf("KeOpenFile: res = %d\n", res);
+    fmm = KeAllocFileMemory(f, 0, 4096, 0, 0);
     for (int i = 0; i < 4096; ++i) {
-        LogPrintf("%c (0x%X)\n", fmm[i], fmm[i]);
+        KeLogPrintf("%c (0x%X)\n", fmm[i], fmm[i]);
     }
-    FreeMemory(fmm, 4096);
-    DerefObject(f);
+    KeFreeMemory(fmm, 4096);
+    KeDerefObject(f);
 
     while (true) {
-        SleepMilli(100000);
-        Schedule();
+        KeSleepMilli(100000);
+        KeSchedule();
     }
 }*/
 
 _Noreturn void WmMainloop(void) {
-    SetThreadPriority(GetCurrentThread(), PRIORITY_MAX);
+    KeSetThreadPriority(KeGetCurrentThread(), PRIORITY_MAX);
 
     struct msg msg;
     wm_mainloop_started = true;
@@ -356,7 +356,7 @@ _Noreturn void WmMainloop(void) {
         .type = WM_PAINT
     });
 
-    //CreateThread(GetKernelVas(), TestDiskRead, NULL);
+    //KeCreateThread(KeGetKernelVas(), TestDiskRead, NULL);
 
     size_t prev_kb_free = 0;
     while (true) {
@@ -376,7 +376,7 @@ _Noreturn void WmMainloop(void) {
             RepaintIfNeeded(win3);
         }
         {
-            size_t kb_free = GetFreeMemory() / 1024;
+            size_t kb_free = KeGetFreeMemory() / 1024;
             char str[16];
             strcpy(str, "---- KB free");
             str[3] = ((kb_free / 1) % 10) + '0';

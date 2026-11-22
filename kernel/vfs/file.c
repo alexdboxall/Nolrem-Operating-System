@@ -13,14 +13,14 @@
  * keeps track of seek position, ability to read/write and O_CLOEXEC. Currently,
  * the only flags stored here are O_NONBLOCK and O_APPEND.
  */
-export struct file* CreateFile(
+export struct file* KeCreateFile(
     struct vnode* node, int mode, int flags, bool can_read, bool can_write
 ) {    
 	struct file* file = AllocHeap(sizeof(struct file));
     if (file == NULL) {
         return NULL;
     }
-    InitObject(file, OBJTYPE_FILE);
+    KeInitObject(file, OBJTYPE_FILE);
     
 	file->node = node;
 	file->can_read = can_read;
@@ -29,7 +29,7 @@ export struct file* CreateFile(
 	file->flags = flags;
 	file->seek_position = 0;
 
-    RefObject(node);
+    KeRefObject(node);
 
 	return file;
 }
@@ -39,13 +39,13 @@ static void CleanupFile(void* _file) {
     
     if (IFTODT(file->node->stat.st_mode) == DT_FIFO) {
         // TODO:
-        //BreakPipe(file->node);
+        //KeBreakPipe(file->node);
     }
 
-    DerefObject(file->node);
+    KeDerefObject(file->node);
     FreeHeap(file);
 }
 
-void InitFile(void) {
-    RegisterObjectType(OBJTYPE_FILE, CleanupFile);
+void KeInitFile(void) {
+    KeRegisterObjectType(OBJTYPE_FILE, CleanupFile);
 }

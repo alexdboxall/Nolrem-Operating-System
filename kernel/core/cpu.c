@@ -12,11 +12,11 @@ static struct cpu_data cpus[ARCH_MAX_CPUS];
 _Atomic int num_cpus_attempt_started = 1;
 _Atomic int num_cpus_reported_started = 1;
 
-struct cpu_data* GetCpu(void) {
+export struct cpu_data* KeGetCpu(void) {
     return &cpus[ArchGetCpuNum()];
 }
 
-void InitCpuTable(void) {
+void KeInitCpuTable(void) {
     for (int i = 0; i < ARCH_MAX_CPUS; ++i) {
         cpus[i].cpu_num = i;
     }

@@ -6,7 +6,7 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
@@ -22,13 +22,13 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
     struct uregion* ua = (struct uregion*) a;
     struct uregion* ub = (struct uregion*) b;
 
-    if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(ub, UOBJ_REGION)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(ub, UOBJ_REGION)) {
         KeSetLastUserError(EINVAL);
-        DerefObject(ua);
+        KeDerefObject(ua);
         return 0;
     }
 
@@ -36,8 +36,8 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
         mode, UserRegionToRegion(ua), UserRegionToRegion(ub)
     );
     
-    DerefObject(ua);
-    DerefObject(ub);
+    KeDerefObject(ua);
+    KeDerefObject(ub);
     return (size_t) RegionToUserRegion(c);
 }
 

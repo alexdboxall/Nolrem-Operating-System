@@ -18,8 +18,8 @@
  * Returns 0 on success, or an errno.
  */
 pageable int CdReadShapeArgs(size_t user_ptr, struct user_shape_args* out) {
-    struct transfer tr = CreateTransferReadingFromUser((const void*) user_ptr, sizeof(struct user_shape_args), 0);
-    int res = PerformTransfer(out, &tr, sizeof(struct user_shape_args));
+    struct transfer tr = KeCreateTransferReadingFromUser((const void*) user_ptr, sizeof(struct user_shape_args), 0);
+    int res = KePerformTransfer(out, &tr, sizeof(struct user_shape_args));
     if (res != 0) {
         return res;
     }
@@ -43,12 +43,12 @@ pageable int CdReadShapeArgs(size_t user_ptr, struct user_shape_args* out) {
 pageable int CdAcquirePaintObjects(void* dc_ptr, struct brush* brush_ptr, int flags,
     struct dc** dc_out, struct brush** brush_out) {
 
-    if (!ValidateUserObjectAndAtomicallyRef(dc_ptr, UOBJ_DC)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(dc_ptr, UOBJ_DC)) {
         return EINVAL;
     }
     if (!(flags & PAINT_USE_DC_BRUSH)
-        && !ValidateUserObjectAndAtomicallyRef(brush_ptr, UOBJ_BRUSH)) {
-        DerefObject(dc_ptr);
+        && !KeValidateUserObjectAndAtomicallyRef(brush_ptr, UOBJ_BRUSH)) {
+        KeDerefObject(dc_ptr);
         return EINVAL;
     }
 
@@ -59,7 +59,7 @@ pageable int CdAcquirePaintObjects(void* dc_ptr, struct brush* brush_ptr, int fl
 
 pageable void CdReleasePaintObjects(struct dc* dc, struct brush* brush) {
     if (brush != NULL) {
-        DerefObject(brush);
+        KeDerefObject(brush);
     }
-    DerefObject(dc);
+    KeDerefObject(dc);
 }

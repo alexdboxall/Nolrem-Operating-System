@@ -6,7 +6,7 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysCreatePatternedBrush(size_t primary, size_t secondary, size_t pattern, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }

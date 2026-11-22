@@ -29,22 +29,22 @@ static void AbandonSemLocked(struct sem* sem) {
             thr = head;
         }
 
-        UnblockThread(thr, EABANDONED);
+        KeUnblockThread(thr, EABANDONED);
         if (sem->waiting_list_start == head) {
-            CancelSems(thr);
+            KeCancelSems(thr);
         }
     }
 }
 
-void AbandonSem(struct sem* sem) {
-    AcquireScheduler();
+void KeAbandonSem(struct sem* sem) {
+    KeAcquireScheduler();
     AbandonSemLocked(sem);
-    ReleaseScheduler();
+    KeReleaseScheduler();
 }
 
 static void CleanupSem(void* _sem) {
     struct sem* sem = _sem;
-    AbandonSem(sem);
+    KeAbandonSem(sem);
     FreeHeap(sem);
 }
 
@@ -55,34 +55,34 @@ static void CleanupWaitClot(void* _clot) {
     FreeHeap(clot);
 }
 
-void DestroyStaticSem(struct sem* sem) {
-    AbandonSem(sem);
+void KeDestroyStaticSem(struct sem* sem) {
+    KeAbandonSem(sem);
 }
 
-void InitSem(void) {
-    RegisterObjectType(OBJTYPE_SEM, CleanupSem);
-    RegisterObjectType(OBJTYPE_WAITCLOT, CleanupWaitClot);
+void KeInitSem(void) {
+    KeRegisterObjectType(OBJTYPE_SEM, CleanupSem);
+    KeRegisterObjectType(OBJTYPE_WAITCLOT, CleanupWaitClot);
 }
 
-export void InitStaticSem(struct sem* sem, int max, int initial) {
-    InitObject(sem, OBJTYPE_SEM);
+export void KeInitStaticSem(struct sem* sem, int max, int initial) {
+    KeInitObject(sem, OBJTYPE_SEM);
     sem->count = initial;
     sem->max = max;
     sem->waiting_list_start = NULL;
     sem->waiting_list_end = NULL;
 }
 
-export struct sem* CreateSem(int max, int initial) {
+export struct sem* KeCreateSem(int max, int initial) {
     struct sem* sem = AllocHeap(sizeof(struct sem));
     if (sem == NULL) {
         return NULL;
     }
-    InitStaticSem(sem, max, initial);
+    KeInitStaticSem(sem, max, initial);
     return sem;
 }
 
-export struct mutex* CreateMutex(void) {
-    return (struct mutex*) CreateSem(1, 0);
+export struct mutex* KeCreateMutex(void) {
+    return (struct mutex*) KeCreateSem(1, 0);
 }
 
 static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread* thr) {
@@ -90,7 +90,7 @@ static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread*
     if (clot == NULL) {
         return NULL;
     }
-    InitObject(clot, OBJTYPE_WAITCLOT);
+    KeInitObject(clot, OBJTYPE_WAITCLOT);
     clot->count = count;
     clot->thr = thr;
     clot->sems = AllocHeap(sizeof(struct sem*) * count);
@@ -98,7 +98,7 @@ static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread*
         FreeHeap(clot);
         return NULL;
     }
-    LogPrintf("A..?\n");
+    KeLogPrintf("A..?\n");
     clot->nexts = AllocHeap(sizeof(void*) * count);
     if (clot->nexts == NULL) {
         FreeHeap(clot->sems);
@@ -221,11 +221,11 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
     }
 }
 
-void CancelSems(struct thread* thr) {
+void KeCancelSems(struct thread* thr) {
     if (KeGetObjectType(thr->waiting_sem_or_clot) == OBJTYPE_WAITCLOT) {
         struct wait_clot* clot = thr->waiting_sem_or_clot;
         CleanupAfterSem(clot->sems, clot->count, thr);
-        DerefObject(clot);
+        KeDerefObject(clot);
     } else {
         struct sem* sem = thr->waiting_sem_or_clot;
         CleanupAfterSem(&sem, 1, thr);
@@ -235,16 +235,16 @@ void CancelSems(struct thread* thr) {
     thr->next_waiting_sem = NULL;
 }
 
-export int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int* selected_out) {
-    if (!IsSchedulingInitialised()) {
+export int KeAcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int* selected_out) {
+    if (!KeIsSchedulingInitialised()) {
         return EINVAL;
     }
     
-    AcquireScheduler();
+    KeAcquireScheduler();
     for (int i = 0; i < count; ++i) {
         if (sems[i]->count < sems[i]->max) {
             sems[i]->count++;
-            ReleaseScheduler();
+            KeReleaseScheduler();
             if (selected_out != NULL) {
                 *selected_out = i;
             }
@@ -253,28 +253,28 @@ export int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int
     }
 
     if (timeout == TIMEOUT_INSTANT) {
-        ReleaseScheduler();
+        KeReleaseScheduler();
         return EAGAIN;
     }
 
     bool needs_timer_wait = timeout != TIMEOUT_INSTANT && timeout != TIMEOUT_INFINITE;
     if (needs_timer_wait) {
-        bool added = AddThreadToSleepQueue(true, timeout, false);
+        bool added = KeAddThreadToSleepQueue(true, timeout, false);
         if (!added) {
             /* i.e. already in the past */
-            ReleaseScheduler();
+            KeReleaseScheduler();
             return EAGAIN;
         }
     }
 
-    struct thread* curr_thread = GetCurrentThread();
+    struct thread* curr_thread = KeGetCurrentThread();
     int res = AddThreadToSemQueues(curr_thread, sems, count);
     if (res != 0) {
-        ReleaseScheduler();
+        KeReleaseScheduler();
         return res;
     }
-    BlockThread();
-    ReleaseScheduler();
+    KeBlockThread();
+    KeReleaseScheduler();
     int retv = curr_thread->block_return_val;
     if (retv > 0) {
         return retv;
@@ -285,21 +285,21 @@ export int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int
     return 0;
 }
 
-export int AcquireSem(struct sem* sem, int64_t timeout) {
-    if (!IsSchedulingInitialised()) {
+export int KeAcquireSem(struct sem* sem, int64_t timeout) {
+    if (!KeIsSchedulingInitialised()) {
         sem->count++;
         return 0;
     }
-    return AcquireSemFromMany(&sem, 1, timeout, NULL);
+    return KeAcquireSemFromMany(&sem, 1, timeout, NULL);
 }
 
-export int ReleaseSem(struct sem* sem) {
-    if (!IsSchedulingInitialised()) {
+export int KeReleaseSem(struct sem* sem) {
+    if (!KeIsSchedulingInitialised()) {
         sem->count--;
         return 0;
     }
 
-    AcquireScheduler();
+    KeAcquireScheduler();
 
     if (sem->count == sem->max) {
         if (sem->waiting_list_start == NULL) {
@@ -307,32 +307,32 @@ export int ReleaseSem(struct sem* sem) {
         } else {
             struct obj_header* hdr = sem->waiting_list_start;
             if (KeGetObjectType(hdr) == OBJTYPE_THREAD) {
-                UnblockThread((struct thread*) sem->waiting_list_start, 0);
+                KeUnblockThread((struct thread*) sem->waiting_list_start, 0);
             } else {
                 struct wait_clot* clot = sem->waiting_list_start;
-                UnblockThread(clot->thr, -LookupClotIndex(clot, sem));
+                KeUnblockThread(clot->thr, -LookupClotIndex(clot, sem));
             }
         }
 
     } else {
         sem->count--;
     }
-    ReleaseScheduler();
+    KeReleaseScheduler();
     return 0;
 }
 
-export void InitStaticMutex(struct mutex* mtx) {
-    InitStaticSem(&mtx->sem, 1, 0);
+export void KeInitStaticMutex(struct mutex* mtx) {
+    KeInitStaticSem(&mtx->sem, 1, 0);
 }
 
-export void DestroyStaticMutex(struct mutex* mtx) {
-    DestroyStaticSem(&mtx->sem);
+export void KeDestroyStaticMutex(struct mutex* mtx) {
+    KeDestroyStaticSem(&mtx->sem);
 }
 
-export int AcquireMutex(struct mutex* mtx, int64_t timeout) {
-    return AcquireSem((struct sem*) mtx, timeout);
+export int KeAcquireMutex(struct mutex* mtx, int64_t timeout) {
+    return KeAcquireSem((struct sem*) mtx, timeout);
 }
 
-export int ReleaseMutex(struct mutex* mtx) {
-    return ReleaseSem((struct sem*) mtx);
+export int KeReleaseMutex(struct mutex* mtx) {
+    return KeReleaseSem((struct sem*) mtx);
 }

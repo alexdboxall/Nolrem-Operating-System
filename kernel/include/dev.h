@@ -1,8 +1,8 @@
 #pragma once
 
-void InitNullDevice(void);
+void KeInitNullDevice(void);
 
 struct vnode;
 
-struct vnode* CreatePipe(void);
-void BreakPipe(struct vnode* node);
+struct vnode* KeCreatePipe(void);
+void KeBreakPipe(struct vnode* node);

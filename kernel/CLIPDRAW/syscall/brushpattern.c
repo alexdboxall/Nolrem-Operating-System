@@ -19,7 +19,7 @@ pageable size_t SysBrushPattern(size_t a, size_t op, size_t pattern, size_t) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
         KeSetLastUserError(EINVAL);
         return op == OP_GET ? (size_t) BRUSH_INVALID : EINVAL;
     }
@@ -32,7 +32,7 @@ pageable size_t SysBrushPattern(size_t a, size_t op, size_t pattern, size_t) {
     } else {
         retv = (size_t) CdSetBrushPattern(br, (int) pattern);
     }
-    DerefObject(br);
+    KeDerefObject(br);
     return retv;
 }
 

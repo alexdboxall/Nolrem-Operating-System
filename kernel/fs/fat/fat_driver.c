@@ -35,7 +35,7 @@ struct fat_request {
 };
 
 static void FatDriverThread(void* _fat) {
-    BeginNewThread();
+    KeBeginNewThread();
 
     struct fat* fat = _fat;
 
@@ -72,30 +72,30 @@ static void FatDriverThread(void* _fat) {
                 break;
             }
         }
-        SignalDoneIO(req.aio, status);
+        KeSignalDoneIO(req.aio, status);
     }
 }
 
 int FatStartDriver(struct fat* fat) {
-    fat->table_lock = CreateMutex();
+    fat->table_lock = KeCreateMutex();
     if (fat->table_lock == NULL) {
         return ENOMEM;
     }
 
-    fat->write_lock = CreateMutex();
+    fat->write_lock = KeCreateMutex();
     if (fat->write_lock == NULL) {
-        DerefObject(fat->table_lock);
+        KeDerefObject(fat->table_lock);
         return ENOMEM;
     }
 
-    fat->msgbox = CreateMessageBox(sizeof(struct fat_request), FAT_QUEUE_DEPTH);
+    fat->msgbox = KeCreateMessageBox(sizeof(struct fat_request), FAT_QUEUE_DEPTH);
     if (fat->msgbox == NULL) {
-        DerefObject(fat->write_lock);
-        DerefObject(fat->table_lock);
+        KeDerefObject(fat->write_lock);
+        KeDerefObject(fat->table_lock);
         return ENOMEM;
     }
 
-    CreateThreadEx(GetKernelVas(), FatDriverThread, fat, 4096);
+    KeCreateThreadEx(KeGetKernelVas(), FatDriverThread, fat, 4096);
     return 0;
 }
 

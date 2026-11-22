@@ -6,26 +6,26 @@
 #include <vnode.h>
 #include <transfer.h>
 
-void InitVfs(void);
+void KeInitVfs(void);
 //void InitRootsFilesystem(void);
 
 struct aio;
 
-int Mount(struct vnode* node, const char* name);
-int Unmount(const char* name);
+int KeMount(struct vnode* node, const char* name);
+int KeUnmount(const char* name);
 
-int OpenFile(const char* path, int flags, mode_t mode, struct file** out);
-int ReadFile(struct aio* aio);
-int WriteFile(struct aio* aio);
-int RemoveFileOrDirectory(const char* path, bool rmdir);
+int KeOpenFile(const char* path, int flags, mode_t mode, struct file** out);
+int KeReadFile(struct aio* aio);
+int KeWriteFile(struct aio* aio);
+int KeRemoveFileOrDirectory(const char* path, bool rmdir);
 
-int SetWorkingDirectory(struct vnode* node);
+int KeSetWorkingDirectory(struct vnode* node);
 
-int NextDevId(void);
+int KeNextDevId(void);
 
-struct vnode* TryFindAndReferenceExistingVnode(ino_t id, dev_t dev);
-int RegisterNewVnode(struct vnode* node);
-void PurgeOldVnodes(void);
+struct vnode* KeTryFindAndReferenceExistingVnode(ino_t id, dev_t dev);
+int KeRegisterNewVnode(struct vnode* node);
+void KePurgeOldVnodes(void);
 
 // TODO: how do we remove vnodes from the table? race between removing from table
 // after ref count = 0 and someone looking up a vnode in the table

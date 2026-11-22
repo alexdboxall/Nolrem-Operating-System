@@ -23,7 +23,7 @@ export struct pen* CdCreateCustomPen(colour_t colour, int width, int height, uin
     if (pn == NULL) {
         return NULL;
     }
-    InitUserObject(pn, UOBJ_PEN);
+    KeInitUserObject(pn, UOBJ_PEN);
     pn->col = colour;
     pn->is_custom = true;
     pn->origin_x = 0;
@@ -40,10 +40,10 @@ export struct pen* CdCopyPen(struct pen* pen) {
     if (pn == NULL) {
         return NULL;
     }
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     memcpy(pn, pen, sizeof(struct pen));
-    UnlockUserObject(pen);
-    InitUserObject(pn, UOBJ_PEN);
+    KeUnlockUserObject(pen);
+    KeInitUserObject(pn, UOBJ_PEN);
     return pn;
 }
 
@@ -66,27 +66,27 @@ export struct pen* CdCreateSolidPen(colour_t colour, int thickness) {
 }
 
 export colour_t CdGetPenColour(struct pen* pen) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     colour_t retv = pen->col;
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return retv;
 }
 
 export int CdSetPenColour(struct pen* pen, colour_t col) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     pen->col = col;
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return 0;
 }
 
 export int CdGetPenPattern(struct pen* pen) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     if (pen->is_custom) {
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return PEN_INVALID;
     }
     int retv = pen->pattern_type;
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return retv;
 }
 
@@ -95,7 +95,7 @@ export int CdSetPenPattern(struct pen* pen, int pattern) {
     if (pattern < 0 || pattern > _HIGHEST_USED_PEN_TYPE) {
         return EINVAL;
     }
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     pen->pattern_type = pattern;
     pen->is_custom = false;
     pen->pat_height = (pattern == PEN_PATTERN_SQUIGGLY || pattern == PEN_PATTERN_DOUBLE) ? 2 : 1;
@@ -105,81 +105,81 @@ export int CdSetPenPattern(struct pen* pen, int pattern) {
         pen->pat_width = 8;
         pen->pattern[0] = 0b11111111;
         pen->pattern[1] = 0b11111111;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     case PEN_PATTERN_DASH:
         pen->pat_width = 8;
         pen->pattern[0] = 0b11101110;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     case PEN_PATTERN_DOT:
         pen->pat_width = 8;
         pen->pattern[0] = 0b10101010;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     case PEN_PATTERN_DASH_DOT:
         pen->pat_width = 6;
         pen->pattern[0] = 0b111010;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     case PEN_PATTERN_DASH_DOT_DOT:
         pen->pat_width = 8;
         pen->pattern[0] = 0b11101010;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     case PEN_PATTERN_SQUIGGLY:
         pen->pat_width = 8;
         pen->pattern[0] = 0b10101010;
         pen->pattern[1] = 0b01010101;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     case PEN_PATTERN_NONE:
         pen->pat_width = 8;
         pen->pattern[0] = 0;
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return 0;
 
     default:
-        UnlockUserObject(pen);
+        KeUnlockUserObject(pen);
         return EINVAL;
     }
 }
 
 export int CdGetPenThickness(struct pen* pen) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     int retv = pen->thickness;
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return retv;
 }
 
 export int CdSetPenThickness(struct pen* pen, int thickness) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     pen->thickness = thickness;
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return 0;
 }
 
 export int CdSetPenOrigin(struct pen* pen, int x, int y) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     pen->origin_x = x & 7;
     pen->origin_y = y & 7;
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return 0;
 }
 
 export struct point CdGetPenOrigin(struct pen* pen) {
-    LockUserObject(pen);
+    KeLockUserObject(pen);
     struct point retv = (struct point) {
         .x = pen->origin_x,
         .y = pen->origin_y
     };
-    UnlockUserObject(pen);
+    KeUnlockUserObject(pen);
     return retv;
 }
 
@@ -206,7 +206,7 @@ export bool CdIsStockPen(struct pen* pen) {
 void CdInitPenSubsystem(void) {
     uint8_t double_pattern[3] = {0xFF, 0x00, 0xFF};
 
-    RegisterUserObjectType(UOBJ_PEN, CleanupPen);
+    KeRegisterUserObjectType(UOBJ_PEN, CleanupPen);
     stock_pens[STOCK_PEN_BLACK_1] = CdCreateSolidPen(BlackColour(), 1);
     stock_pens[STOCK_PEN_BLACK_2] = CdCreateSolidPen(BlackColour(), 2);
     stock_pens[STOCK_PEN_BLACK_3] = CdCreateSolidPen(BlackColour(), 3);

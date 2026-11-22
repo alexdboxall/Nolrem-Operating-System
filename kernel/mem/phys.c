@@ -18,19 +18,19 @@ static _Atomic size_t sys_total_pp;
 static _Atomic size_t sys_free_pp;
 static size_t sys_pp_table_max_index;
 
-struct phys_page* GetPhysPage(size_t addr) {
+struct phys_page* KeGetPhysPage(size_t addr) {
     return sys_pp_table + (addr / PAGE_SIZE);
 }
 
-size_t GetPhysAddr(struct phys_page* pp) {
+size_t KeGetPhysAddr(struct phys_page* pp) {
     return ((size_t) (pp - sys_pp_table)) * PAGE_SIZE;
 }
 
-struct phys_page* GetFirstPhysPage(void) {
+struct phys_page* KeGetFirstPhysPage(void) {
     return sys_pp_table;
 }
 
-struct phys_page* GetNextPhysPage(struct phys_page* pp) {
+struct phys_page* KeGetNextPhysPage(struct phys_page* pp) {
     struct phys_page* last_valid = sys_pp_table + sys_pp_table_max_index;
     if (pp == last_valid) {
         return NULL;
@@ -39,15 +39,15 @@ struct phys_page* GetNextPhysPage(struct phys_page* pp) {
     }
 }
 
-export size_t GetTotalMemory(void) {
+export size_t KeGetTotalMemory(void) {
     return sys_total_pp * PAGE_SIZE;
 }
 
-export size_t GetFreeMemory(void) {
+export size_t KeGetFreeMemory(void) {
     return sys_free_pp * PAGE_SIZE;
 }
 
-void FreeDiscardedPhys(struct phys_page* pp) {
+void KeFreeDiscardedPhys(struct phys_page* pp) {
     /*
      * Reset ALL the state, not just 'allocated'. A frame that had been dirtied
      * once came back from the allocator still marked dirty, and since
@@ -62,48 +62,48 @@ void FreeDiscardedPhys(struct phys_page* pp) {
     ++sys_free_pp;
 }
 
-export bool IsMemoryRunningLow(void) {
+export bool KeIsMemoryRunningLow(void) {
     return sys_free_pp <= LOW_MEM_THRESHOLD * 2;
 }
 
-export bool IsMemoryLow(void) {
+export bool KeIsMemoryLow(void) {
     return sys_free_pp <= LOW_MEM_THRESHOLD;
 }
 
-export bool IsOutOfMemory(void) {
+export bool KeIsOutOfMemory(void) {
     return sys_free_pp <= CRITICAL_THRESHOLD;
 }
 
-export size_t AllocPhys(bool pin) {
-    struct phys_page* curr = GetFirstPhysPage();
+export size_t KeAllocPhys(bool pin) {
+    struct phys_page* curr = KeGetFirstPhysPage();
     while (curr != NULL) {
-        bool acquired = TryAcquireSpinlock(&curr->lock);
+        bool acquired = KeTryAcquireSpinlock(&curr->lock);
         if (!acquired) {
-            curr = GetNextPhysPage(curr);
+            curr = KeGetNextPhysPage(curr);
             continue;
         }
         if (curr->exists && !curr->allocated) {
             curr->allocated = 1;
             curr->wired = pin;
             if (sys_free_pp <= LOW_MEM_THRESHOLD) {
-                LogPrintf("Sending low memory...\n");
-                PostMessageIrq((struct msg) {
+                KeLogPrintf("Sending low memory...\n");
+                KePostMessageIrq((struct msg) {
                     .type = SYSMSG_LOWMEMORY
                 });
             }
             --sys_free_pp;
-            ReleaseSpinlock(&curr->lock);
-            return GetPhysAddr(curr);
+            KeReleaseSpinlock(&curr->lock);
+            return KeGetPhysAddr(curr);
         }
-        ReleaseSpinlock(&curr->lock);
-        curr = GetNextPhysPage(curr);
+        KeReleaseSpinlock(&curr->lock);
+        curr = KeGetNextPhysPage(curr);
     }
-    LogPrintf("Could not alloc phys!\n");
+    KeLogPrintf("Could not alloc phys!\n");
     return 0;
 }
 
-void InitPhys(struct boot_memory_entry* table, size_t count) {
-    LogPrintf("\nInit physical memory... ");
+void KeInitPhys(struct boot_memory_entry* table, size_t count) {
+    KeLogPrintf("\nInit physical memory... ");
     size_t total_phys_pages = 0;
     size_t max_phys_page_idx = 0;
 
@@ -131,7 +131,7 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
 
     for (size_t i = 0; i < sys_pp_table_max_index; ++i) {
         memset(&sys_pp_table[i], 0, sizeof(struct phys_page));
-        InitSpinlock(&sys_pp_table[i].lock);
+        KeInitSpinlock(&sys_pp_table[i].lock);
     }
 
     for (size_t i = 0; i < count; ++i) {
@@ -156,7 +156,7 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
                 }
                 if (j < sys_pp_table_max_index) {
                     ++sys_free_pp;
-                    LogPrintf("Phys page at 0x%X usable!\n", j * PAGE_SIZE);
+                    KeLogPrintf("Phys page at 0x%X usable!\n", j * PAGE_SIZE);
                     sys_pp_table[j].exists = true;
                 }
             }
@@ -168,20 +168,20 @@ void InitPhys(struct boot_memory_entry* table, size_t count) {
      * reclaimed as well.
      */
     sys_free_pp += 2;
-    LogPrintf("Phys page at 0x%X usable!\n", 0xA000);
-    LogPrintf("Phys page at 0x%X usable!\n", 0xC000);
+    KeLogPrintf("Phys page at 0x%X usable!\n", 0xA000);
+    KeLogPrintf("Phys page at 0x%X usable!\n", 0xC000);
     sys_pp_table[0xA000 / PAGE_SIZE].exists = true;
     sys_pp_table[0xC000 / PAGE_SIZE].exists = true;
 
-    LogPrintf("Total RAM: %dKB\n", sys_total_pp * PAGE_SIZE / 1024);
-    LogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);
+    KeLogPrintf("Total RAM: %dKB\n", sys_total_pp * PAGE_SIZE / 1024);
+    KeLogPrintf("Free  RAM: %dKB\n", sys_free_pp  * PAGE_SIZE / 1024);
 }
 
 #define ZEROED_PHYS_BUFFER_COUNT    2
 static size_t zeroed_phys_buffer[ZEROED_PHYS_BUFFER_COUNT];
 static _Atomic uint8_t please_provide_zeroed_phys = 0;
 
-size_t AllocZeroedPhys(void) {
+size_t KeAllocZeroedPhys(void) {
     for (int i = 0; i < ZEROED_PHYS_BUFFER_COUNT; ++i) {
         size_t frame = atomic_load(&zeroed_phys_buffer[i]);
         if (frame != 0) {
@@ -194,12 +194,12 @@ size_t AllocZeroedPhys(void) {
     }
 
     please_provide_zeroed_phys = ZEROED_PHYS_BUFFER_COUNT;
-    size_t frame = AllocPhys(true);
-    ZeroPhysPage(frame);
+    size_t frame = KeAllocPhys(true);
+    KeZeroPhysPage(frame);
     return frame;
 }
 
-bool ProvideZeroedPhys(size_t phys) {
+bool KeProvideZeroedPhys(size_t phys) {
     if (phys == 0) {
         return false;
     }

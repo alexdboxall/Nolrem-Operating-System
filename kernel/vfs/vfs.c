@@ -39,12 +39,12 @@ static struct mutex* mount_list_lock;
 static struct mounted_file* mounted_file_list;
 static _Atomic int next_dev_id = 1;	/* don't start at 0 in case that means 'invalid' */
 
-export int NextDevId(void) {
+export int KeNextDevId(void) {
 	return atomic_fetch_add(&next_dev_id, 1);
 }
 
-void InitVfs(void) {
-    mount_list_lock = CreateMutex();
+void KeInitVfs(void) {
+    mount_list_lock = KeCreateMutex();
 	mounted_file_list = NULL;
 }
 
@@ -73,7 +73,7 @@ static int CheckValidComponentName(const char* name) {
 	return 0;
 }
 
-struct mounted_file* GetMountPointFromName(const char* name) {
+struct mounted_file* KeGetMountPointFromName(const char* name) {
 	if (mounted_file_list == NULL) {
 		return NULL;
 	}
@@ -88,13 +88,13 @@ struct mounted_file* GetMountPointFromName(const char* name) {
 }
 
 static int DoesMountPointExist(const char* name) {
-    if (GetMountPointFromName(name) != NULL) {
+    if (KeGetMountPointFromName(name) != NULL) {
         return EEXIST;
     }
     return 0;
 }
 
-export int Mount(struct vnode* node, const char* name) {
+export int KeMount(struct vnode* node, const char* name) {
     if (name == NULL || node == NULL) {
 		return EINVAL;
 	}
@@ -108,31 +108,31 @@ export int Mount(struct vnode* node, const char* name) {
 		return status;
 	}
 
-    status = AcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
+    status = KeAcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
 	if (status != 0) {
 		return status;
 	}
 
     if (DoesMountPointExist(name) == EEXIST) {
-        ReleaseMutex(mount_list_lock);
+        KeReleaseMutex(mount_list_lock);
         return EEXIST;
     }
 
     struct mounted_file* mount = AllocHeap(sizeof(struct mounted_file) + strlen(name) + 1);
 	if (mount == NULL) {
-		ReleaseMutex(mount_list_lock);
+		KeReleaseMutex(mount_list_lock);
 		return ENOMEM;
 	}
 	strcpy(mount->name, name);
-    mount->node = CreateFile(node, 0, 0, true, true);
+    mount->node = KeCreateFile(node, 0, 0, true, true);
 	mount->next = mounted_file_list;
 	mounted_file_list = mount;
-	RefObject(mount->node);
-    ReleaseMutex(mount_list_lock);
+	KeRefObject(mount->node);
+    KeReleaseMutex(mount_list_lock);
     return 0;
 }
 
-export int Unmount(const char* name) {
+export int KeUnmount(const char* name) {
     if (name == NULL) {
 		return EINVAL;
 	}
@@ -141,7 +141,7 @@ export int Unmount(const char* name) {
 		return EINVAL;
 	}
 
-	int res = AcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
+	int res = KeAcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
 	if (res != 0) {
 		return res;
 	}
@@ -149,13 +149,13 @@ export int Unmount(const char* name) {
 	/*
 	* Scan through the mount table for the device
 	*/ 
-    struct mounted_file* actual = GetMountPointFromName(name);
+    struct mounted_file* actual = KeGetMountPointFromName(name);
     if (actual == NULL) {
-        ReleaseMutex(mount_list_lock);
+        KeReleaseMutex(mount_list_lock);
         return ENODEV;
     }
 
-    DerefObject(actual->node);
+    KeDerefObject(actual->node);
 
     if (actual == mounted_file_list) {
 		mounted_file_list = mounted_file_list->next;
@@ -174,7 +174,7 @@ export int Unmount(const char* name) {
 	
 	FreeHeap(actual->name);
 	FreeHeap(actual);
-    ReleaseMutex(mount_list_lock);
+    KeReleaseMutex(mount_list_lock);
     return 0;
 }
 
@@ -273,12 +273,12 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 			return err;
 		}
 
-		err = AcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
+		err = KeAcquireMutex(mount_list_lock, TIMEOUT_INFINITE);
 		if (err != 0) {
 			return err;
 		}
-		struct mounted_file* mount = GetMountPointFromName(component_buffer);
-		ReleaseMutex(mount_list_lock);
+		struct mounted_file* mount = KeGetMountPointFromName(component_buffer);
+		KeReleaseMutex(mount_list_lock);
 		struct file* current_file = mount == NULL ? NULL : mount->node;
 		if (current_file == NULL) {
 			return ENODEV;
@@ -295,7 +295,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	* after a call to vfs_close (this function should only be called 
 	* by vfs_open).
 	*/
-	RefObject(current_vnode);
+	KeRefObject(current_vnode);
 
 	char component[MAX_COMPONENT_LENGTH + 1];
 
@@ -305,7 +305,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	while (path_ptr < (int) strlen(path)) {
 		int status = GetPathComponent(path, &path_ptr, component, MAX_COMPONENT_LENGTH, '/');
 		if (status != 0) {
-			DerefObject(current_vnode);
+			KeDerefObject(current_vnode);
 			return status;
 		}
 
@@ -330,7 +330,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 		struct vnode* next_vnode = NULL;
 		status = VnodeFollow(current_vnode, &next_vnode, component);
 		if (status != 0) {
-			DerefObject(current_vnode);
+			KeDerefObject(current_vnode);
 			return status;
 		}	
 		current_vnode = next_vnode;
@@ -339,7 +339,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	if (want_parent) {
 		struct vnode* parent;
 		int status = VnodeFollow(current_vnode, &parent, "..");
-		DerefObject(current_vnode);
+		KeDerefObject(current_vnode);
 		if (status != 0) {
 			return status;
 		}
@@ -352,7 +352,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	return 0;
 }
 
-export int RemoveFileOrDirectory(const char* path, bool rmdir) {
+export int KeRemoveFileOrDirectory(const char* path, bool rmdir) {
 	struct vnode* node;
 	int res = GetVnodeFromPath(path, &node, false);
 	if (res != 0) {
@@ -365,11 +365,11 @@ export int RemoveFileOrDirectory(const char* path, bool rmdir) {
 
 	res = node->stat.st_nlink > 0 ? VnodeUnlink(node) : ENOENT;
 
-	DerefObject(node);
+	KeDerefObject(node);
 	return res;
 }
 
-export int OpenFile(const char* path, int flags, mode_t mode, struct file** out) {
+export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** out) {
  	if (path == NULL || out == NULL || strlen(path) <= 0) {
 		return EINVAL;
 	}
@@ -396,7 +396,7 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
 
 			struct vnode* child;
 			status = VnodeCreate(node, &child, name, flags, mode);
-			DerefObject(node);
+			KeDerefObject(node);
 
 			if (status) {
 				return status;
@@ -419,7 +419,7 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
 
 	status = VnodeCheckOpen(node, flags & (O_ACCMODE | O_NONBLOCK));
     if (status) {
-		DerefObject(node);
+		KeDerefObject(node);
 		return status;
 	}
 
@@ -430,7 +430,7 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
 		/*
 		* You cannot write to a directory - this also prevents truncation.
 		*/
-		DerefObject(node);
+		KeDerefObject(node);
 		return EISDIR;
 	}
 
@@ -441,7 +441,7 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
 			if (status) {
 				return status;
 			}
-			status = WaitIO(&a, TIMEOUT_INFINITE);
+			status = KeWaitIO(&a, TIMEOUT_INFINITE);
 			if (status) {
 				return status;
 			}
@@ -453,7 +453,7 @@ export int OpenFile(const char* path, int flags, mode_t mode, struct file** out)
 	// TODO: may need to actually have a VnodeOpOpen, for things like FatFS.
 
 	node->flags = flags & (O_NONBLOCK | O_APPEND);
-	*out = CreateFile(node, mode, flags & O_CLOEXEC, can_read, can_write);
+	*out = KeCreateFile(node, mode, flags & O_CLOEXEC, can_read, can_write);
     return 0;
 }
 
@@ -462,7 +462,7 @@ static void FileAccessAsyncCallback(void* _aio) {
 	struct aio* subaio = aio->sub;
 
 	aio->transfer = subaio->transfer;
-	SignalDoneIO(aio, subaio->result_code);
+	KeSignalDoneIO(aio, subaio->result_code);
 
 	FreeHeap(subaio);
 }
@@ -486,16 +486,16 @@ static int FileAccess(struct aio* aio, bool write) {
 	if (subaio == NULL) {
 		return ENOMEM;
 	}
-	CreateIO(subaio, file->node, *io, FileAccessAsyncCallback, (void*) aio);
+	KeCreateIO(subaio, file->node, *io, FileAccessAsyncCallback, (void*) aio);
 	aio->sub = subaio;
 	return (write ? VnodeWrite : VnodeRead)(subaio);
 }
 
-export int ReadFile(struct aio* aio) {
+export int KeReadFile(struct aio* aio) {
 	return FileAccess(aio, false);
 }
 
-export int WriteFile(struct aio* aio) {
+export int KeWriteFile(struct aio* aio) {
 	return FileAccess(aio, true);
 }
 
@@ -505,7 +505,7 @@ export int WriteFile(struct aio* aio) {
  * kernel maintains a references to the working directory.
  */
 /*
-int SetWorkingDirectory(struct vnode* node) {
+int KeSetWorkingDirectory(struct vnode* node) {
 	struct process* prcss = GetProcess();
 	if (prcss == NULL || node == NULL) {
 		return EINVAL;

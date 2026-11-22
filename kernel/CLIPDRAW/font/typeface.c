@@ -10,9 +10,9 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
     if (tf == NULL) {
         return NULL;
     }
-    InitUserObject(tf, UOBJ_TYPEFACE);
+    KeInitUserObject(tf, UOBJ_TYPEFACE);
 
-    int res = OpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &tf->omf);
+    int res = KeOpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &tf->omf);
     if (res != 0) {
         FreeHeap(tf);
         return NULL;
@@ -35,7 +35,7 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
 
 fail_after_open:
     /* CleanupTypeface closes the Omf and frees tf. */
-    DerefObject(tf);
+    KeDerefObject(tf);
     return NULL;
 }
 
@@ -48,8 +48,8 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
     if (fn == NULL) {
         return NULL;
     }
-    InitUserObject(fn, UOBJ_FONT);
-    RefObject(tf);
+    KeInitUserObject(fn, UOBJ_FONT);
+    KeRefObject(tf);
 
     fn->tf = tf;
     fn->requested_style = style;
@@ -94,7 +94,7 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
         || (fn->min_char > 0x10FFFF)    /* above UTF32 range - prevent overflow when adding*/
         || (fn->num_chars > 0x10FFFF)   /* above UTF32 range - prevent overflow when adding*/
     ) {
-        DerefObject(fn);
+        KeDerefObject(fn);
         return NULL;
     }
 
@@ -480,13 +480,13 @@ static void CleanupFont(void* _fn) {
     if (fn == NULL) {
         return;
     }
-    DerefObject(fn->tf);
+    KeDerefObject(fn->tf);
     FreeHeap(fn);
 }
 
 void CdInitTypefaceSubsystem(void) {
-    RegisterUserObjectType(UOBJ_TYPEFACE, CleanupTypeface);
-    RegisterUserObjectType(UOBJ_FONT, CleanupFont);
+    KeRegisterUserObjectType(UOBJ_TYPEFACE, CleanupTypeface);
+    KeRegisterUserObjectType(UOBJ_FONT, CleanupFont);
 
     extern void InitScaledGlyphCache();
     InitScaledGlyphCache();

@@ -12,12 +12,12 @@
  *
  * ASSUMPTIONS
  *   - Cooperative scheduling: a thread runs until it blocks or calls
- *     Schedule(). A few tests rely on that, e.g. "once a job reports it has
+ *     KeSchedule(). A few tests rely on that, e.g. "once a job reports it has
  *     started, it is already blocked or finished", and the stress tests'
  *     dequeue log. If preemption is ever turned on, those need revisiting.
  *   - Threads can't terminate yet, so a small pool of workers is created on
  *     demand and reused. Workers never return from their entry function.
- *   - CreateThread's context argument works (it didn't before the stack fix).
+ *   - KeCreateThread's context argument works (it didn't before the stack fix).
  *     The worker checks its argument and asserts if it is wrong.
  */
 
@@ -35,11 +35,11 @@
 #include <heap.h>
 
 #ifndef MSGTEST_YIELD
-#define MSGTEST_YIELD() Schedule()
+#define MSGTEST_YIELD() KeSchedule()
 #endif
 #define YIELD() MSGTEST_YIELD()
 
-/* One Schedule() walks every runnable thread once, so a "spin" is a full pass. */
+/* One KeSchedule() walks every runnable thread once, so a "spin" is a full pass. */
 #define SPIN_WARN        200
 #define SPIN_LIMIT       3000
 #define SPIN_LIMIT_LONG  30000
@@ -249,7 +249,7 @@ static void PostWait(struct msgbox* box, size_t size, uint32_t seed) {
 }
 
 static struct msgbox* NewBox(size_t size, size_t cap) {
-    struct msgbox* box = CreateMessageBox(size, cap);
+    struct msgbox* box = KeCreateMessageBox(size, cap);
     CHECK(box != NULL);
     return box;
 }
@@ -441,7 +441,7 @@ static int g_pool_created;
 
 /* Workers never return: there is no thread termination yet. */
 static void WorkerEntry(void* ctx) {
-    BeginNewThread();
+    KeBeginNewThread();
 
     struct tworker* wk = ctx;
     CHECK(wk >= g_pool && wk < g_pool + POOL_SIZE);   /* the context argument arrived intact */
@@ -459,7 +459,7 @@ static void WorkerEntry(void* ctx) {
 }
 
 /* Reuses an idle worker, or creates one (workers are made on demand to keep the
- * number of threads in each Schedule() pass, and so the test time, down). */
+ * number of threads in each KeSchedule() pass, and so the test time, down). */
 static struct tworker* ClaimWorker(void) {
     for (int i = 0; i < g_pool_created; ++i) {
         if (g_pool[i].started && !g_pool[i].busy) {
@@ -475,7 +475,7 @@ static struct tworker* ClaimWorker(void) {
     g_pool[i].job = NULL;
     g_pool[i].busy = 1;
     g_pool[i].started = 0;
-    CreateThread(GetKernelVas(), WorkerEntry, &g_pool[i]);
+    KeCreateThread(KeGetKernelVas(), WorkerEntry, &g_pool[i]);
     WAIT_FOR(g_pool[i].started);
     return &g_pool[i];
 }
@@ -544,7 +544,7 @@ static struct tjob* JobGetMany(struct msgbox** boxes, int n, bool remove) {
 static void TestCreateDestroy(void) {
     struct msgbox* box = NewBox(SZ, 4);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestPostGetSingle(void) {
@@ -552,7 +552,7 @@ static void TestPostGetSingle(void) {
     ExpectPost(box, SZ, 1);
     ExpectGet(box, SZ, 1);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* Exact bytes in and out, for sizes that aren't word-aligned, with the source
@@ -575,7 +575,7 @@ static void TestMessageSizes(void) {
             ExpectGet(box, size, seed);
         }
         ExpectEmpty(box, size);
-        DerefObject(box);
+        KeDerefObject(box);
     }
 }
 
@@ -588,7 +588,7 @@ static void TestFifoOrder(void) {
         ExpectGet(box, SZ, s);
     }
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestPeekDoesNotRemove(void) {
@@ -614,7 +614,7 @@ static void TestPeekDoesNotRemove(void) {
         ExpectGet(box, SZ, s);
     }
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestCapacityLimit(void) {
@@ -632,7 +632,7 @@ static void TestCapacityLimit(void) {
     ExpectGet(box, SZ, 3);
     ExpectGet(box, SZ, 4);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestCapacityOne(void) {
@@ -644,7 +644,7 @@ static void TestCapacityOne(void) {
         ExpectGet(box, SZ, round);
         ExpectEmpty(box, SZ);
     }
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestInvalidArguments(void) {
@@ -664,7 +664,7 @@ static void TestInvalidArguments(void) {
     CHECK(KeGetMessageFromMany(boxes, 1, NULL, TIMEOUT_INSTANT, true, NULL) == EINVAL);
 
     ExpectEmpty(box, SZ);       /* none of the rejected calls stored anything */
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /*
@@ -760,7 +760,7 @@ static void ModelTest(size_t cap, uint32_t seed0) {
         --count;
     }
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestModelRandomised(void) {
@@ -779,7 +779,7 @@ static void TestReplaceOnEmptyAdds(void) {
     CHECK(Replace(box, SZ, 99, 1, TIMEOUT_INSTANT) == 0);
     ExpectGet(box, SZ, 1);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestReplaceTail(void) {
@@ -788,7 +788,7 @@ static void TestReplaceTail(void) {
     CHECK(Replace(box, SZ, 1, 2, TIMEOUT_INSTANT) == 0);   /* replaced in place */
     ExpectGet(box, SZ, 2);
     ExpectEmpty(box, SZ);                                  /* ...not added */
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestReplaceMismatchAppends(void) {
@@ -798,7 +798,7 @@ static void TestReplaceMismatchAppends(void) {
     ExpectGet(box, SZ, 1);
     ExpectGet(box, SZ, 2);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* Only the newest message is a candidate for replacement. */
@@ -814,7 +814,7 @@ static void TestReplaceOnlyComparesTail(void) {
     ExpectGet(box, SZ, 2);
     ExpectGet(box, SZ, 4);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* A replace uses a slot temporarily and must give it back. */
@@ -831,7 +831,7 @@ static void TestReplaceKeepsCapacity(void) {
     ExpectGet(box, SZ, cur);
     ExpectGet(box, SZ, 99);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* The tail is at index capacity-1 while the write index has wrapped to 0. */
@@ -845,7 +845,7 @@ static void TestReplaceAfterWrap(void) {
     ExpectGet(box, SZ, 2);
     ExpectGet(box, SZ, 4);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestReplaceFullBoxMismatch(void) {
@@ -856,7 +856,7 @@ static void TestReplaceFullBoxMismatch(void) {
     ExpectGet(box, SZ, 1);
     ExpectGet(box, SZ, 2);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* Adding via replace-or-add must wake a reader like a normal post. */
@@ -868,7 +868,7 @@ static void TestReplaceWakesReader(void) {
     CHECK(Replace(box, SZ, 99, 5, TIMEOUT_INSTANT) == 0);
     ExpectJobMsg(r, SZ, 5);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* Full box, and the message doesn't match the tail, so the add has to wait for space. */
@@ -887,7 +887,7 @@ static void TestReplaceBlocksUntilSpace(void) {
     ExpectGet(box, SZ, 2);
     ExpectGet(box, SZ, 3);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -903,7 +903,7 @@ static void TestBlockedReaderWokenByPost(void) {
     ExpectPost(box, SZ, 7);
     ExpectJobMsg(r, SZ, 7);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestBlockedWriterWokenByGet(void) {
@@ -922,7 +922,7 @@ static void TestBlockedWriterWokenByGet(void) {
     ExpectGet(box, SZ, 2);
     ExpectGet(box, SZ, 3);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 static void TestBlockedPeekerWokenByPost(void) {
@@ -935,7 +935,7 @@ static void TestBlockedPeekerWokenByPost(void) {
     ExpectJobMsg(p, SZ, 5);
     ExpectGet(box, SZ, 5);          /* the peek left it in place */
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* One message, two peekers: the permit must be passed on, so both see it. */
@@ -953,7 +953,7 @@ static void TestTwoPeekersOnePost(void) {
     ExpectJobMsg(p2, SZ, 9);
     ExpectGet(box, SZ, 9);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* A peeker queued ahead of a getter passes the message on to it. */
@@ -970,7 +970,7 @@ static void TestPeekerThenGetter(void) {
     ExpectJobMsg(p, SZ, 3);
     ExpectJobMsg(g, SZ, 3);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* A getter queued ahead of a peeker takes the message, so the peeker keeps waiting. */
@@ -991,7 +991,7 @@ static void TestGetterThenPeeker(void) {
     ExpectJobMsg(p, SZ, 2);
     ExpectGet(box, SZ, 2);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* Several readers, several messages: every message is delivered exactly once. */
@@ -1028,7 +1028,7 @@ static void TestManyReadersManyPosts(void) {
         CHECK(seen[s] == 1);
     }
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* Several writers blocked on a full box: older messages first, nothing lost. */
@@ -1072,7 +1072,7 @@ static void TestManyWritersBlocked(void) {
         CHECK(w[k]->result == 0);
     }
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* One producer thread, the test thread consuming, box much smaller than the stream. */
@@ -1096,7 +1096,7 @@ static void TestProducerThreadOrder(void) {
     CHECK(p->result == 0);
     CHECK(p->progress == N);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* The other way round: the test thread produces, one consumer thread checks order. */
@@ -1116,7 +1116,7 @@ static void TestConsumerThreadOrder(void) {
     CHECK(c->result == 0);          /* negative values mean "wrong message at position i" */
     CHECK(c->progress == N);
     ExpectEmpty(box, SZ);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1169,8 +1169,8 @@ static void TestGetManyLowestIndexWins(void) {
 
     ExpectEmpty(A, SZ);
     ExpectEmpty(B, SZ);
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 static void TestGetManyNullBoxOut(void) {
@@ -1181,8 +1181,8 @@ static void TestGetManyNullBoxOut(void) {
     ExpectPost(B, SZ, 8);
     CHECK(GetMany(ab, 2, &g, true, NULL) == 0);
     CHECK(MsgMatches(GbufData(&g), SZ, 8));
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 static void TestGetManyLeavesOtherBoxes(void) {
@@ -1201,8 +1201,8 @@ static void TestGetManyLeavesOtherBoxes(void) {
     ExpectEmpty(A, SZ);
     ExpectGet(B, SZ, 2);            /* B's message was not touched */
     ExpectEmpty(B, SZ);
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 static void TestPeekManyKeepsMessage(void) {
@@ -1222,8 +1222,8 @@ static void TestPeekManyKeepsMessage(void) {
     ExpectGet(B, SZ, 6);            /* still there after the peeks */
     ExpectEmpty(B, SZ);
     ExpectEmpty(A, SZ);
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /* The waiter must be fully removed from the other boxes' queues once it wakes. */
@@ -1254,9 +1254,9 @@ static void TestGetManyBlockedThenWoken(void) {
     ExpectEmpty(A, SZ);
     ExpectEmpty(B, SZ);
     ExpectEmpty(C, SZ);
-    DerefObject(A);
-    DerefObject(B);
-    DerefObject(C);
+    KeDerefObject(A);
+    KeDerefObject(B);
+    KeDerefObject(C);
 }
 
 static void TestTwoMultiGetters(void) {
@@ -1286,8 +1286,8 @@ static void TestTwoMultiGetters(void) {
 
     ExpectEmpty(A, SZ);
     ExpectEmpty(B, SZ);
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /* A blocked multi-peek wakes, reports the box, and leaves the message in it. */
@@ -1309,8 +1309,8 @@ static void TestPeekManyBlockedThenWoken(void) {
     ExpectGet(A, SZ, 5);
     ExpectEmpty(A, SZ);
     ExpectEmpty(B, SZ);
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1392,7 +1392,7 @@ static void RunStress(int producers, int consumers, int nboxes, size_t cap, int 
 
     for (int b = 0; b < nboxes; ++b) {
         ExpectEmpty(boxes[b], sizeof(struct pc_msg));
-        DerefObject(boxes[b]);
+        KeDerefObject(boxes[b]);
     }
 }
 
@@ -1410,14 +1410,14 @@ static void TestDestroyWithMessages(void) {
     ExpectPost(box, SZ, 1);
     ExpectPost(box, SZ, 2);
     ExpectPost(box, SZ, 3);
-    DerefObject(box);                /* must not crash */
+    KeDerefObject(box);                /* must not crash */
 }
 
 static void TestDestroyFullBox(void) {
     struct msgbox* box = NewBox(SZ, 2);
     ExpectPost(box, SZ, 1);
     ExpectPost(box, SZ, 2);
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -1427,10 +1427,10 @@ static void TestDestroyFullBox(void) {
 /*
  * CleanupMsgbox frees the data and the box but never drops its three objects
  * (the mutex and the two semaphores). Destroying a box therefore (a) leaks them
- * and (b) never wakes threads blocked on it, which is exactly what AbandonSem is
+ * and (b) never wakes threads blocked on it, which is exactly what KeAbandonSem is
  * for. A reader or writer that is waiting when the last reference goes would
- * wait forever. The fix is to DerefObject(lock), DerefObject(empty_sem) and
- * DerefObject(filled_sem) in CleanupMsgbox.
+ * wait forever. The fix is to KeDerefObject(lock), KeDerefObject(empty_sem) and
+ * KeDerefObject(filled_sem) in CleanupMsgbox.
  */
 static void TestDestroyWakesBlockedReader(void) {
     struct msgbox* box = NewBox(SZ, 4);
@@ -1438,7 +1438,7 @@ static void TestDestroyWakesBlockedReader(void) {
     Start(r);
     ExpectBlocked(r);
 
-    DerefObject(box);
+    KeDerefObject(box);
 
     int ok;
     WAIT_RESULT_N(r->done, ok, SPIN_LIMIT);
@@ -1456,7 +1456,7 @@ static void TestDestroyWakesBlockedWriter(void) {
     Start(w);
     ExpectBlocked(w);
 
-    DerefObject(box);
+    KeDerefObject(box);
 
     int ok;
     WAIT_RESULT_N(w->done, ok, SPIN_LIMIT);
@@ -1475,7 +1475,7 @@ static void TestDestroyOneBoxOfMany(void) {
     Start(j);
     ExpectBlocked(j);
 
-    DerefObject(A);
+    KeDerefObject(A);
 
     int ok;
     WAIT_RESULT_N(j->done, ok, SPIN_LIMIT);
@@ -1486,7 +1486,7 @@ static void TestDestroyOneBoxOfMany(void) {
         ExpectPost(B, SZ, 1);        /* a stale queue entry on B would swallow this */
         ExpectGet(B, SZ, 1);
     }
-    DerefObject(B);
+    KeDerefObject(B);
 }
 
 /* count == 0 should be rejected; today it falls through into the semaphore code. */
@@ -1497,7 +1497,7 @@ static void TestGetManyCountZero(void) {
     int r = KeGetMessageFromMany(boxes, 0, out, TIMEOUT_INSTANT, true, NULL);
     TRACE("  count == 0 returned %d\n", r);
     SUSPECT(r == EINVAL, "KeGetMessageFromMany with count == 0 is not rejected with EINVAL");
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /*
@@ -1520,7 +1520,7 @@ static void TestReplaceOnFullBoxTailMatch(void) {
     CHECK(MsgMatches(GbufData(&g), SZ, 1));
     CHECK(KeGetMessage(box, GbufData(&g), TIMEOUT_INSTANT) == 0);
     CHECK(MsgMatches(GbufData(&g), SZ, r == 0 ? 3 : 2));
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* These dereference NULL today, so they are opt-in. */
@@ -1536,14 +1536,14 @@ static void TestNullBoxInGetAndPeek(void) {
  */
 static void TestNoLeakOnDestroy(void) {
     struct msgbox* warm = NewBox(SZ, 4);
-    DerefObject(warm);
+    KeDerefObject(warm);
 
-    size_t before = GetHeapAllocatedAmount();
+    size_t before = KeGetHeapAllocatedAmount();
     for (int i = 0; i < 20; ++i) {
         struct msgbox* box = NewBox(SZ, 4);
-        DerefObject(box);
+        KeDerefObject(box);
     }
-    size_t after = GetHeapAllocatedAmount();
+    size_t after = KeGetHeapAllocatedAmount();
     TRACE("  heap before %d, after %d\n", (int) before, (int) after);
     SUSPECT(after == before, "creating and destroying message boxes leaks heap");
 }
@@ -1553,14 +1553,14 @@ static void TestNoLeakOnGet(void) {
     ExpectPost(box, SZ, 1);
     ExpectPeek(box, SZ, 1);      /* warm up */
 
-    size_t before = GetHeapAllocatedAmount();
+    size_t before = KeGetHeapAllocatedAmount();
     for (int i = 0; i < 50; ++i) {
         ExpectPeek(box, SZ, 1);
     }
-    size_t after = GetHeapAllocatedAmount();
+    size_t after = KeGetHeapAllocatedAmount();
     TRACE("  heap before %d, after %d\n", (int) before, (int) after);
     SUSPECT(after == before, "KeGetMessageFromMany leaks the semaphore array it allocates");
-    DerefObject(box);
+    KeDerefObject(box);
 }
 
 /* ------------------------------------------------------------------------ */

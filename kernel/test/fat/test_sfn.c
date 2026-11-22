@@ -35,7 +35,7 @@ int GetShortFilename(const char* lfn, int clash_num, char* sfn_out);
 
 static volatile int g_suspected;
 #define SUSPECT(cond, what) do { \
-    if (!(cond)) { g_suspected++; LogPrintf("SUSPECTED BUG: %s\n", what); } \
+    if (!(cond)) { g_suspected++; KeLogPrintf("SUSPECTED BUG: %s\n", what); } \
 } while (0)
 
 /* ------------------------------------------------------------------------ */
@@ -73,7 +73,7 @@ static void ExpectName(const char* lfn, int clash, const char* name, const char*
         char got[SFN_LEN + 1], exp[SFN_LEN + 1];
         Show(got, g_buf);
         Show(exp, want);
-        LogPrintf("sfn FAIL: lfn \"%s\" clash %d: returned %d, got [%s], expected [%s]\n",
+        KeLogPrintf("sfn FAIL: lfn \"%s\" clash %d: returned %d, got [%s], expected [%s]\n",
                   lfn, clash, r, got, exp);
     }
     CHECK(r == 0);
@@ -83,7 +83,7 @@ static void ExpectName(const char* lfn, int clash, const char* name, const char*
 
 static void ExpectError(const char* lfn, int clash) {
     int r = Run(lfn, clash);
-    if (r != EINVAL) LogPrintf("sfn FAIL: lfn \"%s\" clash %d: returned %d, expected EINVAL\n", lfn, clash, r);
+    if (r != EINVAL) KeLogPrintf("sfn FAIL: lfn \"%s\" clash %d: returned %d, expected EINVAL\n", lfn, clash, r);
     CHECK(r == EINVAL);
     for (int i = 12; i < 16; ++i) CHECK(g_buf[i] == POISON);
 }
@@ -278,7 +278,7 @@ static void CheckWellFormed(const char* lfn, int clash, const char* f) {
     if (!ok) {
         char got[SFN_LEN + 1];
         Show(got, f);
-        LogPrintf("sfn FAIL: lfn \"%s\" clash %d gave malformed [%s]\n", lfn, clash, got);
+        KeLogPrintf("sfn FAIL: lfn \"%s\" clash %d gave malformed [%s]\n", lfn, clash, got);
     }
     CHECK(ok);
 }
@@ -322,7 +322,7 @@ static void CheckAllDistinct(const char* lfn) {
     for (int a = 0; a < UNIQUE_N; ++a) {
         for (int b = a + 1; b < UNIQUE_N; ++b) {
             if (memcmp(g_seen[a], g_seen[b], SFN_LEN) == 0) {
-                LogPrintf("sfn FAIL: lfn \"%s\": clash %d and %d both give the same name\n", lfn, a, b);
+                KeLogPrintf("sfn FAIL: lfn \"%s\": clash %d and %d both give the same name\n", lfn, a, b);
                 CHECK(0);
             }
         }
@@ -375,7 +375,7 @@ static void TestNegativeClashNumber(void) {
     if (r == 0) {
         char got[SFN_LEN + 1];
         Show(got, g_buf);
-        LogPrintf("  (-1 produced [%s])\n", got);
+        KeLogPrintf("  (-1 produced [%s])\n", got);
     }
     r = Run("file.txt", -100);
     SUSPECT(r == EINVAL, "clash_num -100 is accepted (should return EINVAL)");
@@ -460,6 +460,6 @@ void RunSfnTests(void) {
     RUN_TEST(TestNonAsciiBytes);
 #endif
 
-    if (g_suspected) LogPrintf("sfn tests: %d SUSPECTED BUG(S)\n", g_suspected);
-    else             LogPrintf("sfn tests: ALL PASSED\n");
+    if (g_suspected) KeLogPrintf("sfn tests: %d SUSPECTED BUG(S)\n", g_suspected);
+    else             KeLogPrintf("sfn tests: ALL PASSED\n");
 }

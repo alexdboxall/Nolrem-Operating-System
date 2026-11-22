@@ -8,17 +8,17 @@
 pageable size_t SysCopyPen(size_t a, size_t, size_t, size_t) {
     struct pen* pen = (struct pen*) a;
 
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
 
     struct pen* copy = CdCopyPen(pen);
-    DerefObject(pen);
+    KeDerefObject(pen);
 
     if (copy == NULL) {
         KeSetLastUserError(ENOMEM);

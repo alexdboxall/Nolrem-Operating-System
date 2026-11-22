@@ -2,15 +2,15 @@
 
 #include "CLIPDRAW/api.h"
 
-void AcquireScheduler(void);
-void ReleaseScheduler(void);
-void Schedule(void);
+void KeAcquireScheduler(void);
+void KeReleaseScheduler(void);
+void KeSchedule(void);
 
-void InitScheduler(void);
-void LowPriorityBackgroundThread(void*);
-bool IsSchedulingInitialised(void);
+void KeInitScheduler(void);
+void KeLowPriorityBackgroundThread(void*);
+bool KeIsSchedulingInitialised(void);
 
-void PostMessageIrq(struct msg msg);
-void ProcessIrqPostMessage(void);
+void KePostMessageIrq(struct msg msg);
+void KeProcessIrqPostMessage(void);
 
-void BeginNewThread(void);
+void KeBeginNewThread(void);

@@ -7,12 +7,12 @@
 #include <aio.h>
 #include <sys/ioctl.h>
 
-export struct vnode* CreateVnode(struct vnode_operations ops, struct stat st) {
+export struct vnode* KeCreateVnode(struct vnode_operations ops, struct stat st) {
     struct vnode* node = AllocHeap(sizeof(struct vnode));
     if (node == NULL) {
         return NULL;
     }
-    InitObject(node, OBJTYPE_VNODE);
+    KeInitObject(node, OBJTYPE_VNODE);
     node->data = NULL;
     node->stat = st;
     node->flags = 0;
@@ -34,8 +34,8 @@ static void CleanupVnode(void* _node) {
     FreeHeap(node);
 }
 
-void InitVnode(void) {
-    RegisterObjectType(OBJTYPE_VNODE, CleanupVnode);
+void KeInitVnode(void) {
+    KeRegisterObjectType(OBJTYPE_VNODE, CleanupVnode);
 }
 
 static void CheckVnode(struct vnode* node) {

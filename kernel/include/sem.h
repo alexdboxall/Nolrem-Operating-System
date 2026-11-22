@@ -17,22 +17,22 @@ struct sem {
     void* waiting_list_end;
 };
 
-void InitSem(void);
+void KeInitSem(void);
 
-struct sem* CreateSem(int max, int inital);
-struct mutex* CreateMutex(void);
+struct sem* KeCreateSem(int max, int inital);
+struct mutex* KeCreateMutex(void);
 
-int AcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int* selected_out);
-int AcquireSem(struct sem* sem, int64_t timeout);
-int AcquireMutex(struct mutex* mtx, int64_t timeout);
-int ReleaseSem(struct sem* sem);
-int ReleaseMutex(struct mutex* mtx);
+int KeAcquireSemFromMany(struct sem** sems, int count, int64_t timeout, int* selected_out);
+int KeAcquireSem(struct sem* sem, int64_t timeout);
+int KeAcquireMutex(struct mutex* mtx, int64_t timeout);
+int KeReleaseSem(struct sem* sem);
+int KeReleaseMutex(struct mutex* mtx);
 
-void CancelSems(struct thread* thr);
+void KeCancelSems(struct thread* thr);
 
-void InitStaticSem(struct sem* sem, int max, int initial);
-void DestroyStaticSem(struct sem* sem);
+void KeInitStaticSem(struct sem* sem, int max, int initial);
+void KeDestroyStaticSem(struct sem* sem);
 
 /* Should not generally be called on its own - is called as part of cleanup 
- * or DestroyStaticSem. */
-void AbandonSem(struct sem* sem);
+ * or KeDestroyStaticSem. */
+void KeAbandonSem(struct sem* sem);

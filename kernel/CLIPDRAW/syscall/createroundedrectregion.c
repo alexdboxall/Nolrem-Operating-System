@@ -7,13 +7,13 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysCreateRoundedRectRegion(size_t rect_ptr, size_t radius, size_t, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
     struct rect rect;
-    struct transfer tr = CreateTransferReadingFromUser((const void*) rect_ptr, sizeof(struct rect), 0);
-    int res = PerformTransfer(&rect, &tr, sizeof(struct rect));
+    struct transfer tr = KeCreateTransferReadingFromUser((const void*) rect_ptr, sizeof(struct rect), 0);
+    int res = KePerformTransfer(&rect, &tr, sizeof(struct rect));
     if (res != 0) {
         KeSetLastUserError(res);
         return 0;

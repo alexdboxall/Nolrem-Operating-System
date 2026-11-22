@@ -133,7 +133,7 @@ void InitPs2Mouse(void) {
     /* Reset to defaults. This disables data reporting, so the mouse stays
      * quiet during negotiation. */
     if (Ps2DeviceWrite(PS2_MOUSE_CMD_SET_DEFAULTS, true) != 0) {
-        LogPrintf("[mouse] set-defaults not ACKed;\n  no mouse present\n");
+        KeLogPrintf("[mouse] set-defaults not ACKed;\n  no mouse present\n");
         return;
     }
 
@@ -160,10 +160,10 @@ void InitPs2Mouse(void) {
     Ps2ControllerSetIrqEnable(true, true);
 
     /* Register the handler. */
-    RegisterInterruptHandler(12, Ps2MouseIrqHandler);
+    KeRegisterInterruptHandler(12, Ps2MouseIrqHandler);
 
     /* Enable packet reporting. */
     if (Ps2DeviceWrite(PS2_MOUSE_CMD_ENABLE_DATA_REPORTING, true) != 0) {
-        LogPrintf("[mouse] enable-reporting (0xF4) not\nACKed\n");
+        KeLogPrintf("[mouse] enable-reporting (0xF4) not\nACKed\n");
     }
 }

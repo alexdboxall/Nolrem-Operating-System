@@ -9,7 +9,7 @@
 #define TYPE_EVERY  1
 
 pageable size_t SysEmptyOrEveryRegion(size_t type, size_t, size_t, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }

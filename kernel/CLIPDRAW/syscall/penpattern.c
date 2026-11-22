@@ -21,7 +21,7 @@ pageable size_t SysPenPattern(size_t a, size_t op, size_t pattern, size_t) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
         KeSetLastUserError(EINVAL);
         return op == OP_GET ? (size_t) PEN_INVALID : EINVAL;
     }
@@ -38,7 +38,7 @@ pageable size_t SysPenPattern(size_t a, size_t op, size_t pattern, size_t) {
     } else {
         retv = (size_t) CdSetPenPattern(pen, (int) pattern);
     }
-    DerefObject(pen);
+    KeDerefObject(pen);
     return retv;
 }
 

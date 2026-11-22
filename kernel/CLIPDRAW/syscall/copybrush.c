@@ -8,17 +8,17 @@
 pageable size_t SysCopyBrush(size_t a, size_t, size_t, size_t) {
     struct brush* br = (struct brush*) a;
 
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
 
     struct brush* copy = CdCopyBrush(br);
-    DerefObject(br);
+    KeDerefObject(br);
 
     if (copy == NULL) {
         KeSetLastUserError(ENOMEM);

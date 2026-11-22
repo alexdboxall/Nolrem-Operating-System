@@ -8,13 +8,13 @@
 
 #define RUN_TEST(fn)                                       \
     do {                                                   \
-        LogPrintf("\x01 Running " #fn " (" __FILE_NAME__ ")\n\x02");      \
+        KeLogPrintf("\x01 Running " #fn " (" __FILE_NAME__ ")\n\x02");      \
         fn();                                              \
     } while (0)
 
 /*
  * The condition is always evaluated, even if assert() is compiled out, because
- * many checks contain calls with side effects (ReleaseSem, AcquireSem, ...).
+ * many checks contain calls with side effects (KeReleaseSem, KeAcquireSem, ...).
  */
 #define CHECK(cond)                 \
     do {                            \
@@ -23,6 +23,6 @@
         (void) _check_ok;           \
     } while (0)
 
-#define TRACE(...) LogPrintf(__VA_ARGS__)
+#define TRACE(...) KeLogPrintf(__VA_ARGS__)
 
 void RunTestSuite(void);

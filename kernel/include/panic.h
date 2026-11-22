@@ -18,5 +18,5 @@ enum panic_codes {
         PANIC_NOT_IMPLEMENTED
 };
 
-_Noreturn void Panic(int panic_reason);
+_Noreturn void KePanic(int panic_reason);
 

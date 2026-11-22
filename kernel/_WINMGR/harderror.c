@@ -23,7 +23,7 @@
 
 int WmHardError(int herrno) {
     struct msgbox* sysbox = WmGetSystemMessageBox();
-    struct graphics_driver* drv = GetKernelGraphicsDriver();
+    struct graphics_driver* drv = KeGetKernelGraphicsDriver();
     int sw = WmGetDesktop()->local_client_bound.w;
     int sh = WmGetDesktop()->local_client_bound.h;
     CdStartVideoUpdate(0, 0, sw, sh);

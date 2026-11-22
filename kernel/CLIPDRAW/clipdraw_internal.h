@@ -79,7 +79,7 @@ struct region UserRegionToRegion(struct uregion* urgn);
 
 void CdSetTranslation(struct dc* dc, int x, int y);
 
-bool ValidateUserObjectAndAtomicallyRef(void* obj, int type);
+bool KeValidateUserObjectAndAtomicallyRef(void* obj, int type);
 
 struct region CdBadRegion(void);
 bool CdIsRegionBad(struct region rgn);

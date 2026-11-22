@@ -20,15 +20,15 @@
 #define DEMOFS_QUEUE_DEPTH 16
 
 /*
-* Tear down an aio that was created with CreateIO but which the driver failed to
-* start (so it will never be signalled). Signalling it ourselves lets WaitIO
+* Tear down an aio that was created with KeCreateIO but which the driver failed to
+* start (so it will never be signalled). Signalling it ourselves lets KeWaitIO
 * drop the reference to the file and destroy the mutex.
 */
 static void demofs_io_abort(struct aio* aio, int status) {
     aio->callback = NULL;
     aio->sub = NULL;
-    SignalDoneIO(aio, status);
-    WaitIO(aio, TIMEOUT_INFINITE);
+    KeSignalDoneIO(aio, status);
+    KeWaitIO(aio, TIMEOUT_INFINITE);
 }
 
 /*
@@ -37,15 +37,15 @@ static void demofs_io_abort(struct aio* aio, int status) {
 */
 static int demofs_read_disk_transfer(struct demofs* fs, struct transfer* io) {
     struct aio aio;
-    CreateIO(&aio, fs->disk, *io, NULL, NULL);
+    KeCreateIO(&aio, fs->disk, *io, NULL, NULL);
 
-    int status = ReadFile(&aio);
+    int status = KeReadFile(&aio);
     if (status != 0) {
         demofs_io_abort(&aio, status);
         return status;
     }
 
-    status = WaitIO(&aio, TIMEOUT_INFINITE);
+    status = KeWaitIO(&aio, TIMEOUT_INFINITE);
     if (status == 0) {
         *io = aio.transfer;
     }
@@ -57,7 +57,7 @@ static int demofs_read_disk_transfer(struct demofs* fs, struct transfer* io) {
 * Synchronous read of exactly 'length' bytes from the disk into a kernel buffer.
 */
 static int demofs_read_disk_sync(struct demofs* fs, void* buffer, size_t length, uint64_t offset) {
-    struct transfer io = CreateKernelTransfer(buffer, length, offset, TRANSFER_READ);
+    struct transfer io = KeCreateKernelTransfer(buffer, length, offset, TRANSFER_READ);
 
     int status = demofs_read_disk_transfer(fs, &io);
     if (status == 0 && io.length_remaining != 0) {
@@ -103,7 +103,7 @@ static int demofs_read_file_sync(struct demofs* fs, ino_t file, uint32_t file_si
             * We have an aligned sector amount, so transfer it all directly,
             * except for possibly a few bytes at the end.
             *
-            * ReadFile only allows lengths that are a multiple of the sector
+            * KeReadFile only allows lengths that are a multiple of the sector
             * size, so round down to the nearest sector. Also never read past the
             * end of the file. The leftover is picked up by a later iteration.
             *
@@ -155,7 +155,7 @@ static int demofs_read_file_sync(struct demofs* fs, ino_t file, uint32_t file_si
                 (uint64_t) file_size_left
             );
 
-            status = PerformTransfer(sector_buffer + sector_offset, io, transfer_size);
+            status = KePerformTransfer(sector_buffer + sector_offset, io, transfer_size);
             if (status != 0) {
                 return status;
             }
@@ -220,11 +220,11 @@ int demofs_follow(struct demofs* fs, ino_t parent, ino_t* child, const char* nam
                 * If so, read the inode number and return it.
                 * Remember to add the directory flag if necessary.
                 */
-                LogPrintf("Found name.\n");
+                KeLogPrintf("Found name.\n");
                 ino_t inode = buffer[i * 32 + MAX_NAME_LENGTH + 4];
                 inode |= (ino_t) buffer[i * 32 + MAX_NAME_LENGTH + 5] << 8;
                 inode |= (ino_t) buffer[i * 32 + MAX_NAME_LENGTH + 6] << 16;
-                LogPrintf("inode 0x%X (offset 0x%X).\n", inode, inode * SECTOR_SIZE);
+                KeLogPrintf("inode 0x%X (offset 0x%X).\n", inode, inode * SECTOR_SIZE);
 
                 if (buffer[i * 32 + MAX_NAME_LENGTH + 7] & 1) {
                     /*
@@ -308,7 +308,7 @@ static int demofs_read_directory_entry_sync(struct demofs* fs, ino_t directory, 
         dir.d_ino = directory & 0x7FFFFFFF;
         dir.d_disk = (size_t) fs->disk->node->stat.st_dev;
         dir.d_type = DT_DIR;
-        return PerformTransfer(&dir, io, sizeof(struct dirent));
+        return KePerformTransfer(&dir, io, sizeof(struct dirent));
 
     } else {
         --entry_number;
@@ -376,13 +376,13 @@ static int demofs_read_directory_entry_sync(struct demofs* fs, ino_t directory, 
     inode |= (ino_t) buffer[offset * 32 + MAX_NAME_LENGTH + 5] << 8;
     inode |= (ino_t) buffer[offset * 32 + MAX_NAME_LENGTH + 6] << 16;
 
-    LogPrintf("entry no = %d. offset = %d. indirs = %d. name = %s\n", entry_number, offset, indirections, name);
+    KeLogPrintf("entry no = %d. offset = %d. indirs = %d. name = %s\n", entry_number, offset, indirections, name);
     dir.d_ino = inode & 0x7FFFFFFF;
     dir.d_disk = (size_t) fs->disk->node->stat.st_dev;
     dir.d_type = (buffer[offset * 32 + MAX_NAME_LENGTH + 7] & 1) ? DT_DIR : DT_REG;
 
     /* Perform the transfer to the correct location */
-    return PerformTransfer(&dir, io, sizeof(struct dirent));
+    return KePerformTransfer(&dir, io, sizeof(struct dirent));
 }
 
 /*
@@ -392,7 +392,7 @@ static int demofs_read_directory_entry_sync(struct demofs* fs, ino_t directory, 
 */
 
 static void DemofsDriverThread(void* _fs) {
-    BeginNewThread();
+    KeBeginNewThread();
 
     struct demofs* fs = _fs;
 
@@ -410,7 +410,7 @@ static void DemofsDriverThread(void* _fs) {
         }
 
         /* The aio may be freed by the waiter as soon as this is called. */
-        SignalDoneIO(req.aio, status);
+        KeSignalDoneIO(req.aio, status);
     }
 }
 
@@ -419,12 +419,12 @@ static void DemofsDriverThread(void* _fs) {
 * filesystem is mounted, before any reads can happen.
 */
 int demofs_start_driver(struct demofs* fs) {
-    fs->msgbox = CreateMessageBox(sizeof(struct demofs_request), DEMOFS_QUEUE_DEPTH);
+    fs->msgbox = KeCreateMessageBox(sizeof(struct demofs_request), DEMOFS_QUEUE_DEPTH);
     if (fs->msgbox == NULL) {
         return ENOMEM;
     }
 
-    CreateThreadEx(GetKernelVas(), DemofsDriverThread, fs, 1024 * 3);
+    KeCreateThreadEx(KeGetKernelVas(), DemofsDriverThread, fs, 1024 * 3);
     return 0;
 }
 
@@ -435,7 +435,7 @@ int demofs_start_driver(struct demofs* fs) {
 * This only queues the request. Returns an error if it could not be queued
 * (nothing is signalled in that case). Otherwise returns 0 and the read completes
 * when the filesystem thread has finished, which the caller finds out about with
-* WaitIO.
+* KeWaitIO.
 */
 int demofs_read_file(struct demofs* fs, ino_t file, uint32_t file_size, struct aio* aio) {
     struct demofs_request req = {

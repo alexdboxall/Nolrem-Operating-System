@@ -11,7 +11,7 @@
 
 // The bytes of plane `p` that a blit of the (already clipped) source rect
 // reads: from the first row's first byte to the last row's last byte. Used
-// for both WireVirt and UnwireVirt, which must be given the same range.
+// for both KeWireVirt and KeUnwireVirt, which must be given the same range.
 static void BlitPlaneRange(const uint8_t* planes, size_t plane_size, int plane_stride, int p,
                            int src_x, int src_y, int w, int h,
                            uint8_t** out_ptr, size_t* out_len) {
@@ -69,10 +69,10 @@ void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
         uint8_t* ptr;
         size_t len;
         BlitPlaneRange(planes, plane_size, plane_stride, p, src_x, src_y, w, h, &ptr, &len);
-        if (WireVirt(ptr, len) != 0) {
+        if (KeWireVirt(ptr, len) != 0) {
             for (int u = 0; u < p; u++) {
                 BlitPlaneRange(planes, plane_size, plane_stride, u, src_x, src_y, w, h, &ptr, &len);
-                UnwireVirt(ptr, len);
+                KeUnwireVirt(ptr, len);
             }
             return;     // couldn't make the pixels resident; nothing drawn
         }
@@ -139,7 +139,7 @@ void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
         uint8_t* ptr;
         size_t len;
         BlitPlaneRange(planes, plane_size, plane_stride, p, src_x, src_y, w, h, &ptr, &len);
-        UnwireVirt(ptr, len);
+        KeUnwireVirt(ptr, len);
     }
 }
 #pragma GCC diagnostic pop

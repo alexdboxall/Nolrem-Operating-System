@@ -90,14 +90,14 @@ export int CdInvertRegion(struct dc* dc, struct region rgn) {
 export int CdPaintRegion(struct dc* dc, struct region rgn) {
     struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintRegionWithBrush(dc, rgn, brush);
-    DerefObject(brush);
+    KeDerefObject(brush);
     return retv;
 }
 
 export int CdPaintRect(struct dc* dc, int x, int y, int width, int height) {
     struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
     int retv = CdPaintRectWithBrush(dc, x, y, width, height, brush);
-    DerefObject(brush);
+    KeDerefObject(brush);
     return retv;
 }
 
@@ -144,7 +144,7 @@ export int CdPaintGradientRectHz(struct dc* dc, int x, int y, int width, int hei
         b1 += adj_b;
         a1 += adj_a;
     }
-    DerefObject(grad_brush);
+    KeDerefObject(grad_brush);
     return 0;
 }
 

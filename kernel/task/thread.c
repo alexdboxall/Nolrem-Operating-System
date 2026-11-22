@@ -10,23 +10,23 @@
 #define KSTACK_SIZE     (1024 * 4)
 #define USTACK_SIZE     (1024 * 16)
 
-export size_t GetCurrentThreadKernelStackRemaining(void) {
-    struct thread* thr = GetCurrentThread();
+export size_t KeGetCurrentThreadKernelStackRemaining(void) {
+    struct thread* thr = KeGetCurrentThread();
     size_t stack_current = (size_t) &thr;
     size_t stack_bottom = thr->kernel_stack_top - thr->kernel_stack_size;
     return stack_current - stack_bottom;
 }
 
 export void KeSetLastUserError(int err) {
-    GetCurrentThread()->last_error = err;
+    KeGetCurrentThread()->last_error = err;
 }
 
-export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size) {
+export struct thread* KeCreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size) {
     struct thread* thr = AllocHeap(sizeof(struct thread));
     if (thr == NULL) {
         return NULL;
     }
-    InitObject(thr, OBJTYPE_THREAD);
+    KeInitObject(thr, OBJTYPE_THREAD);
 
     thr->vas = vas;
 
@@ -52,7 +52,7 @@ export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void*
                 return NULL;
             }
         } else {
-            kernel_stack_bottom = (size_t) AllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
+            kernel_stack_bottom = (size_t) KeAllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
         }
         thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
     }
@@ -70,10 +70,10 @@ export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void*
     thr->irq_disable_counter = 2;   /* BeginThread does TWO pops to IF state */
     thr->saved_interrupt_enabled = true;
     
-    if (vas == GetKernelVas()) {
+    if (vas == KeGetKernelVas()) {
         thr->stack_pointer = thr->kernel_stack_top;
     } else {
-        thr->user_stack_base = (size_t) AllocAnonMemory(USTACK_SIZE, VP_WRITE | VP_USER);
+        thr->user_stack_base = (size_t) KeAllocAnonMemory(USTACK_SIZE, VP_WRITE | VP_USER);
         thr->stack_pointer = thr->user_stack_base + USTACK_SIZE;
     }
 
@@ -81,28 +81,28 @@ export struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void*
         /* Skip for initial kernel thread, we're not really entering it. */
         ArchSetupNewThreadEntry(thr, entry, context);
     }
-    AcquireScheduler();
-    UnblockThread(thr, 0);
-    ReleaseScheduler();
+    KeAcquireScheduler();
+    KeUnblockThread(thr, 0);
+    KeReleaseScheduler();
 
     return thr;
 }
 
-export struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context) {
-    return CreateThreadEx(vas, entry, context, KSTACK_SIZE);
+export struct thread* KeCreateThread(struct vas* vas, void(*entry)(void*), void* context) {
+    return KeCreateThreadEx(vas, entry, context, KSTACK_SIZE);
 }
 
-export uint8_t GetThreadPriority(struct thread* thr) {
-    AcquireScheduler();
+export uint8_t KeGetThreadPriority(struct thread* thr) {
+    KeAcquireScheduler();
     uint8_t retv = thr->priority;
-    ReleaseScheduler();
+    KeReleaseScheduler();
     return retv;
 }
 
-export void SetThreadPriority(struct thread* thr, uint8_t priority) {
-    AcquireScheduler();
+export void KeSetThreadPriority(struct thread* thr, uint8_t priority) {
+    KeAcquireScheduler();
     thr->priority = priority;
-    ReleaseScheduler();
+    KeReleaseScheduler();
 }
 
 static void CleanupThread(void* _thr) {
@@ -111,26 +111,26 @@ static void CleanupThread(void* _thr) {
 }
 
 void KeStartDelayTermination(void) {
-    AcquireScheduler();
+    KeAcquireScheduler();
     /* TODO: probably some process-side things too once that's implemented */
-    struct thread* thr = GetCurrentThread();
-    RefObject(thr);
+    struct thread* thr = KeGetCurrentThread();
+    KeRefObject(thr);
     thr->flags |= TF_DELAY_TERMINATE;
-    ReleaseScheduler();
+    KeReleaseScheduler();
 }
 
 void KeEndDelayTermination(void) {
-     AcquireScheduler();
+     KeAcquireScheduler();
     /* TODO: probably some process-side things too once that's implemented */
-    struct thread* thr = GetCurrentThread();
+    struct thread* thr = KeGetCurrentThread();
     thr->flags &= ~TF_DELAY_TERMINATE;
     if (thr->flags & TF_MARKED_TERMINATION) {
         // TODO: terminate however that's done
     }
-    DerefObject(thr);
-    ReleaseScheduler();
+    KeDerefObject(thr);
+    KeReleaseScheduler();
 }
 
-void InitThread(void) { 
-    RegisterObjectType(OBJTYPE_THREAD, CleanupThread);
+void KeInitThread(void) { 
+    KeRegisterObjectType(OBJTYPE_THREAD, CleanupThread);
 }

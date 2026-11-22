@@ -20,7 +20,7 @@ pageable size_t SysPenColour(size_t a, size_t op, size_t argb, size_t) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
         KeSetLastUserError(EINVAL);
         return op == OP_GET ? 0 : EINVAL;
     }
@@ -34,7 +34,7 @@ pageable size_t SysPenColour(size_t a, size_t op, size_t argb, size_t) {
     } else {
         retv = (size_t) CdSetPenColour(pen, (colour_t) argb);
     }
-    DerefObject(pen);
+    KeDerefObject(pen);
     return retv;
 }
 

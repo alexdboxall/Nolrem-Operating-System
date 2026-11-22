@@ -10,7 +10,7 @@
 
 pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
     void* uo = (void*) a;
-    if (!ValidateUserObjectAndAtomicallyRef(uo, UOBJ_ANYTYPE)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(uo, UOBJ_ANYTYPE)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
@@ -20,19 +20,19 @@ pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
     struct user_obj_header* hdr = uo;
     if ((hdr->user_type == UOBJ_BRUSH && CdIsStockBrush(uo))
         || (hdr->user_type == UOBJ_PEN && CdIsStockPen(uo))) {
-        DerefObject(uo);
+        KeDerefObject(uo);
         return 0;
     }
 
     int retv;
     if (type == TYPE_REF) {
-        retv = UserRef(uo);
+        retv = KeUserRef(uo);
     } else if (type == TYPE_DEREF) {
-        retv = UserDeref(uo);
+        retv = KeUserDeref(uo);
     } else {
         retv = EINVAL;
     }
-    DerefObject(uo);
+    KeDerefObject(uo);
     return retv;
 }
 

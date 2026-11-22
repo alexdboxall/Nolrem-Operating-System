@@ -37,8 +37,8 @@ struct aio {
 };
 
 
-int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt);
+int KeCreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt);
 int KeCreateTruncateIO(struct aio* aio, void* node_or_file, off_t pos, void(*callback)(void*), void* callback_ctxt);
 
-void SignalDoneIO(struct aio* aio, int result_code);
-int WaitIO(struct aio* aio, uint64_t timeout);
+void KeSignalDoneIO(struct aio* aio, int result_code);
+int KeWaitIO(struct aio* aio, uint64_t timeout);

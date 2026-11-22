@@ -135,7 +135,7 @@ _Static_assert(FLOPPY_MAX_RUN >= 1 && FLOPPY_MAX_RUN <= SECTORS_PER_TRACK,
 #define FLOPPY_TRACE
 
 #ifdef FLOPPY_TRACE
-#define FloppyTrace(s) LogPrintf("FloppyTrace: %s", s)
+#define FloppyTrace(s) KeLogPrintf("FloppyTrace: %s", s)
 #else
 #define FloppyTrace(s) ((void) 0)
 #endif
@@ -177,7 +177,7 @@ struct floppy_data* floppy_drives_installed[MAX_FLOPPY_DRIVES] = {0};
  */
 static void FloppyIrqHandler(struct x86_regs*) {
     if (__atomic_exchange_n(&floppy_irq_armed, false, __ATOMIC_ACQ_REL)) {
-        ReleaseMutex(floppy_irq_mutex);
+        KeReleaseMutex(floppy_irq_mutex);
     }
 }
 
@@ -197,26 +197,26 @@ static void FloppyIrqHandler(struct x86_regs*) {
  */
 static void FloppyIrqArm(void) {
     if (__atomic_exchange_n(&floppy_irq_armed, false, __ATOMIC_ACQ_REL)) {
-        ReleaseMutex(floppy_irq_mutex);
+        KeReleaseMutex(floppy_irq_mutex);
     }
 
     /*
      * Never blocks: the mutex is free whenever we get here, since only one
      * thread (the one holding floppy_lock) ever uses it.
      */
-    AcquireMutex(floppy_irq_mutex, TIMEOUT_INFINITE);
+    KeAcquireMutex(floppy_irq_mutex, TIMEOUT_INFINITE);
     __atomic_store_n(&floppy_irq_armed, true, __ATOMIC_RELEASE);
 }
 
 static int FloppyIrqWait(struct floppy_data* flp, int timeout_ms) {
-    if (AcquireMutex(floppy_irq_mutex, MS_TO_NS(timeout_ms)) != 0) {
+    if (KeAcquireMutex(floppy_irq_mutex, MS_TO_NS(timeout_ms)) != 0) {
         /*
          * Timed out. Disarm so a late IRQ can't release the mutex behind our
          * back. If it was still armed, we hold the mutex and must put it back.
          */
         if (__atomic_exchange_n(&floppy_irq_armed, false, __ATOMIC_ACQ_REL)) {
-            ReleaseMutex(floppy_irq_mutex);
-            LogPrintf("[floppy]: IRQ timeout\n");
+            KeReleaseMutex(floppy_irq_mutex);
+            KeLogPrintf("[floppy]: IRQ timeout\n");
             flp->need_reset = true;
             return ETIMEDOUT;
         }
@@ -231,7 +231,7 @@ static int FloppyIrqWait(struct floppy_data* flp, int timeout_ms) {
     /*
      * Got the IRQ. Hand the mutex back so it is free for the next command.
      */
-    ReleaseMutex(floppy_irq_mutex);
+    KeReleaseMutex(floppy_irq_mutex);
     return 0;
 }
 
@@ -252,7 +252,7 @@ static void FloppyMotor(struct floppy_data* flp, bool on) {
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_ON);
         if (!flp->motor_on) {
             play_sound(55);
-            SleepMilli(MOTOR_SPINUP_MS);
+            KeSleepMilli(MOTOR_SPINUP_MS);
         }
     } else {
         nosound();
@@ -278,13 +278,13 @@ static int FloppyWaitMsr(struct floppy_data* flp, bool want_read) {
     }
 
     for (int i = 0; i < MSR_TIMEOUT_MS / 10; ++i) {
-        SleepMilli(10);
+        KeSleepMilli(10);
         if ((inb(flp->base + FLOPPY_MSR) & mask) == want) {
             return 0;
         }
     }
 
-    LogPrintf("[floppy]: MSR timeout\n");
+    KeLogPrintf("[floppy]: MSR timeout\n");
     flp->need_reset = true;
     return ETIMEDOUT;
 }
@@ -349,7 +349,7 @@ static int FloppyStep(struct floppy_data* flp, const uint8_t* cmd, int length, i
          * it can legitimately need another go.
          */
         if ((st0 & (ST0_IC | ST0_EC)) == 0 && (st0 & ST0_SE) && cyl == target_cylinder) {
-            SleepMilli(HEAD_SETTLE_MS);
+            KeSleepMilli(HEAD_SETTLE_MS);
             play_sound(55);
             return 0;
         }
@@ -429,7 +429,7 @@ static int FloppyReset(struct floppy_data* flp) {
      * microseconds).
      */
     outb(flp->base + FLOPPY_DOR, DOR_RESET);
-    SleepMilli(RESET_HOLD_MS);
+    KeSleepMilli(RESET_HOLD_MS);
 
     FloppyIrqArm();
     outb(flp->base + FLOPPY_DOR, DOR_MOTOR_OFF);
@@ -589,12 +589,12 @@ static int FloppyTransferSectors(struct floppy_data* flp, bool write, int cylind
             return 0;
         }
         if (error == EROFS) {
-            LogPrintf("[floppy]: disk is write protected\n");
+            KeLogPrintf("[floppy]: disk is write protected\n");
             return EROFS;
         }
     }
 
-    LogPrintf(write ? "[floppy]: write failed\n" : "[floppy]: read failed\n");
+    KeLogPrintf(write ? "[floppy]: write failed\n" : "[floppy]: read failed\n");
     return EIO;
 }
 
@@ -618,7 +618,7 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
     int remaining = length / SECTOR_SIZE;
     int error = 0;
 
-    AcquireMutex(floppy_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
 
     while (remaining > 0) {
         /*
@@ -645,7 +645,7 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
          * read, hand the data over once it has been read successfully.
          */
         if (write) {
-            PerformTransfer((void*) flp->virt_buffer, io, count * SECTOR_SIZE);
+            KePerformTransfer((void*) flp->virt_buffer, io, count * SECTOR_SIZE);
         }
 
         int done = 0;
@@ -653,14 +653,14 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
         if (error != 0) break;
 
         if (!write) {
-            PerformTransfer((void*) flp->virt_buffer, io, done * SECTOR_SIZE);
+            KePerformTransfer((void*) flp->virt_buffer, io, done * SECTOR_SIZE);
         }
 
         lba += done;
         remaining -= done;
     }
 
-    ReleaseMutex(floppy_lock);
+    KeReleaseMutex(floppy_lock);
 
     FloppyTrace("[floppy]: done\n");
     return error;
@@ -674,18 +674,18 @@ static int ReadWrite(struct aio* aio) {
 }
 
 static int Create(struct vnode* node, struct vnode** partition, const char* name, int, mode_t) {
-    AcquireMutex(floppy_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
     struct floppy_data* flp = node->data;
-    int res = DiskCreateHelper(&flp->partitions, partition, name);
-    ReleaseMutex(floppy_lock);
+    int res = KeDiskCreateHelper(&flp->partitions, partition, name);
+    KeReleaseMutex(floppy_lock);
     return res;
 }
 
 static int Follow(struct vnode* node, struct vnode** output, const char* name) {
-    AcquireMutex(floppy_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
     struct floppy_data* flp = node->data;
-    int res = DiskFollowHelper(&flp->partitions, output, name);
-    ReleaseMutex(floppy_lock);
+    int res = KeDiskFollowHelper(&flp->partitions, output, name);
+    KeReleaseMutex(floppy_lock);
     return res;
 }
 
@@ -717,7 +717,7 @@ static bool DetectFloppy(void) {
 
 
 void FloppyDriverThread(void* _flp) {
-    BeginNewThread();
+    KeBeginNewThread();
 
     struct floppy_data* flp = _flp;
 
@@ -728,7 +728,7 @@ void FloppyDriverThread(void* _flp) {
         int retv = KeGetMessage(flp->msgbox, &aio, next_timeout);
         bool have_request = retv == 0;
         if (have_request && aio->operation != AIO_OP_READ && aio->operation != AIO_OP_WRITE) {
-            SignalDoneIO(aio, ENOTSUP);
+            KeSignalDoneIO(aio, ENOTSUP);
             continue;
         }
         FloppyMotor(flp, have_request);
@@ -736,7 +736,7 @@ void FloppyDriverThread(void* _flp) {
         if (have_request) {
             next_timeout = MS_TO_NS(MOTOR_IDLE_MS);
             int res = FloppyIo((struct floppy_data*) aio->node->data, &aio->transfer);
-            SignalDoneIO(aio, res);
+            KeSignalDoneIO(aio, res);
 
         } else {
             next_timeout = TIMEOUT_INFINITE;
@@ -750,8 +750,8 @@ void InitFloppy(void) {
         return;
     }
 
-    size_t phys_buffer = AllocPhys(true);
-    size_t virt_buffer = (size_t) AllocFixedMemory(phys_buffer, PAGE_SIZE, VP_WRITE);
+    size_t phys_buffer = KeAllocPhys(true);
+    size_t virt_buffer = (size_t) KeAllocFixedMemory(phys_buffer, PAGE_SIZE, VP_WRITE);
     
     /*
      * We will only support the first floppy drive that a system has.
@@ -775,9 +775,9 @@ void InitFloppy(void) {
      * the controller turns out not to work.
      */
     if (floppy_irq_mutex == NULL) {
-        floppy_irq_mutex = CreateMutex();
+        floppy_irq_mutex = KeCreateMutex();
     }
-    RegisterInterruptHandler(6, FloppyIrqHandler);
+    KeRegisterInterruptHandler(6, FloppyIrqHandler);
 
     /*
      * Nothing else can touch the controller yet (no lock, no motor thread, no
@@ -785,31 +785,31 @@ void InitFloppy(void) {
      */
     int res = FloppyReset(flp);
     if (res != 0) {
-        LogPrintf("FDC doesn't work...\n");
-        FreeDiscardedPhys(GetPhysPage(phys_buffer));
+        KeLogPrintf("FDC doesn't work...\n");
+        KeFreeDiscardedPhys(KeGetPhysPage(phys_buffer));
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_OFF);
         FreeHeap(flp);
         return;
     }
 
-    floppy_lock = CreateMutex();
+    floppy_lock = KeCreateMutex();
     
-    flp->msgbox = CreateMessageBox(sizeof(struct aio*), 16);
+    flp->msgbox = KeCreateMessageBox(sizeof(struct aio*), 16);
     floppy_drives_installed[0] = flp;
 
-    CreateThreadEx(GetKernelVas(), FloppyDriverThread, flp, 1200);
+    KeCreateThreadEx(KeGetKernelVas(), FloppyDriverThread, flp, 1200);
 
-    struct vnode* node = CreateVnode(dev_ops, (struct stat) {
+    struct vnode* node = KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFBLK | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,
         .st_blksize = SECTOR_SIZE,
         .st_blocks = TOTAL_SECTORS,
         .st_size = FLOPPY_SIZE,
-        .st_dev = NextDevId()
+        .st_dev = KeNextDevId()
     });
     node->data = flp;
 
-    InitDiskPartitionHelper(&flp->partitions);
-    Mount(node, GenerateNewRawDiskName(DISKUTIL_TYPE_FLOPPY));
-    CreateDiskPartitions(CreateFile(node, 0, 0, true, true));
+    KeInitDiskPartitionHelper(&flp->partitions);
+    KeMount(node, KeGenerateNewRawDiskName(DISKUTIL_TYPE_FLOPPY));
+    KeCreateDiskPartitions(KeCreateFile(node, 0, 0, true, true));
 }

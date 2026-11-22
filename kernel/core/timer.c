@@ -10,10 +10,10 @@ static uint64_t ns_since_boot = 1;
 static uint64_t next_wakeup_ns = 0;
 static struct thread* first_waiting_timer = NULL;
 
-uint64_t GetTimeSinceBoot(void) {
-    AcquireSpinlock(&timer_spinlock);
+uint64_t KeGetTimeSinceBoot(void) {
+    KeAcquireSpinlock(&timer_spinlock);
     uint64_t retv = ns_since_boot;
-    ReleaseSpinlock(&timer_spinlock);
+    KeReleaseSpinlock(&timer_spinlock);
     return retv;
 }
 
@@ -23,7 +23,7 @@ static void DoWakeups(uint64_t ns) {
         if (ns >= thr->wakeup_time_ns) {
             thr->wakeup_time_ns = 0;
             first_waiting_timer = thr->next_waiting_timer;
-            UnblockThread(thr, ETIMEDOUT);
+            KeUnblockThread(thr, ETIMEDOUT);
         } else {
             next_wakeup_ns = thr->wakeup_time_ns;
             return;
@@ -32,23 +32,23 @@ static void DoWakeups(uint64_t ns) {
     next_wakeup_ns = 0;
 }
 
-void AdvanceTimer(uint64_t ns) {
-    AcquireScheduler();
-    AcquireSpinlock(&timer_spinlock);
+void KeAdvanceTimer(uint64_t ns) {
+    KeAcquireScheduler();
+    KeAcquireSpinlock(&timer_spinlock);
     ns_since_boot += ns;
     if (next_wakeup_ns != 0 && next_wakeup_ns <= ns_since_boot) {
         DoWakeups(ns_since_boot);
     }
-    ReleaseSpinlock(&timer_spinlock);
-    ReleaseScheduler();
+    KeReleaseSpinlock(&timer_spinlock);
+    KeReleaseScheduler();
 }
 
-void CancelTimer(struct thread* thr) {
+void KeCancelTimer(struct thread* thr) {
     // Scheduler lock must already be held!
 
     if (thr->wakeup_time_ns == 0) {
-        /* Already cancelled, i.e. DoWakeups woke it, so CancelTimer as part
-         * of UnblockThread doesn't need to do anything. */
+        /* Already cancelled, i.e. DoWakeups woke it, so KeCancelTimer as part
+         * of KeUnblockThread doesn't need to do anything. */
         return;
     }
     
@@ -65,31 +65,31 @@ void CancelTimer(struct thread* thr) {
     thr->next_waiting_timer = NULL;
     thr->wakeup_time_ns = 0;
 
-    AcquireSpinlock(&timer_spinlock); 
+    KeAcquireSpinlock(&timer_spinlock); 
     next_wakeup_ns = first_waiting_timer == NULL ? 0 : first_waiting_timer->wakeup_time_ns;
-    ReleaseSpinlock(&timer_spinlock);
+    KeReleaseSpinlock(&timer_spinlock);
 }
 
-bool AddThreadToSleepQueue(bool relative, uint64_t ns, bool need_sched_lock) {
-    if (need_sched_lock) AcquireScheduler();
+bool KeAddThreadToSleepQueue(bool relative, uint64_t ns, bool need_sched_lock) {
+    if (need_sched_lock) KeAcquireScheduler();
 
-    AcquireSpinlock(&timer_spinlock); 
+    KeAcquireSpinlock(&timer_spinlock); 
     /* Convert to absolute. */
     if (relative) {
         ns += ns_since_boot;
     }
     bool past = ns <= ns_since_boot;
     if (past) {
-        ReleaseSpinlock(&timer_spinlock);
-        if (need_sched_lock) ReleaseScheduler();
+        KeReleaseSpinlock(&timer_spinlock);
+        if (need_sched_lock) KeReleaseScheduler();
         return false;
     }
     if (next_wakeup_ns == 0 || ns < next_wakeup_ns) {
         next_wakeup_ns = ns;
     }
-    ReleaseSpinlock(&timer_spinlock);
+    KeReleaseSpinlock(&timer_spinlock);
 
-    struct thread* thr = GetCurrentThread();
+    struct thread* thr = KeGetCurrentThread();
     thr->wakeup_time_ns = ns;
     if (first_waiting_timer == NULL || ns < first_waiting_timer->wakeup_time_ns) {
         thr->next_waiting_timer = first_waiting_timer;
@@ -103,23 +103,23 @@ bool AddThreadToSleepQueue(bool relative, uint64_t ns, bool need_sched_lock) {
         prev->next_waiting_timer = thr;
     }
 
-    BlockThread();
-    if (need_sched_lock) ReleaseScheduler();
+    KeBlockThread();
+    if (need_sched_lock) KeReleaseScheduler();
     return true;
 }
 
-void InitTimer(void) {
-    InitSpinlock(&timer_spinlock);
+void KeInitTimer(void) {
+    KeInitSpinlock(&timer_spinlock);
 }
 
-export void SleepUntil(uint64_t ns) {
-    AddThreadToSleepQueue(false, ns, true);
+export void KeSleepUntil(uint64_t ns) {
+    KeAddThreadToSleepQueue(false, ns, true);
 }
 
-export void SleepNano(uint64_t ns) {
-    AddThreadToSleepQueue(true, ns, true);
+export void KeSleepNano(uint64_t ns) {
+    KeAddThreadToSleepQueue(true, ns, true);
 }
 
-export void SleepMilli(uint64_t ms) {
-    AddThreadToSleepQueue(true, ms * 1000000, true);
+export void KeSleepMilli(uint64_t ms) {
+    KeAddThreadToSleepQueue(true, ms * 1000000, true);
 }

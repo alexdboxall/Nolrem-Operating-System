@@ -29,7 +29,7 @@ static void LogCharacter(char c) {
         }
         outb(PORT, c);
         if (disp_mode) {
-            KernelDisplayLog(c);
+            KeDisplayLog(c);
         }
     }   
 }
@@ -67,7 +67,7 @@ static void LogString(char* s) {
     }
 }
 
-export void LogPrintf(const char* format, ...) {
+export void KeLogPrintf(const char* format, ...) {
     va_list args;
     va_start(args, format);
 
@@ -121,7 +121,7 @@ export void LogPrintf(const char* format, ...) {
     va_end(args);
 }
 
-void InitLog(void) {
+void KeInitLog(void) {
     uint16_t* vram = (uint16_t*) (0xC0000000 + 0xB8000);
     memset(vram, 0, 2 * 25 * 80);
 
@@ -133,6 +133,6 @@ void InitLog(void) {
     outb(PORT + 2, 0xC7);    // Enable FIFO, clear them, with 14-byte threshold
     outb(PORT + 4, 0x0B);    // IRQs enabled, RTS/DSR set
 
-    LogPrintf("Kernel started...\n");
+    KeLogPrintf("Kernel started...\n");
 }
 

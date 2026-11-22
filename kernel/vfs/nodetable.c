@@ -152,17 +152,17 @@ static struct vnode* FindNode(dev_t dev, ino_t id) {
     return NULL;
 }
 
-export struct vnode* TryFindAndReferenceExistingVnode(ino_t id, dev_t dev) {
-    AcquireSpinlock(&lock);
+export struct vnode* KeTryFindAndReferenceExistingVnode(ino_t id, dev_t dev) {
+    KeAcquireSpinlock(&lock);
     struct vnode* node = FindNode(dev, id);
     if (node != NULL) {
-        RefObject(node);
+        KeRefObject(node);
     }
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
     return node;
 }
 
-export int RegisterNewVnode(struct vnode* node) {
+export int KeRegisterNewVnode(struct vnode* node) {
     if (node == NULL) {
         return EINVAL;
     }
@@ -171,12 +171,12 @@ export int RegisterNewVnode(struct vnode* node) {
     node->tree.height = 1;
 
     bool duplicate = false;
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     root = InsertNode(root, node, &duplicate);
     if (!duplicate) {
-        RefObject(node);
+        KeRefObject(node);
     }
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
     return duplicate ? EEXIST : 0;
 }
 
@@ -185,17 +185,17 @@ export int RegisterNewVnode(struct vnode* node) {
  * unmounted): removes `node` from the table and drops the table's reference.
  * Safe to call on a node that isn't registered; then it does nothing.
  */
-export void UnregisterVnode(struct vnode* node) {
+export void KeUnregisterVnode(struct vnode* node) {
     if (node == NULL) {
         return;
     }
     bool found = false;
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     root = RemoveNode(root, node, &found);
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
     if (found) {
         /* Outside the lock: this may run the destructor. */
-        DerefObject(node);
+        KeDerefObject(node);
     }
 }
 
@@ -229,7 +229,7 @@ static void CollectPurgeVictims(struct vnode* sub, struct purge_scan* scan) {
     CollectPurgeVictims(sub->tree.right, scan);
 }
 
-export void PurgeOldVnodes(void) {
+export void KePurgeOldVnodes(void) {
     struct purge_scan scan;
     scan.have_after = false;
     scan.after_dev = 0;
@@ -238,7 +238,7 @@ export void PurgeOldVnodes(void) {
     for (;;) {
         scan.count = 0;
  
-        AcquireSpinlock(&lock);
+        KeAcquireSpinlock(&lock);
         CollectPurgeVictims(root, &scan);
         bool more = scan.count == PURGE_BATCH;
         if (more) {
@@ -256,11 +256,11 @@ export void PurgeOldVnodes(void) {
                 scan.found[i] = NULL;   /* never deref what we didn't unlink */
             }
         }
-        ReleaseSpinlock(&lock);
+        KeReleaseSpinlock(&lock);
  
         for (size_t i = 0; i < scan.count; i++) {
             if (scan.found[i] != NULL) {
-                DerefObject(scan.found[i]);
+                KeDerefObject(scan.found[i]);
             }
         }
  
@@ -270,7 +270,7 @@ export void PurgeOldVnodes(void) {
     }
 }
 
-void InitVnodeTable(void) {
-    InitSpinlock(&lock);
+void KeInitVnodeTable(void) {
+    KeInitSpinlock(&lock);
     root = NULL;
 }

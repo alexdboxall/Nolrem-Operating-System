@@ -13,24 +13,24 @@ pageable size_t SysInvertRegion(size_t a, size_t rgn_ptr, size_t, size_t) {
     struct dc* dc = (struct dc*) a;
     struct uregion* urgn = (struct uregion*) rgn_ptr;
 
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return ENOMEM;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(urgn, UOBJ_REGION)) {
-        DerefObject(dc);
+    if (!KeValidateUserObjectAndAtomicallyRef(urgn, UOBJ_REGION)) {
+        KeDerefObject(dc);
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
 
     int res = CdInvertRegion(dc, UserRegionToRegion(urgn));
 
-    DerefObject(urgn);
-    DerefObject(dc);
+    KeDerefObject(urgn);
+    KeDerefObject(dc);
     if (res != 0) {
         KeSetLastUserError(res);
     }

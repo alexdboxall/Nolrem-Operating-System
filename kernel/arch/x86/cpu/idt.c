@@ -53,9 +53,9 @@ void x86LoadIdt(size_t idtPtr) {
 }
 
 void x86InitIdt(void) {
-	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
+	platform_cpu_data_t* cpu_data = KeGetCpu()->platform_specific;
 
-	cpu_data->idt = AllocPermanentHeap(sizeof(struct idt));
+	cpu_data->idt = KeAllocPermanentHeap(sizeof(struct idt));
 	struct idt* idt = cpu_data->idt;
 
 	size_t* isr_vectors = &isr_vectors_first_33;

@@ -12,7 +12,7 @@
 pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_t flags) {
     struct uregion* urgn = (struct uregion*) rgn_ptr;
 
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return ENOMEM;
     }
@@ -20,7 +20,7 @@ pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(urgn, UOBJ_REGION)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(urgn, UOBJ_REGION)) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
@@ -29,7 +29,7 @@ pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_
     struct brush* brush;
     int res = CdAcquirePaintObjects((void*) a, (struct brush*) brush_ptr, (int) flags, &dc, &brush);
     if (res != 0) {
-        DerefObject(urgn);
+        KeDerefObject(urgn);
         KeSetLastUserError(res);
         return res;
     }
@@ -41,7 +41,7 @@ pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_
     }
 
     CdReleasePaintObjects(dc, brush);
-    DerefObject(urgn);
+    KeDerefObject(urgn);
     if (res != 0) {
         KeSetLastUserError(res);
     }

@@ -7,5 +7,5 @@ struct mutex {
     struct sem sem;
 };
 
-void InitStaticMutex(struct mutex* mtx);
-void DestroyStaticMutex(struct mutex* mtx);
+void KeInitStaticMutex(struct mutex* mtx);
+void KeDestroyStaticMutex(struct mutex* mtx);

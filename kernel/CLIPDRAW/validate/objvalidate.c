@@ -8,7 +8,7 @@ static bool IsValidUserOwnedObject(void* obj) {
     return true;
 }
 
-bool ValidateUserObjectAndAtomicallyRef(void* obj, int type) {
+bool KeValidateUserObjectAndAtomicallyRef(void* obj, int type) {
     /* Don't dereference NULL below to read the type. */
     if (obj == NULL) {
         return false;
@@ -18,7 +18,7 @@ bool ValidateUserObjectAndAtomicallyRef(void* obj, int type) {
         ok = ok && ((struct user_obj_header*) obj)->user_type == type;
     }
     if (ok) {
-        RefObject(obj);
+        KeRefObject(obj);
     }
     return ok;
 }

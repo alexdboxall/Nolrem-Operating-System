@@ -49,7 +49,7 @@ static void PartitionAccessAsyncCallback(void* _aio) {
         tr->address = ((uint8_t*) tr->address) + bytes_transferred;
     }
 
-    SignalDoneIO(aio, subaio->result_code);
+    KeSignalDoneIO(aio, subaio->result_code);
     FreeHeap(subaio);
 }
 
@@ -69,10 +69,10 @@ static int Access(struct aio* aio, bool write) {
     real_transfer.offset = start_addr;
 
     struct aio* subaio = AllocHeap(sizeof(struct aio));
-    CreateIO(subaio, partition->disk, real_transfer, PartitionAccessAsyncCallback, (void*) aio);
+    KeCreateIO(subaio, partition->disk, real_transfer, PartitionAccessAsyncCallback, (void*) aio);
     aio->sub = subaio;
     subaio->extra_data = length;
-    return (write ? WriteFile : ReadFile)(subaio);
+    return (write ? KeWriteFile : KeReadFile)(subaio);
 }
 
 static int Read(struct aio* aio) {   
@@ -89,7 +89,7 @@ static int Create(struct vnode* node, struct vnode** fs, const char*, int flags,
         return EALREADY;
     }
 
-    partition->fs = CreateFile(*fs, flags, mode, true, true);
+    partition->fs = KeCreateFile(*fs, flags, mode, true, true);
     return 0;
 }
 
@@ -115,7 +115,7 @@ static const struct vnode_operations dev_ops = {
     .follow         = Follow,
 };
 
-pageable struct file* CreatePartition(
+pageable struct file* KeCreatePartition(
     struct file* disk, uint64_t start, uint64_t length, int id, 
     int sector_size, int media_type, bool boot
 ) {
@@ -129,19 +129,19 @@ pageable struct file* CreatePartition(
     data->boot = boot;
     data->fs = NULL;
 
-    struct vnode* node = CreateVnode(dev_ops, (struct stat) {
+    struct vnode* node = KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFBLK | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_blksize = sector_size,
         .st_blocks = length / sector_size,
         .st_nlink = 1,
         .st_size = length,
-        .st_dev = NextDevId()
+        .st_dev = KeNextDevId()
     });
 
     node->data = data;
 
-    struct file* partition = CreateFile(node, 0, 0, true, true);
-    MountFilesystemForDisk(partition);
+    struct file* partition = KeCreateFile(node, 0, 0, true, true);
+    KeMountFilesystemForDisk(partition);
     return partition;
 }
 
@@ -177,7 +177,7 @@ static pageable struct file* TryCreateMbrPartition(
         return NULL;
     }
 
-    return CreatePartition(
+    return KeCreatePartition(
         disk, 
         ((uint64_t) start_sector) * sector_size, 
         ((uint64_t) total_sectors) * sector_size, 
@@ -223,7 +223,7 @@ static pageable struct file** GetMbrPartitions(struct file* disk) {
 /*
  * Returns a null terminated array of partitions.
  */
-export pageable struct file** GetPartitionsForDisk(struct file* disk) {
+export pageable struct file** KeGetPartitionsForDisk(struct file* disk) {
     struct file** partitions = GetMbrPartitions(disk);
     
     if (partitions == NULL) {

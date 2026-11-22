@@ -32,18 +32,18 @@ int DesktopWinProc(struct window* win, struct msg msg) {
         struct dc* dc = WmBeginPaint(win);
         if (desktop_bitmap == NULL) {
             struct open_mapped_file omf;
-            OpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", OMF_TRANSPARENT_DECOMPRESS, &omf);
+            KeOpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", OMF_TRANSPARENT_DECOMPRESS, &omf);
             desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, omf.f, 640, 480);
             OmfClose(&omf);
         }
-        if (IsOutOfMemory() || oom > 0 || desktop_bitmap == NULL) {
-            if (IsOutOfMemory() && oom == 0) {
+        if (KeIsOutOfMemory() || oom > 0 || desktop_bitmap == NULL) {
+            if (KeIsOutOfMemory() && oom == 0) {
                 WmInvalidateWindow(desktop_window, true);
             }
             oom = 256;
             CdPaintRectWithBrush(dc, 0, 0, win->local_win_bound.w, win->local_win_bound.h, desktop_brush);
         } else {
-            if (oom > 0 && !IsMemoryLow()) {
+            if (oom > 0 && !KeIsMemoryLow()) {
                 --oom;
                 if (oom == 0) {
                     WmInvalidateWindow(desktop_window, true);

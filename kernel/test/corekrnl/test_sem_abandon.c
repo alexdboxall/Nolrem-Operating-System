@@ -18,11 +18,11 @@
 
 /* ADJUST: replace with whatever gives up the CPU to other threads. */
 #ifndef SEMTEST_YIELD
-#define SEMTEST_YIELD() Schedule()
+#define SEMTEST_YIELD() KeSchedule()
 #endif
 
 /*
- * One Schedule() call walks every runnable thread once, and your kernel logs
+ * One KeSchedule() call walks every runnable thread once, and your kernel logs
  * every hop, so a "spin" is expensive. A real handoff completes within a
  * pass or two, so these are generous.
  */
@@ -39,8 +39,8 @@
 
 /*
  * How far the most recent job got on its worker:
- *   0 not picked up yet, 3 picked up and about to call AcquireSemFromMany,
- *   4 AcquireSemFromMany returned.
+ *   0 not picked up yet, 3 picked up and about to call KeAcquireSemFromMany,
+ *   4 KeAcquireSemFromMany returned.
  */
 static volatile int g_waiter_stage;
 
@@ -63,10 +63,10 @@ static int PoolStarted(void);
             }                                                                \
             SEMTEST_YIELD();                                                 \
             if (++_spins == SPIN_WARN) {                                     \
-                LogPrintf("sem test: STILL WAITING for: %s (workers started %d, job stage %d)\n", #cond, PoolStarted(), g_waiter_stage); \
+                KeLogPrintf("sem test: STILL WAITING for: %s (workers started %d, job stage %d)\n", #cond, PoolStarted(), g_waiter_stage); \
             }                                                                \
             if (_spins > SPIN_LIMIT) {                                       \
-                LogPrintf("sem test: TIMED OUT waiting for: %s (workers started %d, job stage %d)\n", #cond, PoolStarted(), g_waiter_stage); \
+                KeLogPrintf("sem test: TIMED OUT waiting for: %s (workers started %d, job stage %d)\n", #cond, PoolStarted(), g_waiter_stage); \
                 assert(0);                                                   \
                 break;                                                       \
             }                                                                \
@@ -108,7 +108,7 @@ struct worker {
     struct waiter* volatile job;
     volatile int busy;
     volatile int stage;   /* 0 not claimed by a thread yet, 2 claimed and running */
-    int idle_logs;        /* how many idle-loop Schedule calls have been logged */
+    int idle_logs;        /* how many idle-loop KeSchedule calls have been logged */
 };
 
 static struct worker g_pool[POOL_SIZE];
@@ -126,13 +126,13 @@ static int PoolStarted(void) {
 
 /* Runs one blocking acquire on the calling worker thread. */
 static void RunWaiter(struct waiter* w) {
-    struct thread* me = GetCurrentThread();
+    struct thread* me = KeGetCurrentThread();
     int sel = -1;
 
     w->thr = me;
-    TRACE("  waiter %p: entered, calling AcquireSemFromMany\n", (void*) me);
+    TRACE("  waiter %p: entered, calling KeAcquireSemFromMany\n", (void*) me);
     g_waiter_stage = 3;
-    int r = AcquireSemFromMany(w->sems, w->count, w->timeout, &sel);
+    int r = KeAcquireSemFromMany(w->sems, w->count, w->timeout, &sel);
     g_waiter_stage = 4;
     TRACE("  waiter %p: woke, result=%d selected=%d\n", (void*) me, r, sel);
 
@@ -149,7 +149,7 @@ static void RunWaiter(struct waiter* w) {
  * Workers do NOT read their context argument. The first run showed a page
  * fault at exactly the top of the new thread's stack (see the note on
  * TestContextArgument): the thread entry's parameter appears to be read from
- * one slot above where CreateThread() stored it. Until that's fixed in the
+ * one slot above where KeCreateThread() stored it. Until that's fixed in the
  * kernel, each worker instead claims the next free pool slot by counting.
  * Slots are initialised before any worker can run, and the claim is a plain
  * increment, which is fine only because scheduling is cooperative. With
@@ -159,25 +159,25 @@ static int g_worker_claims;
 
 static void WorkerEntry(void* ctx) {
     (void) ctx;     /* deliberately unused, see above */
-    BeginNewThread();
+    KeBeginNewThread();
 
     int idx = g_worker_claims++;
     CHECK(idx >= 0 && idx < g_pool_created);
     struct worker* wk = &g_pool[idx];
 
     wk->stage = 2;
-    TRACE("  worker %d: past BeginNewThread, entering idle loop\n", idx);
+    TRACE("  worker %d: past KeBeginNewThread, entering idle loop\n", idx);
 
     /* Never returns: there's no thread termination yet. */
     for (;;) {
         struct waiter* w;
         while ((w = wk->job) == NULL) {
             if (wk->idle_logs < 2) {
-                TRACE("  worker %d: idle, calling Schedule\n", (int) (wk - g_pool));
+                TRACE("  worker %d: idle, calling KeSchedule\n", (int) (wk - g_pool));
             }
             SEMTEST_YIELD();
             if (wk->idle_logs < 2) {
-                TRACE("  worker %d: idle Schedule returned\n", (int) (wk - g_pool));
+                TRACE("  worker %d: idle KeSchedule returned\n", (int) (wk - g_pool));
                 ++wk->idle_logs;
             }
         }
@@ -194,9 +194,9 @@ static void CreateWorker(int i) {
     g_pool[i].stage = 0;
     g_pool[i].idle_logs = 0;
     g_pool_created = i + 1;
-    TRACE("  CreateWorker %d: calling CreateThread\n", i);
-    CreateThread(GetKernelVas(), WorkerEntry, NULL);
-    TRACE("  CreateWorker %d: CreateThread returned\n", i);
+    TRACE("  CreateWorker %d: calling KeCreateThread\n", i);
+    KeCreateThread(KeGetKernelVas(), WorkerEntry, NULL);
+    TRACE("  CreateWorker %d: KeCreateThread returned\n", i);
 }
 
 static void EnsurePool(void) {
@@ -257,7 +257,7 @@ static void SpawnWaiter(struct waiter* w, struct sem** sems, int count) {
 
 static struct sem* NewBlockingSem(void) {
     /* count == max, so any acquire has to wait. */
-    return CreateSem(1, 1);
+    return KeCreateSem(1, 1);
 }
 
 static void CheckQueueEmpty(struct sem* s) {
@@ -299,11 +299,11 @@ static void CheckStillBlocked(struct waiter* w) {
 
 /* A sem that's been abandoned must still be a working sem. */
 static void CheckSemUsable(struct sem* s) {
-    CHECK(ReleaseSem(s) == 0);                        /* empty queue: count-- */
+    CHECK(KeReleaseSem(s) == 0);                        /* empty queue: count-- */
     CHECK(s->count == s->max - 1);
-    CHECK(AcquireSem(s, TIMEOUT_INSTANT) == 0);       /* count++ */
+    CHECK(KeAcquireSem(s, TIMEOUT_INSTANT) == 0);       /* count++ */
     CHECK(s->count == s->max);
-    CHECK(AcquireSem(s, TIMEOUT_INSTANT) == EAGAIN);
+    CHECK(KeAcquireSem(s, TIMEOUT_INSTANT) == EAGAIN);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -311,21 +311,21 @@ static void CheckSemUsable(struct sem* s) {
 /* ------------------------------------------------------------------------ */
 
 static void TestAbandonNoWaiters(void) {
-    struct sem* s = CreateSem(2, 1);
+    struct sem* s = KeCreateSem(2, 1);
 
-    AbandonSem(s);
+    KeAbandonSem(s);
     CHECK(s->count == 1);
     CheckQueueEmpty(s);
 
-    AbandonSem(s);   /* twice is fine */
+    KeAbandonSem(s);   /* twice is fine */
     CHECK(s->count == 1);
     CheckQueueEmpty(s);
 
-    CHECK(AcquireSem(s, TIMEOUT_INSTANT) == 0);
+    CHECK(KeAcquireSem(s, TIMEOUT_INSTANT) == 0);
     CHECK(s->count == 2);
-    CHECK(AcquireSem(s, TIMEOUT_INSTANT) == EAGAIN);
+    CHECK(KeAcquireSem(s, TIMEOUT_INSTANT) == EAGAIN);
 
-    DerefObject(s);
+    KeDerefObject(s);
 }
 
 static void TestAbandonSingleWaiter(void) {
@@ -337,16 +337,16 @@ static void TestAbandonSingleWaiter(void) {
     CheckQueueSingleEntry(s);
     CHECK(QueueStart(s) == (void*) w.thr);
 
-    TRACE("  calling AbandonSem\n");
-    AbandonSem(s);
-    TRACE("  AbandonSem returned, waiting for waiter to finish\n");
+    TRACE("  calling KeAbandonSem\n");
+    KeAbandonSem(s);
+    TRACE("  KeAbandonSem returned, waiting for waiter to finish\n");
 
     CheckAbandoned(&w);
     CheckQueueEmpty(s);
     CHECK(s->count == s->max);   /* abandon doesn't touch the count */
     CheckSemUsable(s);
 
-    DerefObject(s);
+    KeDerefObject(s);
 }
 
 static void TestAbandonManyWaitersOneSem(void) {
@@ -360,7 +360,7 @@ static void TestAbandonManyWaitersOneSem(void) {
     }
     CHECK(QueueEnd(s) == (void*) w[N - 1].thr);
 
-    AbandonSem(s);
+    KeAbandonSem(s);
 
     for (int i = 0; i < N; ++i) {
         CheckAbandoned(&w[i]);
@@ -368,7 +368,7 @@ static void TestAbandonManyWaitersOneSem(void) {
     CheckQueueEmpty(s);
     CheckSemUsable(s);
 
-    DerefObject(s);
+    KeDerefObject(s);
 }
 
 static void TestAbandonTwiceWithWaiters(void) {
@@ -380,15 +380,15 @@ static void TestAbandonTwiceWithWaiters(void) {
         SpawnWaiter(&w[i], sems, 1);
     }
 
-    AbandonSem(s);
-    AbandonSem(s);   /* second is a no-op */
+    KeAbandonSem(s);
+    KeAbandonSem(s);   /* second is a no-op */
 
     for (int i = 0; i < 3; ++i) {
         CheckAbandoned(&w[i]);
     }
     CheckQueueEmpty(s);
 
-    DerefObject(s);
+    KeDerefObject(s);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -404,14 +404,14 @@ static void MultiTwoSemsImpl(int abandon_idx) {
     CheckQueueSingleEntry(s[0]);
     CheckQueueSingleEntry(s[1]);
 
-    AbandonSem(s[abandon_idx]);
+    KeAbandonSem(s[abandon_idx]);
 
     CheckAbandoned(&w);
     CheckQueueEmpty(s[0]);
     CheckQueueEmpty(s[1]);   /* must be pulled off the other queue too */
 
     /* Abandoning the other sem now must be a no-op (no stale entry). */
-    AbandonSem(s[other]);
+    KeAbandonSem(s[other]);
     CHECK(s[0]->count == 1);
     CHECK(s[1]->count == 1);
 
@@ -419,8 +419,8 @@ static void MultiTwoSemsImpl(int abandon_idx) {
     CheckSemUsable(s[other]);
     CheckSemUsable(s[abandon_idx]);
 
-    DerefObject(s[0]);
-    DerefObject(s[1]);
+    KeDerefObject(s[0]);
+    KeDerefObject(s[1]);
 }
 
 static void TestMultiTwoSemsAbandonFirst(void)  { MultiTwoSemsImpl(0); }
@@ -432,7 +432,7 @@ static void MultiThreeSemsImpl(int abandon_idx) {
 
     SpawnWaiter(&w, s, 3);
 
-    AbandonSem(s[abandon_idx]);
+    KeAbandonSem(s[abandon_idx]);
 
     CheckAbandoned(&w);
     for (int i = 0; i < 3; ++i) {
@@ -440,7 +440,7 @@ static void MultiThreeSemsImpl(int abandon_idx) {
         CheckSemUsable(s[i]);
     }
     for (int i = 0; i < 3; ++i) {
-        DerefObject(s[i]);
+        KeDerefObject(s[i]);
     }
 }
 
@@ -458,7 +458,7 @@ static void TestManyClotsSamePair(void) {
         SpawnWaiter(&w[i], s, 2);
     }
 
-    AbandonSem(s[0]);
+    KeAbandonSem(s[0]);
 
     for (int i = 0; i < N; ++i) {
         CheckAbandoned(&w[i]);
@@ -466,8 +466,8 @@ static void TestManyClotsSamePair(void) {
     CheckQueueEmpty(s[0]);
     CheckQueueEmpty(s[1]);
 
-    DerefObject(s[0]);
-    DerefObject(s[1]);
+    KeDerefObject(s[0]);
+    KeDerefObject(s[1]);
 }
 
 /*
@@ -488,7 +488,7 @@ static void TestOverlappingWaitSets(void) {
     SpawnWaiter(&w2, set2, 2);
     SpawnWaiter(&w3, set3, 2);
 
-    AbandonSem(B);
+    KeAbandonSem(B);
 
     CheckAbandoned(&w1);
     CheckAbandoned(&w2);
@@ -497,16 +497,16 @@ static void TestOverlappingWaitSets(void) {
     CheckQueueSingleEntry(A);   /* only w3 left */
     CheckQueueSingleEntry(C);
 
-    AbandonSem(C);
+    KeAbandonSem(C);
 
     CheckAbandoned(&w3);
     CheckQueueEmpty(A);
     CheckQueueEmpty(B);
     CheckQueueEmpty(C);
 
-    DerefObject(A);
-    DerefObject(B);
-    DerefObject(C);
+    KeDerefObject(A);
+    KeDerefObject(B);
+    KeDerefObject(C);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -525,7 +525,7 @@ static void TestClotInMiddleOfThreads(void) {
     SpawnWaiter(&w2, ab, 2);
     SpawnWaiter(&w3, b_only, 1);
 
-    AbandonSem(A);
+    KeAbandonSem(A);
 
     CheckAbandoned(&w2);
     CheckQueueEmpty(A);
@@ -535,17 +535,17 @@ static void TestClotInMiddleOfThreads(void) {
     CHECK(QueueEnd(B) == (void*) w3.thr);
 
     /* B's list must have been relinked: w1 -> w3, in order. */
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&w1, 0);
     CHECK(QueueStart(B) == (void*) w3.thr);
     CHECK(!w3.done);
 
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&w3, 0);
     CheckQueueEmpty(B);
 
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /* B: w1(single) -> w2(clot A,B). The removed clot is the tail of B. */
@@ -559,7 +559,7 @@ static void TestClotAtTailOfOtherQueue(void) {
     SpawnWaiter(&w1, b_only, 1);
     SpawnWaiter(&w2, ab, 2);
 
-    AbandonSem(A);
+    KeAbandonSem(A);
 
     CheckAbandoned(&w2);
     CheckQueueEmpty(A);
@@ -567,12 +567,12 @@ static void TestClotAtTailOfOtherQueue(void) {
     CHECK(QueueStart(B) == (void*) w1.thr);
     CHECK(QueueEnd(B) == (void*) w1.thr);   /* tail pointer repaired */
 
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&w1, 0);
     CheckQueueEmpty(B);
 
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /* B: w1(clot A,B) -> w2(single). The removed clot is the head of B. */
@@ -586,7 +586,7 @@ static void TestClotAtHeadOfOtherQueue(void) {
     SpawnWaiter(&w1, ab, 2);
     SpawnWaiter(&w2, b_only, 1);
 
-    AbandonSem(A);
+    KeAbandonSem(A);
 
     CheckAbandoned(&w1);
     CheckQueueEmpty(A);
@@ -594,12 +594,12 @@ static void TestClotAtHeadOfOtherQueue(void) {
     CHECK(QueueStart(B) == (void*) w2.thr);   /* head advanced past the clot */
     CHECK(QueueEnd(B) == (void*) w2.thr);
 
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&w2, 0);
     CheckQueueEmpty(B);
 
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /*
@@ -619,7 +619,7 @@ static void TestClotBetweenClots(void) {
     SpawnWaiter(&w2, ab, 2);
     SpawnWaiter(&w3, b_only, 1);
 
-    AbandonSem(A);
+    KeAbandonSem(A);
 
     CheckAbandoned(&w2);
     CheckQueueEmpty(A);
@@ -628,45 +628,45 @@ static void TestClotBetweenClots(void) {
     CHECK(QueueEnd(B) == (void*) w3.thr);
 
     /* Release B: w1 wins via its second sem (index 1), leaves C's queue. */
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&w1, 1);
     CheckQueueEmpty(C);
     CHECK(!w3.done);
 
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&w3, 0);
     CheckQueueEmpty(B);
 
-    AbandonSem(C);   /* no-op: w1 must not still be queued there */
+    KeAbandonSem(C);   /* no-op: w1 must not still be queued there */
     CheckQueueEmpty(C);
 
-    DerefObject(A);
-    DerefObject(B);
-    DerefObject(C);
+    KeDerefObject(A);
+    KeDerefObject(B);
+    KeDerefObject(C);
 }
 
 /* ------------------------------------------------------------------------ */
 /* Interaction with normal release                                           */
 /* ------------------------------------------------------------------------ */
 
-/* A waiter that already won via ReleaseSem must not be hit by a later abandon. */
+/* A waiter that already won via KeReleaseSem must not be hit by a later abandon. */
 static void TestReleaseThenAbandon(void) {
     struct sem* s[2] = { NewBlockingSem(), NewBlockingSem() };
     struct waiter w;
 
     SpawnWaiter(&w, s, 2);
 
-    CHECK(ReleaseSem(s[1]) == 0);
+    CHECK(KeReleaseSem(s[1]) == 0);
     CheckAcquired(&w, 1);
     CheckQueueEmpty(s[0]);   /* removed from the sem it didn't win */
     CheckQueueEmpty(s[1]);
 
-    AbandonSem(s[0]);
-    AbandonSem(s[1]);
+    KeAbandonSem(s[0]);
+    KeAbandonSem(s[1]);
     CHECK(w.result == 0);    /* result must not change after the fact */
 
-    DerefObject(s[0]);
-    DerefObject(s[1]);
+    KeDerefObject(s[0]);
+    KeDerefObject(s[1]);
 }
 
 /* T1 is released normally, then T2 and T3 are abandoned. */
@@ -679,19 +679,19 @@ static void TestReleaseOneThenAbandonRest(void) {
         SpawnWaiter(&w[i], sems, 1);
     }
 
-    CHECK(ReleaseSem(s) == 0);
+    CHECK(KeReleaseSem(s) == 0);
     CheckAcquired(&w[0], 0);   /* FIFO: first waiter wins */
     CheckStillBlocked(&w[1]);
     CheckStillBlocked(&w[2]);
 
-    AbandonSem(s);
+    KeAbandonSem(s);
 
     CheckAbandoned(&w[1]);
     CheckAbandoned(&w[2]);
     CHECK(w[0].result == 0);
     CheckQueueEmpty(s);
 
-    DerefObject(s);
+    KeDerefObject(s);
 }
 
 /* Waiters on a different sem must not be disturbed. */
@@ -705,18 +705,18 @@ static void TestUnrelatedWaiterUnaffected(void) {
     SpawnWaiter(&wa, a_only, 1);
     SpawnWaiter(&wb, b_only, 1);
 
-    AbandonSem(A);
+    KeAbandonSem(A);
 
     CheckAbandoned(&wa);
     CheckStillBlocked(&wb);
     CheckQueueSingleEntry(B);
     CHECK(QueueStart(B) == (void*) wb.thr);
 
-    CHECK(ReleaseSem(B) == 0);
+    CHECK(KeReleaseSem(B) == 0);
     CheckAcquired(&wb, 0);
 
-    DerefObject(A);
-    DerefObject(B);
+    KeDerefObject(A);
+    KeDerefObject(B);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -734,7 +734,7 @@ static void TestDerefDestroyWithWaiters(void) {
         SpawnWaiter(&w[i], sems, 1);
     }
 
-    DerefObject(s);   /* s is freed from here on: don't touch it */
+    KeDerefObject(s);   /* s is freed from here on: don't touch it */
 
     for (int i = 0; i < N; ++i) {
         CheckAbandoned(&w[i]);
@@ -748,13 +748,13 @@ static void TestDerefDestroyMultiWaiter(void) {
 
     SpawnWaiter(&w, s, 2);
 
-    DerefObject(s[0]);
+    KeDerefObject(s[0]);
 
     CheckAbandoned(&w);
     CheckQueueEmpty(s[1]);
     CheckSemUsable(s[1]);
 
-    DerefObject(s[1]);
+    KeDerefObject(s[1]);
 }
 
 static struct sem g_static_sem;
@@ -763,12 +763,12 @@ static void TestDestroyStaticSemWithWaiters(void) {
     struct sem* p = &g_static_sem;
     struct waiter w[2];
 
-    InitStaticSem(&g_static_sem, 1, 1);
+    KeInitStaticSem(&g_static_sem, 1, 1);
 
     SpawnWaiter(&w[0], &p, 1);
     SpawnWaiter(&w[1], &p, 1);
 
-    DestroyStaticSem(&g_static_sem);
+    KeDestroyStaticSem(&g_static_sem);
 
     CheckAbandoned(&w[0]);
     CheckAbandoned(&w[1]);
@@ -781,20 +781,20 @@ static void TestDestroyStaticSemMultiWaiter(void) {
     struct sem* sems[2];
     struct waiter w;
 
-    InitStaticSem(&g_static_sem, 1, 1);
+    KeInitStaticSem(&g_static_sem, 1, 1);
     sems[0] = &g_static_sem;
     sems[1] = heap_sem;
 
     SpawnWaiter(&w, sems, 2);
 
-    DestroyStaticSem(&g_static_sem);
+    KeDestroyStaticSem(&g_static_sem);
 
     CheckAbandoned(&w);
     CheckQueueEmpty(&g_static_sem);
     CheckQueueEmpty(heap_sem);
     CheckSemUsable(heap_sem);
 
-    DerefObject(heap_sem);
+    KeDerefObject(heap_sem);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -863,7 +863,7 @@ static void StressRound(uint32_t seed) {
         if (target == NULL) {
             break;
         }
-        CHECK(ReleaseSem(target) == 0);
+        CHECK(KeReleaseSem(target) == 0);
         ++woken;
     }
 
@@ -879,7 +879,7 @@ static void StressRound(uint32_t seed) {
         order[j] = tmp;
     }
     for (int i = 0; i < STRESS_SEMS; ++i) {
-        AbandonSem(sems[order[i]]);
+        KeAbandonSem(sems[order[i]]);
     }
 
     /* Verify. */
@@ -901,7 +901,7 @@ static void StressRound(uint32_t seed) {
 
     for (int i = 0; i < STRESS_SEMS; ++i) {
         CheckQueueEmpty(sems[i]);
-        DerefObject(sems[i]);
+        KeDerefObject(sems[i]);
     }
 }
 
@@ -951,5 +951,5 @@ void RunSemAbandonTests(void) {
     /* Randomised */
     RUN_TEST(TestStressRandomWaitSets);
 
-    LogPrintf("sem abandon tests: ALL PASSED\n");
+    KeLogPrintf("sem abandon tests: ALL PASSED\n");
 }

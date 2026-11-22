@@ -13,5 +13,5 @@ struct cpu_data {
     bool saved_interrupt_enabled;
 }  __attribute__((aligned(64)));
 
-void InitCpuTable(void);
-struct cpu_data* GetCpu(void);
+void KeInitCpuTable(void);
+struct cpu_data* KeGetCpu(void);

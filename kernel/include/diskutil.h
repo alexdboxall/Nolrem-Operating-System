@@ -24,11 +24,11 @@ struct disk_partition_helper {
     int num_partitions;
 };
 
-void InitDiskUtil(void);
-char* GenerateNewRawDiskName(int type);
-char* GenerateNewMountedDiskName();
-void CreateDiskPartitions(struct file* disk);
-void InitDiskPartitionHelper(struct disk_partition_helper* helper);
+void KeInitDiskUtil(void);
+char* KeGenerateNewRawDiskName(int type);
+char* KeGenerateNewMountedDiskName();
+void KeCreateDiskPartitions(struct file* disk);
+void KeInitDiskPartitionHelper(struct disk_partition_helper* helper);
 
-int DiskFollowHelper(struct disk_partition_helper* helper, struct vnode** out, const char* name);
-int DiskCreateHelper(struct disk_partition_helper* helper, struct vnode** in, const char* name);
+int KeDiskFollowHelper(struct disk_partition_helper* helper, struct vnode** out, const char* name);
+int KeDiskCreateHelper(struct disk_partition_helper* helper, struct vnode** in, const char* name);

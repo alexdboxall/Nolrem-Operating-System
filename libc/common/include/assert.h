@@ -13,10 +13,10 @@
 #define ___tostr(x) #x
 #define __tostr(x) ___tostr(x)
 
-_Noreturn void AssertionFail(const char* file, const char* line, const char* condition, const char* msg);
+_Noreturn void KeAssertionFail(const char* file, const char* line, const char* condition, const char* msg);
 
-#define assert(condition) (condition ? (void)0 : (void)AssertionFail(__FILE__, __tostr(__LINE__), __tostr(condition), ""));
-#define assert_with_message(condition, msg) (condition ? (void)0 : (void)AssertionFail(__FILE__, __tostr(__LINE__), __tostr(condition), msg));
+#define assert(condition) (condition ? (void)0 : (void)KeAssertionFail(__FILE__, __tostr(__LINE__), __tostr(condition), ""));
+#define assert_with_message(condition, msg) (condition ? (void)0 : (void)KeAssertionFail(__FILE__, __tostr(__LINE__), __tostr(condition), msg));
 
 #else
 

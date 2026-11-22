@@ -12,40 +12,40 @@
 #include <vnode.h>
 
 /* 
- Create (CreateIO) -> Queue -> Done (disk side calls SignalDoneIO) -> Complete (after WaitIO called)
+ Create (KeCreateIO) -> Queue -> Done (disk side calls KeSignalDoneIO) -> Complete (after KeWaitIO called)
  */
 
 
-export void SignalDoneIO(struct aio* aio, int result_code) {
+export void KeSignalDoneIO(struct aio* aio, int result_code) {
     aio->result_code = result_code;
-    ReleaseMutex(&aio->mtx);
+    KeReleaseMutex(&aio->mtx);
 }
 
 export int KeCreateTruncateIO(struct aio* aio, void* node_or_file, off_t pos, void(*callback)(void*), void* callback_ctxt) {
-    InitStaticMutex(&aio->mtx);
-    int res = AcquireMutex(&aio->mtx, TIMEOUT_INSTANT);
+    KeInitStaticMutex(&aio->mtx);
+    int res = KeAcquireMutex(&aio->mtx, TIMEOUT_INSTANT);
     (void) res; assert(res == 0);
     aio->operation = AIO_OP_TRUNCATE;
     aio->completed = false;
     aio->node_or_file = node_or_file;
     aio->sub = NULL;
     aio->args.truncate.size = pos;
-    RefObject(node_or_file);
+    KeRefObject(node_or_file);
     aio->callback = callback;
     aio->callback_ctxt = callback_ctxt;
     return 0;
 }
 
-export int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt) {
-    InitStaticMutex(&aio->mtx);
-    int res = AcquireMutex(&aio->mtx, TIMEOUT_INSTANT);
+export int KeCreateIO(struct aio* aio, void* node_or_file, struct transfer tr, void(*callback)(void*), void* callback_ctxt) {
+    KeInitStaticMutex(&aio->mtx);
+    int res = KeAcquireMutex(&aio->mtx, TIMEOUT_INSTANT);
     (void) res; assert(res == 0);
     aio->transfer = tr;
     aio->operation = tr.direction == TRANSFER_WRITE ? AIO_OP_WRITE : AIO_OP_READ;
     aio->completed = false;
     aio->node_or_file = node_or_file;
     aio->sub = NULL;
-    RefObject(node_or_file);
+    KeRefObject(node_or_file);
     aio->callback = callback;
     aio->callback_ctxt = callback_ctxt;
     return 0;
@@ -56,25 +56,25 @@ export int CreateIO(struct aio* aio, void* node_or_file, struct transfer tr, voi
  * If trying to do sync io, call this straight after requesting.
  * If doing async io, call this when you're ready for the result.
  */
-export int WaitIO(struct aio* aio, uint64_t timeout) {
+export int KeWaitIO(struct aio* aio, uint64_t timeout) {
     if (aio->completed) {
         return EALREADY;
     }
     int res;
     if (aio->sub != NULL) {
-        res = WaitIO(aio->sub, timeout);
+        res = KeWaitIO(aio->sub, timeout);
         if (res != 0) {
             goto cleanup_on_err;
         }
     }
-    res = AcquireMutex(&aio->mtx, timeout);
+    res = KeAcquireMutex(&aio->mtx, timeout);
     if (res != 0) {
         goto cleanup_on_err;
     }
 
     aio->completed = true;
-    DerefObject(aio->node);
-    DestroyStaticMutex(&aio->mtx);
+    KeDerefObject(aio->node);
+    KeDestroyStaticMutex(&aio->mtx);
     res = aio->result_code;
     if (aio->callback != NULL) {
         aio->callback(aio->callback_ctxt);
@@ -83,7 +83,7 @@ export int WaitIO(struct aio* aio, uint64_t timeout) {
 
 cleanup_on_err:
     aio->completed = true;
-    DerefObject(aio->node);
-    DestroyStaticMutex(&aio->mtx);
+    KeDerefObject(aio->node);
+    KeDestroyStaticMutex(&aio->mtx);
     return res;
 }

@@ -117,9 +117,9 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     //       temporarily map it in?
     // or does this only ever get called on the current vas?
 
-    if (vas != GetCurrentVas()){ 
-        LogPrintf("SetPte called in non-current VAS!");
-        Panic(PANIC_INVALID_ARCH_OPERATION);
+    if (vas != KeGetCurrentVas()){ 
+        KeLogPrintf("SetPte called in non-current VAS!");
+        KePanic(PANIC_INVALID_ARCH_OPERATION);
     }
 
     size_t virt_index = virt / PAGE_SIZE;
@@ -129,7 +129,7 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     size_t* directory = GetRecursiveTable(1023);
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Time to map a new table. */
-        size_t phys = AllocPhys(true);
+        size_t phys = KeAllocPhys(true);
         directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
         size_t* table = GetRecursiveTable(level1_index);
         Invalidate((size_t) table);
@@ -152,16 +152,16 @@ void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
 
 size_t ArchGetTemporaryPage(size_t phys) {
     size_t cpu_num = ArchGetCpuNum();
-    SetPte(GetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
+    SetPte(KeGetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
     return scratch_virt_region + cpu_num * PAGE_SIZE;
 }
 
 void ArchReleaseTemporaryPage(size_t virt) {
-    SetPte(GetCurrentVas(), virt, 0);
+    SetPte(KeGetCurrentVas(), virt, 0);
 }
 
 void ArchMapKernelPageDirectly(size_t phys, size_t virt) {
-    SetPte(GetCurrentVas(), virt, (phys & ~0xFFF) | PAGE_PRESENT | PAGE_WRITE);
+    SetPte(KeGetCurrentVas(), virt, (phys & ~0xFFF) | PAGE_PRESENT | PAGE_WRITE);
 }
 
 void ArchInitVas(struct vas* vas, bool first) {
@@ -200,7 +200,7 @@ void ArchInitVas(struct vas* vas, bool first) {
             table[i % (PAGE_SIZE / sizeof(size_t))] &= ~PAGE_WRITE;
         }
 
-        scratch_virt_region = AllocVirt(PAGE_SIZE * ARCH_MAX_CPUS);
+        scratch_virt_region = KeAllocVirt(PAGE_SIZE * ARCH_MAX_CPUS);
         for (size_t i = 0; i < (size_t) ARCH_MAX_CPUS; ++i) {
             SetPte(vas, scratch_virt_region + i * PAGE_SIZE, 0);
         }

@@ -30,9 +30,9 @@ export struct window_class* WmCreateWindowClassEx(
         return NULL;
     }
     if (parent != NULL) {
-        RefObject(parent);
+        KeRefObject(parent);
         if (parent->extra_ptrs + extra_ptrs > 16) {
-            DerefObject(parent);
+            KeDerefObject(parent);
             FreeHeap(wc);
             KeSetLastUserError(EINVAL);
             return NULL;
@@ -42,13 +42,13 @@ export struct window_class* WmCreateWindowClassEx(
             *extra_off_out = parent->extra_ptrs;
         }
     }
-    InitUserObject(wc, UOBJ_WINDOW_CLASS);
+    KeInitUserObject(wc, UOBJ_WINDOW_CLASS);
 
     if (icon != NULL) {
-        RefObject(icon);
+        KeRefObject(icon);
     }
     if (cursor != NULL) {
-        RefObject(cursor);
+        KeRefObject(cursor);
     }
     strcpy(wc->name, name);
     wc->proc = proc;
@@ -58,10 +58,10 @@ export struct window_class* WmCreateWindowClassEx(
     wc->cursor = cursor;
     wc->flags = flags;
     
-    AcquireSpinlock(&winclass_lock);
+    KeAcquireSpinlock(&winclass_lock);
     wc->next = classes;
     classes = wc;
-    ReleaseSpinlock(&winclass_lock);
+    KeReleaseSpinlock(&winclass_lock);
 
     return wc;
 }
@@ -71,23 +71,23 @@ export struct window_class* WmCreateWindowClass(const char* name, winproc_t proc
 }
 
 export struct window_class* WmOpenWindowClass(const char* _name) {
-    AcquireSpinlock(&winclass_lock);
+    KeAcquireSpinlock(&winclass_lock);
     struct window_class* wc = classes;
     const char* name = _name == NULL ? ".DEFAULT" : _name;
     while (wc) {
         if (!strcmp(wc->name, name)) {
-            RefObject(wc);
-            ReleaseSpinlock(&winclass_lock);
+            KeRefObject(wc);
+            KeReleaseSpinlock(&winclass_lock);
             return wc;
         }
         wc = wc->next;
     }
-    ReleaseSpinlock(&winclass_lock);
+    KeReleaseSpinlock(&winclass_lock);
     return NULL;
 }
 
 void WmInitWindowClassSubsystem() {
-    InitSpinlock(&winclass_lock);
+    KeInitSpinlock(&winclass_lock);
     classes = NULL;
     WmCreateWindowClass(".DEFAULT", WmDefaultWindowProcedure, 0);
 }

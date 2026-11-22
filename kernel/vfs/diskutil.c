@@ -39,8 +39,8 @@ static char type_strings[__DISKUTIL_NUM_TYPES][6] = {
  * Initialises the disk utility functions. Must be called before any partitions
  * are created or any drive names are generated.
  */
-void InitDiskUtil(void) {
-    InitSpinlock(&lock);
+void KeInitDiskUtil(void) {
+    KeInitSpinlock(&lock);
     memset(type_table, 0, sizeof(type_table));
 }
 
@@ -80,17 +80,17 @@ static pageable int AppendNumberToString(char* str, int num) {
  * drv1, etc.) Each call to this function will return a different string. The 
  * caller is responsible for freeing the returned string.
  */
-export pageable char* GenerateNewMountedDiskName() {
+export pageable char* KeGenerateNewMountedDiskName() {
     char name[16];
     strcpy(name, "drv");
 
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     int disk_num = next_mounted_disk_num++;
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
 
-    LogPrintf("MNT : %s\n", name);
+    KeLogPrintf("MNT : %s\n", name);
     return KeStrdup(name);
 }
 
@@ -99,7 +99,7 @@ export pageable char* GenerateNewMountedDiskName() {
  * (e.g. raw-hd0, raw-hd1, raw-fd0). Each call to this function will return a 
  * different string. The caller is responsible for freeing the returned string.
  */
-export pageable char* GenerateNewRawDiskName(int type) {
+export pageable char* KeGenerateNewRawDiskName(int type) {
     char name[16] = "raw-";
 
     if (type >= __DISKUTIL_NUM_TYPES || type < 0) {
@@ -108,12 +108,12 @@ export pageable char* GenerateNewRawDiskName(int type) {
 
     strcat(name, type_strings[type]);
 
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     int disk_num = type_table[type]++;
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
 
     AppendNumberToString(name, disk_num);
-    LogPrintf("RAW : %s\n", name);
+    KeLogPrintf("RAW : %s\n", name);
     return KeStrdup(name);
 }
 
@@ -124,7 +124,7 @@ export pageable char* GenerateNewRawDiskName(int type) {
 static pageable char* GetPartitionNameString(int index) {
     char name[16] = "part";
     AppendNumberToString(name, index);
-    LogPrintf("PART: %s\n", name);
+    KeLogPrintf("PART: %s\n", name);
     return KeStrdup(name);
 }
 
@@ -134,12 +134,12 @@ static pageable char* GetPartitionNameString(int index) {
  * is mounted if it exists. If the disk has no partitions,= a 'whole disk 
  * partition' will be created, the filesystem will still be detected.
  */
-export pageable void CreateDiskPartitions(struct file* disk) {
-    struct file** partitions = GetPartitionsForDisk(disk);
+export pageable void KeCreateDiskPartitions(struct file* disk) {
+    struct file** partitions = KeGetPartitionsForDisk(disk);
 
     if (partitions == NULL || partitions[0] == NULL) {
         struct stat st = disk->node->stat;
-        struct vnode* whole_disk = CreatePartition(
+        struct vnode* whole_disk = KeCreatePartition(
             disk, 0, st.st_size, 0, st.st_blksize, 0, false)->node;
         VnodeCreate(disk->node, &whole_disk, GetPartitionNameString(0), 0, 0);
         return;
@@ -152,11 +152,11 @@ export pageable void CreateDiskPartitions(struct file* disk) {
     }
 }
 
-export void InitDiskPartitionHelper(struct disk_partition_helper* helper) {
+export void KeInitDiskPartitionHelper(struct disk_partition_helper* helper) {
     helper->num_partitions = 0;
 }
 
-export int DiskFollowHelper(
+export int KeDiskFollowHelper(
     struct disk_partition_helper* helper, struct vnode** out, const char* name
 ) {
     for (int i = 0; i < helper->num_partitions; ++i) {
@@ -169,7 +169,7 @@ export int DiskFollowHelper(
     return EINVAL;
 }
 
-export int DiskCreateHelper(
+export int KeDiskCreateHelper(
     struct disk_partition_helper* helper, struct vnode** in, const char* name
 ) {
     if (helper->num_partitions >= MAX_PARTITIONS_PER_DISK) {

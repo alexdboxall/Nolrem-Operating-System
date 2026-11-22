@@ -103,7 +103,7 @@ static int CreateChildVnode(struct vnode* parent, const struct fat_node_info* in
     child_node->data = child_data;
 
     *out = child_node;
-    return RegisterNewVnode(child_node);
+    return KeRegisterNewVnode(child_node);
 }
 
 /*
@@ -141,7 +141,7 @@ static int Follow(struct vnode* node, struct vnode** out, const char* name) {
     * If it's already open then share its vnode, as that's where the up to date
     * size lives.
     */
-    struct vnode* existing = TryFindAndReferenceExistingVnode(info.ino, node->stat.st_dev);
+    struct vnode* existing = KeTryFindAndReferenceExistingVnode(info.ino, node->stat.st_dev);
     if (existing) {
         *out = existing;
         return 0;
@@ -164,7 +164,7 @@ static struct vnode* CreateFatVnode(uint32_t ino, bool directory, uint32_t size,
     /*
     * FAT has no permissions, so everything is accessible to everyone.
     */
-    return CreateVnode(dev_ops, (struct stat) {
+    return KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = (directory ? S_IFDIR : S_IFREG) | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,
         .st_size = size,
@@ -206,10 +206,10 @@ int FatMountCreator(struct file* raw_device, struct file** out) {
     struct vnode* node = CreateFatVnode(FAT_ROOT_INO, true, 0, raw_device->node->stat.st_dev);
     node->data = data;
 
-    *out = CreateFile(node, 0, 0, true, false);
+    *out = KeCreateFile(node, 0, 0, true, false);
     return 0;
 }
 
 void InitFat(void) {
-    RegisterFilesystem("fat", FatMountCreator);
+    KeRegisterFilesystem("fat", FatMountCreator);
 }

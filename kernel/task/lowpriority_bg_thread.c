@@ -13,9 +13,9 @@
 
 extern volatile uint64_t last_task_switch_time;
 
-void LowPriorityBackgroundThread(void*) {
-    BeginNewThread();
-    SetThreadPriority(GetCurrentThread(), PRIORITY_IDLE);
+void KeLowPriorityBackgroundThread(void*) {
+    KeBeginNewThread();
+    KeSetThreadPriority(KeGetCurrentThread(), PRIORITY_IDLE);
 
     size_t spare_frame = 0;
     bool is_zeroed = false;
@@ -24,16 +24,16 @@ void LowPriorityBackgroundThread(void*) {
     bool out_of_discards = false;
     while (true) {
         if (!ArchAreInterruptsEnabled()) {
-            Panic(PANIC_FUCK_ME);
+            KePanic(PANIC_FUCK_ME);
         }
 
         ArchIdle();
-        Schedule();
+        KeSchedule();
         
         /* How long the idle task has been running for uninterrupted */
-        uint64_t time_running_for_ns = (GetTimeSinceBoot() - last_task_switch_time);
+        uint64_t time_running_for_ns = (KeGetTimeSinceBoot() - last_task_switch_time);
 
-        bool low_mem = IsMemoryRunningLow();
+        bool low_mem = KeIsMemoryRunningLow();
 
         /* If idle for 75ms sec or more, start getting some zeroed out pages ready */
         if (low_mem && spare_frame != 0) {
@@ -43,15 +43,15 @@ void LowPriorityBackgroundThread(void*) {
 #if 1
         if (time_running_for_ns >= MS_TO_NS(75) && !low_mem) {
             if (spare_frame == 0) {
-                spare_frame = AllocPhys(true);
+                spare_frame = KeAllocPhys(true);
                 is_zeroed = false;
                 
             } else if (!is_zeroed) {
-                ZeroPhysPage(spare_frame);
+                KeZeroPhysPage(spare_frame);
                 is_zeroed = true;
     
             } else {
-                bool provided = ProvideZeroedPhys(spare_frame);
+                bool provided = KeProvideZeroedPhys(spare_frame);
                 if (provided) {
                     spare_frame = 0;
                     is_zeroed = false;
@@ -77,7 +77,7 @@ void LowPriorityBackgroundThread(void*) {
         (void) done_vnode_purge;
 #if 1
         if (time_running_for_ns >= (low_mem ? MS_TO_NS(300) : MS_TO_NS(2000))) {
-            if (!done_vnode_purge) PurgeOldVnodes();
+            if (!done_vnode_purge) KePurgeOldVnodes();
             done_vnode_purge = true;
         } else {
             done_vnode_purge = false;
@@ -86,7 +86,7 @@ void LowPriorityBackgroundThread(void*) {
 
         if (time_running_for_ns >= MS_TO_NS(5000)) {
             if (low_mem && !out_of_discards) {
-                struct phys_page* retv = DiscardPage();
+                struct phys_page* retv = KeDiscardPage();
                 out_of_discards = retv == NULL;
             }
             ArchIdle();

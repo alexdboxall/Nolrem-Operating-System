@@ -35,22 +35,22 @@ static void CleanupModule(void* _mod) {
     FreeHeap(mod);
 }
 
-void InitModule(void) {
-    RegisterObjectType(OBJTYPE_MODULE, CleanupModule);  
-    InitSpinlock(&modlock); 
+void KeInitModule(void) {
+    KeRegisterObjectType(OBJTYPE_MODULE, CleanupModule);  
+    KeInitSpinlock(&modlock); 
 }
 
 static struct symbol_list* CreateSymbolListFromSymFile(struct file* f) {
-    void* initial = AllocFileMemory(f, 0, PAGE_SIZE, 0, 0);
+    void* initial = KeAllocFileMemory(f, 0, PAGE_SIZE, 0, 0);
     void* mem = initial;
     int total_symbols = ReadUnaligned16AndAdvance(&mem);
     size_t address = ReadUnalignedSizeT(mem);
-    FreeMemory(initial, PAGE_SIZE);
+    KeFreeMemory(initial, PAGE_SIZE);
 
-    struct symbol_list* symlist = CreateSymbolList(total_symbols);
+    struct symbol_list* symlist = KeCreateSymbolList(total_symbols);
     size_t file_size = 2 + sizeof(size_t) + total_symbols * 10;
     
-    void* og_mem = AllocFileMemory(f, 0, file_size, 0, 0);
+    void* og_mem = KeAllocFileMemory(f, 0, file_size, 0, 0);
     mem = AddVoidPtr(og_mem, 2 + sizeof(size_t));
 
     for (int i = 0; i < total_symbols; ++i) {
@@ -58,20 +58,20 @@ static struct symbol_list* CreateSymbolListFromSymFile(struct file* f) {
         uint16_t offset = ReadUnaligned16AndAdvance(&mem);
 
         address += offset;
-        AddToSymbolListPreHashed(symlist, i, hash, address);
+        KeAddToSymbolListPreHashed(symlist, i, hash, address);
 
-        LogPrintf("Added symbol: addr 0x%X, hash_low = 0x%X\n", address, (uint32_t) hash);
+        KeLogPrintf("Added symbol: addr 0x%X, hash_low = 0x%X\n", address, (uint32_t) hash);
     }
-    FreeMemory(og_mem, file_size);
+    KeFreeMemory(og_mem, file_size);
     return symlist;
 }
 
-struct module* LoadKernelModule(void) {
+struct module* KeLoadKernelModule(void) {
     uint16_t maj_ver = 1;
     uint16_t min_ver = 0;
 
-    struct module* mod = AllocPermanentHeap(sizeof(struct module) + strlen("KERNEL") + 1);
-    InitObject(mod, OBJTYPE_MODULE);
+    struct module* mod = KeAllocPermanentHeap(sizeof(struct module) + strlen("KERNEL") + 1);
+    KeInitObject(mod, OBJTYPE_MODULE);
 
     strcpy(mod->name, "KERNEL");
     mod->major_ver = maj_ver;
@@ -79,26 +79,26 @@ struct module* LoadKernelModule(void) {
     mod->path = "";
 
     struct file* file;
-    int res = OpenFile("drv0:/SYSTEM/KERNEL.SYM", O_RDONLY, 0, &file);
+    int res = KeOpenFile("drv0:/SYSTEM/KERNEL.SYM", O_RDONLY, 0, &file);
     if (res != 0) {
-        Panic(PANIC_BAD_KERNEL);
+        KePanic(PANIC_BAD_KERNEL);
     }
     mod->sym_list = CreateSymbolListFromSymFile(file);
-    DerefObject(file);
+    KeDerefObject(file);
 
-    AcquireSpinlock(&modlock);
+    KeAcquireSpinlock(&modlock);
     mod->next = module_list_head;
     module_list_head = mod;
-    ReleaseSpinlock(&modlock);
+    KeReleaseSpinlock(&modlock);
 
     return mod;
 }
 
-export struct module* CreateModule(const char* path) {
+export struct module* KeCreateModule(const char* path) {
     // TODO: load the version
     // TODO: load the name
     struct file* file;
-    int res = OpenFile(path, O_RDONLY, 0, &file);
+    int res = KeOpenFile(path, O_RDONLY, 0, &file);
     if (res != 0) {
         return NULL;
     }
@@ -108,7 +108,7 @@ export struct module* CreateModule(const char* path) {
     uint16_t min_ver = 0;
 
     struct module* mod = AllocHeap(sizeof(struct module) + strlen(name) + 1);
-    InitObject(mod, OBJTYPE_MODULE);
+    KeInitObject(mod, OBJTYPE_MODULE);
 
     strcpy(mod->name, name);
     mod->major_ver = maj_ver;
@@ -117,31 +117,31 @@ export struct module* CreateModule(const char* path) {
 
     mod->sym_list = ArchLoadSymbols(file, 0, false);
 
-    AcquireSpinlock(&modlock);
+    KeAcquireSpinlock(&modlock);
     mod->next = module_list_head;
     module_list_head = mod;
-    ReleaseSpinlock(&modlock);
+    KeReleaseSpinlock(&modlock);
 
     return mod;
 }
 
-export uint16_t GetModuleMajorVersion(struct module* mod) {
+export uint16_t KeGetModuleMajorVersion(struct module* mod) {
     return mod->major_ver;
 }
 
-export uint16_t GetModuleMinorVersion(struct module* mod) {
+export uint16_t KeGetModuleMinorVersion(struct module* mod) {
     return mod->minor_ver;
 }
 
-export size_t ResolveSymbol(const char* sym, const char* mod_name, int ver_mode, uint16_t major, uint16_t minor) {
-    AcquireSpinlock(&modlock);
+export size_t KeResolveSymbol(const char* sym, const char* mod_name, int ver_mode, uint16_t major, uint16_t minor) {
+    KeAcquireSpinlock(&modlock);
     struct module* curr = module_list_head;
     while (curr) {
         if (mod_name == NULL || !strcmp(curr->name, mod_name)) {
-            if (IsMatchingModuleVersion(curr, ver_mode, major, minor)) {
-                struct symbol* s = FindSymbol(curr->sym_list, sym);
+            if (KeIsMatchingModuleVersion(curr, ver_mode, major, minor)) {
+                struct symbol* s = KeFindSymbol(curr->sym_list, sym);
                 if (s != NULL) {
-                    ReleaseSpinlock(&modlock);
+                    KeReleaseSpinlock(&modlock);
                     return s->addr;
                 }
             }
@@ -149,11 +149,11 @@ export size_t ResolveSymbol(const char* sym, const char* mod_name, int ver_mode,
         curr = curr->next;
     }
 
-    ReleaseSpinlock(&modlock);
+    KeReleaseSpinlock(&modlock);
     return 0;
 }
 
-bool IsMatchingModuleVersion(struct module* mod, int ver_mode, uint16_t major, uint16_t minor) {
+bool KeIsMatchingModuleVersion(struct module* mod, int ver_mode, uint16_t major, uint16_t minor) {
     uint16_t mod_maj = mod->major_ver;
     uint16_t mod_min = mod->minor_ver;
     if (ver_mode == MODVER_ANY) {

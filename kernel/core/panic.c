@@ -23,20 +23,20 @@ char* panic_msgs[] = {
 };
 
 static _Noreturn void PanicEx(int panic_reason, const char* msg1, const char* msg2) {
-    LogPrintf("\x01PANIC - ");
-    LogPrintf("%d\n", panic_reason);
-    LogPrintf("%s", msg1);
+    KeLogPrintf("\x01PANIC - ");
+    KeLogPrintf("%d\n", panic_reason);
+    KeLogPrintf("%s", msg1);
     if (msg2 != NULL) {
-        LogPrintf(": %s\n", msg2);
+        KeLogPrintf(": %s\n", msg2);
     }
-    KernelDisplayPanic(msg1);
+    KeDisplayPanic(msg1);
     while (true) {
         ArchDisableInterrupts();
         ArchIdle();
     }
 }
 
-export _Noreturn void Panic(int panic_reason) {
+export _Noreturn void KePanic(int panic_reason) {
     char* msg = "PANIC_UNKNOWN_REASON";
     if (panic_reason < (int) (sizeof(panic_msgs) / sizeof(panic_msgs[0]))) {
         msg = panic_msgs[panic_reason];
@@ -44,7 +44,7 @@ export _Noreturn void Panic(int panic_reason) {
     PanicEx(panic_reason, msg, NULL);
 }
 
-export _Noreturn void AssertionFail(const char* file, const char* line, const char* condition, const char* msg) {
-    LogPrintf("Assertion Failure:\n    %s\n    %s\n    %s\n    Line %s\n", msg, condition, file, line);
+export _Noreturn void KeAssertionFail(const char* file, const char* line, const char* condition, const char* msg) {
+    KeLogPrintf("Assertion Failure:\n    %s\n    %s\n    %s\n    Line %s\n", msg, condition, file, line);
     PanicEx(PANIC_ASSERTION_FAILURE, msg, condition);
 }

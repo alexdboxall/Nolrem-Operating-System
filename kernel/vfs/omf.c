@@ -19,7 +19,7 @@
  *                                not a plain file that happens to start with those letters.
  *   0                            the file is mapped as it is, CPZ or not.
  */
-export int OpenAndMapFile(const char* path, int flags, struct open_mapped_file* out) {
+export int KeOpenAndMapFile(const char* path, int flags, struct open_mapped_file* out) {
     if (out == NULL) {
         return EINVAL;
     }
@@ -32,7 +32,7 @@ export int OpenAndMapFile(const char* path, int flags, struct open_mapped_file* 
     if (path == NULL || (flags & ~OMF_TRANSPARENT_DECOMPRESS) != 0) {
         return EINVAL;
     }
-    int res = OpenFile(path, O_RDONLY, 0, &out->f);
+    int res = KeOpenFile(path, O_RDONLY, 0, &out->f);
     if (res != 0) {
         out->f = NULL;
         return res;
@@ -50,25 +50,25 @@ export int OpenAndMapFile(const char* path, int flags, struct open_mapped_file* 
      */
     bool is_cpz = false;
     if (flags & OMF_TRANSPARENT_DECOMPRESS) {
-        res = CheckCpzSignature(out->f, &is_cpz);
+        res = KeCheckCpzSignature(out->f, &is_cpz);
         if (res != 0) {                 /* couldn't even look: don't guess "plain file" and hand back compressed bytes */
             OmfClose(out);
             return res;
         }
     }
     if (is_cpz) {
-        out->cpz = OpenCpzImage(out->f);
+        out->cpz = KeOpenCpzImage(out->f);
         if (out->cpz == NULL) {
             OmfClose(out);
             return EINVAL;
         }
-        len = GetCpzImageSize(out->cpz);
+        len = KeGetCpzImageSize(out->cpz);
         /* TODO: lock the file as below; for a CPZ image it matters more, the page table was read once at open. */
-        out->ptr = AllocCompressedFileMemory(out->cpz, 0, len, 0);
+        out->ptr = KeAllocCompressedFileMemory(out->cpz, 0, len, 0);
     } else {
         /* TODO: we also want to lock the file so that no-one can modify it under
          * us if a part of it gets paged out. */
-        out->ptr = AllocFileMemory(out->f, 0, len, 0, 0);
+        out->ptr = KeAllocFileMemory(out->f, 0, len, 0, 0);
     }
     if (out->ptr == NULL) {
         OmfClose(out);
@@ -85,15 +85,15 @@ export void OmfClose(struct open_mapped_file* omf) {
         return;
     }
     if (omf->ptr != NULL) {
-        FreeMemory(omf->ptr, omf->len);
+        KeFreeMemory(omf->ptr, omf->len);
         omf->ptr = NULL;
     }
     if (omf->cpz != NULL) {
-        DerefObject(omf->cpz);
+        KeDerefObject(omf->cpz);
         omf->cpz = NULL;
     }
     if (omf->f != NULL) {
-        DerefObject(omf->f);
+        KeDerefObject(omf->f);
         omf->f = NULL;
     }
     omf->error = true;

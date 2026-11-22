@@ -4,27 +4,27 @@
 #include <stdatomic.h>
 #include <arch.h>
 
-export void InitSpinlock(struct spinlock* lock) {
+export void KeInitSpinlock(struct spinlock* lock) {
     atomic_flag_clear(&lock->lock); 
 }
 
-export void AcquireSpinlock(struct spinlock* lock) {
-    AcquireIrqPrevent();
+export void KeAcquireSpinlock(struct spinlock* lock) {
+    KeAcquireIrqPrevent();
     while (atomic_flag_test_and_set_explicit(&lock->lock, memory_order_acquire)) {
         ArchIndicateSpinLoop();
     }
 }
 
-export inline __attribute__((__always_inline__)) void ReleaseSpinlock(struct spinlock* lock) {
+export inline __attribute__((__always_inline__)) void KeReleaseSpinlock(struct spinlock* lock) {
     atomic_flag_clear_explicit(&lock->lock, memory_order_release);
-    ReleaseIrqPrevent();
+    KeReleaseIrqPrevent();
 }
 
-export inline __attribute__((__always_inline__)) bool TryAcquireSpinlock(struct spinlock* lock) {
-    AcquireIrqPrevent();
+export inline __attribute__((__always_inline__)) bool KeTryAcquireSpinlock(struct spinlock* lock) {
+    KeAcquireIrqPrevent();
     bool acquired = !atomic_flag_test_and_set_explicit(&lock->lock, memory_order_acquire);
     if (!acquired) {
-        ReleaseIrqPrevent();
+        KeReleaseIrqPrevent();
     }
     return acquired;
 }

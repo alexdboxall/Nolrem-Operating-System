@@ -10,7 +10,7 @@
  * Returns 0 on success, or an errno. Drawing is clipped to the DC's clip region.
  */
 pageable size_t SysPaintEllipse(size_t a, size_t args_ptr, size_t, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return ENOMEM;
     }

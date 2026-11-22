@@ -69,7 +69,7 @@ struct thread;
 void ArchSwitchThread(struct thread* old_thr, struct thread* new_thr);
 void ArchSetupNewThreadEntry(struct thread* thr, void(*entry)(void*), void*);
 
-/* If true, the hardware timer will not call AdvanceTimer */
+/* If true, the hardware timer will not call KeAdvanceTimer */
 void ArchDebugInhibitTimerAdvance(bool inhibit);
 
 struct module;

@@ -17,6 +17,6 @@ struct file {
     mode_t initial_mode;
 };
 
-struct file* CreateFile(struct vnode* node, int mode, int flags, bool can_read, bool can_write);
+struct file* KeCreateFile(struct vnode* node, int mode, int flags, bool can_read, bool can_write);
 
-void InitFile(void);
+void KeInitFile(void);

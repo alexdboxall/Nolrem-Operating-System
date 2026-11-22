@@ -60,7 +60,7 @@ static int Truncate(struct vnode*, off_t) {
 static struct vnode* CreateDemoFsVnode(ino_t, off_t);
 
 static int Follow(struct vnode* node, struct vnode** out, const char* name) {
-    LogPrintf("demofs_node: Follow: %s\n", name);
+    KeLogPrintf("demofs_node: Follow: %s\n", name);
     struct vnode_data* data = node->data;
     if (data->directory) {
         ino_t child_inode;
@@ -103,13 +103,13 @@ static const struct vnode_operations dev_ops = {
 };
 
 static struct vnode* CreateDemoFsVnode(ino_t inode, off_t size) {
-    return CreateVnode(dev_ops, (struct stat) {
+    return KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = (INODE_IS_DIR(inode) ? S_IFDIR : S_IFREG) | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,
         .st_size = size,
         .st_ino = inode & 0x7FFFFFFF,
         .st_blksize = 512,      // the 'efficient' size
-        .st_dev = NextDevId()
+        .st_dev = KeNextDevId()
     });
 }
 
@@ -117,15 +117,15 @@ static int CheckForDemofsSignature(struct file* raw_device) {
     struct stat st = raw_device->node->stat;
 
     uint8_t* buffer = AllocHeap(st.st_blksize);
-    struct transfer io = CreateKernelTransfer(buffer, st.st_blksize, 8 * st.st_blksize, TRANSFER_READ);
+    struct transfer io = KeCreateKernelTransfer(buffer, st.st_blksize, 8 * st.st_blksize, TRANSFER_READ);
     struct aio aio;
-    CreateIO(&aio, raw_device, io, NULL, NULL);
-    int res = ReadFile(&aio);
+    KeCreateIO(&aio, raw_device, io, NULL, NULL);
+    int res = KeReadFile(&aio);
     if (res != 0) {
         FreeHeap(buffer);
         return ENOTSUP;
     }
-    res = WaitIO(&aio, TIMEOUT_INFINITE);
+    res = KeWaitIO(&aio, TIMEOUT_INFINITE);
     if (res != 0) {
         FreeHeap(buffer);
         return ENOTSUP;
@@ -162,16 +162,16 @@ int DemofsMountCreator(struct file* raw_device, struct file** out) {
 
     int res = demofs_start_driver(&data->fs);
     if (res != 0) {
-        DerefObject(node);
+        KeDerefObject(node);
         return res;
     }
 
     node->data = data;
 
-	*out = CreateFile(node, 0, 0, true, false);
+	*out = KeCreateFile(node, 0, 0, true, false);
     return 0;
 }
 
 void InitDemofs(void) {
-    RegisterFilesystem("demofs", DemofsMountCreator);
+    KeRegisterFilesystem("demofs", DemofsMountCreator);
 }

@@ -13,7 +13,7 @@ struct open_mapped_file {
 
 #define OMF_TRANSPARENT_DECOMPRESS  (1 << 0)
 
-int OpenAndMapFile(const char* path, int flags, struct open_mapped_file* out);
+int KeOpenAndMapFile(const char* path, int flags, struct open_mapped_file* out);
 
 /* DOUBLE CLOSE IS ALLOWED! */
 void OmfClose(struct open_mapped_file* omf); 

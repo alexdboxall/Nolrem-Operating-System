@@ -8,7 +8,7 @@
 pageable size_t SysTranslateRegion(size_t a, size_t _x, size_t _y, size_t) {
     struct uregion* ua = (struct uregion*) a;
 
-    if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
@@ -17,7 +17,7 @@ pageable size_t SysTranslateRegion(size_t a, size_t _x, size_t _y, size_t) {
     int y = (int) _y;
 
     int retv = CdTranslateRegion(&ua->rgn, x, y);
-    DerefObject(ua);
+    KeDerefObject(ua);
     return retv;
 }
 

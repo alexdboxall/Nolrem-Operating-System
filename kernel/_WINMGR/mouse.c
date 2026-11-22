@@ -43,7 +43,7 @@ void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, in
             .rect_arg.y = mouse_y
         };
 
-        PostMessageIrq(new_mouse_message);
+        KePostMessageIrq(new_mouse_message);
     }
 
     (void) scrollx;

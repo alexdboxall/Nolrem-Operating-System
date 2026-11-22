@@ -6,7 +6,7 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysCreateRectRegion(size_t a, size_t b, size_t c, size_t d) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }

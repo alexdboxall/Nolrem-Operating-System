@@ -8,13 +8,13 @@
 pageable size_t SysIsRegionEmpty(size_t a, size_t, size_t, size_t) {
     struct uregion* ua = (struct uregion*) a;
 
-    if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
 
     bool empty = CdIsRegionEmpty(ua->rgn);
-    DerefObject(ua);
+    KeDerefObject(ua);
     return empty;
 }
 

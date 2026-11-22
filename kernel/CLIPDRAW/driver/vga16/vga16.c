@@ -370,7 +370,7 @@ void InitVga() {
     drv.blit_compatible_bitmap = VGABitmapBlit;
     drv.draw_glyph = VGADrawGlyph;
 
-    RegisterPrimaryGraphicsDriver(drv);
+    KeRegisterPrimaryGraphicsDriver(drv);
     
     VgaPutSolidRect(NULL, 0, 0, 640, 480, BlackColour());
     VGADrawString(16, 16, 8, 0xF, "Nolrem", true, false);

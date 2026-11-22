@@ -10,14 +10,14 @@
 #define CUSTOM_BRUSH_PATTERN_BYTES  8
 
 pageable size_t SysCreateCustomBrush(size_t primary, size_t secondary, size_t pattern_ptr, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
 
     uint8_t pattern[CUSTOM_BRUSH_PATTERN_BYTES];
-    struct transfer tr = CreateTransferReadingFromUser((const void*) pattern_ptr, sizeof(pattern), 0);
-    int res = PerformTransfer(pattern, &tr, sizeof(pattern));
+    struct transfer tr = KeCreateTransferReadingFromUser((const void*) pattern_ptr, sizeof(pattern), 0);
+    int res = KePerformTransfer(pattern, &tr, sizeof(pattern));
     if (res != 0) {
         KeSetLastUserError(res);
         return 0;

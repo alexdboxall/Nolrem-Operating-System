@@ -2,5 +2,5 @@
 
 #include <stddef.h>
 
-void InitLog(void);
-void LogPrintf(const char* format, ...);
+void KeInitLog(void);
+void KeLogPrintf(const char* format, ...);

@@ -14,7 +14,7 @@
 
 #define NWORKERS     4
 #define SPIN_LIMIT   2000
-#define SETTLE       3      /* Schedule() passes to let woken threads run */
+#define SETTLE       3      /* KeSchedule() passes to let woken threads run */
 
 enum { MODE_NANO = 1, MODE_UNTIL, MODE_MILLI };
 
@@ -34,23 +34,23 @@ static volatile int     g_wake_counter;
 static volatile int     g_suspected;
 
 #define SUSPECT(cond, what) do { \
-    if (!(cond)) { g_suspected++; LogPrintf("SUSPECTED BUG: %s\n", what); assert(false); } \
+    if (!(cond)) { g_suspected++; KeLogPrintf("SUSPECTED BUG: %s\n", what); assert(false); } \
 } while (0)
 
 static void Settle(void) {
-    for (int i = 0; i < SETTLE; ++i) Schedule();
+    for (int i = 0; i < SETTLE; ++i) KeSchedule();
 }
 
 static void WorkerEntry(void* ctx) {
-    BeginNewThread();
+    KeBeginNewThread();
     struct tworker* w = ctx;
     for (;;) {
-        while (!w->job) Schedule();
+        while (!w->job) KeSchedule();
         w->started = 1;
         switch (w->mode) {
-            case MODE_NANO:  SleepNano(w->arg);  break;
-            case MODE_UNTIL: SleepUntil(w->arg); break;
-            case MODE_MILLI: SleepMilli(w->arg); break;
+            case MODE_NANO:  KeSleepNano(w->arg);  break;
+            case MODE_UNTIL: KeSleepUntil(w->arg); break;
+            case MODE_MILLI: KeSleepMilli(w->arg); break;
         }
         w->wake_seq = ++g_wake_counter;
         w->done = 1;
@@ -60,7 +60,7 @@ static void WorkerEntry(void* ctx) {
 
 static void EnsureWorkers(void) {
     while (g_created < NWORKERS) {
-        CreateThread(GetKernelVas(), WorkerEntry, &g_w[g_created]);
+        KeCreateThread(KeGetKernelVas(), WorkerEntry, &g_w[g_created]);
         g_created++;
     }
 }
@@ -77,25 +77,25 @@ static void StartSleep(int i, int mode, uint64_t arg) {
     w->job = 1;
     for (int n = 0; !w->started; ++n) {
         CHECK(n < SPIN_LIMIT);
-        Schedule();
+        KeSchedule();
     }
     Settle();
 }
 
 static int IsDone(int i) { return g_w[i].done; }
 
-/* Wait for worker i to wake (after an AdvanceTimer that should wake it). */
+/* Wait for worker i to wake (after an KeAdvanceTimer that should wake it). */
 static int WaitDone(int i) {
     for (int n = 0; n < SPIN_LIMIT; ++n) {
         if (g_w[i].done) return 1;
-        Schedule();
+        KeSchedule();
     }
     return 0;
 }
 
 /* Leave nothing asleep: used between tests. */
 static void FlushAll(void) {
-    AdvanceTimer(1000ULL * 1000 * 1000 * 1000);
+    KeAdvanceTimer(1000ULL * 1000 * 1000 * 1000);
     Settle();
     for (int i = 0; i < NWORKERS; ++i) {
         if (g_w[i].job) CHECK(WaitDone(i));
@@ -105,13 +105,13 @@ static void FlushAll(void) {
 /* ------------------------------------------------------------------------ */
 
 static void TestTimeAdvances(void) {
-    uint64_t t0 = GetTimeSinceBoot();
-    AdvanceTimer(1000);
-    CHECK(GetTimeSinceBoot() == t0 + 1000);
-    AdvanceTimer(0);
-    CHECK(GetTimeSinceBoot() == t0 + 1000);
-    AdvanceTimer(1);
-    CHECK(GetTimeSinceBoot() == t0 + 1001);
+    uint64_t t0 = KeGetTimeSinceBoot();
+    KeAdvanceTimer(1000);
+    CHECK(KeGetTimeSinceBoot() == t0 + 1000);
+    KeAdvanceTimer(0);
+    CHECK(KeGetTimeSinceBoot() == t0 + 1000);
+    KeAdvanceTimer(1);
+    CHECK(KeGetTimeSinceBoot() == t0 + 1001);
 }
 
 /* Wakes at the deadline, and not a nanosecond before. */
@@ -119,18 +119,18 @@ static void TestSleepNanoExactDeadline(void) {
     StartSleep(0, MODE_NANO, 1000);
     CHECK(!IsDone(0));
 
-    AdvanceTimer(999);
+    KeAdvanceTimer(999);
     Settle();
     CHECK(!IsDone(0));          /* 1ns early */
 
-    AdvanceTimer(1);
+    KeAdvanceTimer(1);
     CHECK(WaitDone(0));
 }
 
 /* Time jumps well past the deadline (the usual real-world case). */
 static void TestSleepNanoOvershoot(void) {
     StartSleep(0, MODE_NANO, 1000);
-    AdvanceTimer(5000000);
+    KeAdvanceTimer(5000000);
     CHECK(WaitDone(0));
 }
 
@@ -138,36 +138,36 @@ static void TestSleepNanoOvershoot(void) {
 static void TestSleepNanoManySteps(void) {
     StartSleep(0, MODE_NANO, 1000);
     for (int i = 0; i < 9; ++i) {
-        AdvanceTimer(100);
+        KeAdvanceTimer(100);
         Settle();
         CHECK(!IsDone(0));
     }
-    AdvanceTimer(100);
+    KeAdvanceTimer(100);
     CHECK(WaitDone(0));
 }
 
 static void TestSleepUntilAbsolute(void) {
-    uint64_t target = GetTimeSinceBoot() + 5000;
+    uint64_t target = KeGetTimeSinceBoot() + 5000;
     StartSleep(0, MODE_UNTIL, target);
 
-    AdvanceTimer(4999);
+    KeAdvanceTimer(4999);
     Settle();
     CHECK(!IsDone(0));
 
-    AdvanceTimer(1);
+    KeAdvanceTimer(1);
     CHECK(WaitDone(0));
-    CHECK(GetTimeSinceBoot() == target);
+    CHECK(KeGetTimeSinceBoot() == target);
 }
 
-/* SleepMilli(n) must sleep n milliseconds = n * 1,000,000 ns. */
+/* KeSleepMilli(n) must sleep n milliseconds = n * 1,000,000 ns. */
 static void TestSleepMilliScale(void) {
     StartSleep(0, MODE_MILLI, 2);
 
-    AdvanceTimer(1999999);
+    KeAdvanceTimer(1999999);
     Settle();
     CHECK(!IsDone(0));
 
-    AdvanceTimer(1);
+    KeAdvanceTimer(1);
     CHECK(WaitDone(0));
 }
 
@@ -179,21 +179,21 @@ static void TestWakeOrder(void) {
     StartSleep(1, MODE_NANO, 1000);     /* earlier than the head of the queue */
     StartSleep(2, MODE_NANO, 2000);     /* between the other two */
 
-    AdvanceTimer(500);
+    KeAdvanceTimer(500);
     Settle();
     CHECK(!IsDone(0) && !IsDone(1) && !IsDone(2));
 
-    AdvanceTimer(500);                  /* t = 1000 */
+    KeAdvanceTimer(500);                  /* t = 1000 */
     CHECK(WaitDone(1));
     Settle();
     CHECK(!IsDone(0) && !IsDone(2));
 
-    AdvanceTimer(1000);                 /* t = 2000 */
+    KeAdvanceTimer(1000);                 /* t = 2000 */
     CHECK(WaitDone(2));
     Settle();
     CHECK(!IsDone(0));
 
-    AdvanceTimer(1000);                 /* t = 3000 */
+    KeAdvanceTimer(1000);                 /* t = 3000 */
     CHECK(WaitDone(0));
 
     CHECK(g_w[1].wake_seq == 1);
@@ -208,7 +208,7 @@ static void TestWakeOrderAscendingOneJump(void) {
     StartSleep(1, MODE_NANO, 2000);
     StartSleep(2, MODE_NANO, 3000);
 
-    AdvanceTimer(10000);
+    KeAdvanceTimer(10000);
     CHECK(WaitDone(0) && WaitDone(1) && WaitDone(2));
     /* all three are runnable at once, so only check nobody was missed */
     CHECK(g_w[0].wake_seq && g_w[1].wake_seq && g_w[2].wake_seq);
@@ -218,7 +218,7 @@ static void TestWakeOrderAscendingOneJump(void) {
 static void TestSameDeadline(void) {
     StartSleep(0, MODE_NANO, 1000);
     StartSleep(1, MODE_NANO, 1000);
-    AdvanceTimer(1000);
+    KeAdvanceTimer(1000);
     CHECK(WaitDone(0));
     CHECK(WaitDone(1));
 }
@@ -226,18 +226,18 @@ static void TestSameDeadline(void) {
 /* After a queue empties it works again, and the same thread can sleep twice. */
 static void TestSleepTwice(void) {
     StartSleep(0, MODE_NANO, 1000);
-    AdvanceTimer(1000);
+    KeAdvanceTimer(1000);
     CHECK(WaitDone(0));
 
     StartSleep(0, MODE_NANO, 2000);
-    AdvanceTimer(1999);
+    KeAdvanceTimer(1999);
     Settle();
     CHECK(!IsDone(0));
-    AdvanceTimer(1);
+    KeAdvanceTimer(1);
     CHECK(WaitDone(0));
 
     /* queue is empty again; a time jump with nobody asleep must be harmless */
-    AdvanceTimer(123456);
+    KeAdvanceTimer(123456);
     Settle();
 }
 
@@ -246,11 +246,11 @@ static void TestSleepTwice(void) {
 static void TestLaterSleeperDoesntDelayEarlier(void) {
     StartSleep(0, MODE_NANO, 1000);
     StartSleep(1, MODE_NANO, 9000);
-    AdvanceTimer(1000);
+    KeAdvanceTimer(1000);
     CHECK(WaitDone(0));
     Settle();
     CHECK(!IsDone(1));
-    AdvanceTimer(8000);
+    KeAdvanceTimer(8000);
     CHECK(WaitDone(1));
 }
 
@@ -259,17 +259,17 @@ static void TestSleepAlreadyElapsed(void) {
     struct tworker* w = &g_w[0];
     w->mode = MODE_NANO; w->arg = 0;
     w->started = 0; w->done = 0; w->job = 1;
-    for (int n = 0; !w->started; ++n) { CHECK(n < SPIN_LIMIT); Schedule(); }
+    for (int n = 0; !w->started; ++n) { CHECK(n < SPIN_LIMIT); KeSchedule(); }
     Settle();
-    SUSPECT(w->done, "SleepNano(0) did not return without a timer tick");
+    SUSPECT(w->done, "KeSleepNano(0) did not return without a timer tick");
 
     w->done = 0;
     w->mode = MODE_UNTIL; w->arg = 1;       /* long in the past */
     if (w->job == 0) {
         w->started = 0; w->job = 1;
-        for (int n = 0; !w->started; ++n) { CHECK(n < SPIN_LIMIT); Schedule(); }
+        for (int n = 0; !w->started; ++n) { CHECK(n < SPIN_LIMIT); KeSchedule(); }
         Settle();
-        SUSPECT(w->done, "SleepUntil(<past>) did not return without a timer tick");
+        SUSPECT(w->done, "KeSleepUntil(<past>) did not return without a timer tick");
     }
 }
 
@@ -295,6 +295,6 @@ void RunTimerTests(void) {
 
     ArchDebugInhibitTimerAdvance(false);
 
-    if (g_suspected) LogPrintf("timer tests: %d SUSPECTED BUG(S)\n", g_suspected);
-    else             LogPrintf("timer tests: ALL PASSED\n");
+    if (g_suspected) KeLogPrintf("timer tests: %d SUSPECTED BUG(S)\n", g_suspected);
+    else             KeLogPrintf("timer tests: ALL PASSED\n");
 }

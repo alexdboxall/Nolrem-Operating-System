@@ -46,7 +46,7 @@ static const struct vnode_operations dev_ops = {
 /*
  * Assumes the caller has already ensured that we're calling this on a S_IFIFO.
  */
-void BreakPipe(struct vnode* node) {
+void KeBreakPipe(struct vnode* node) {
     struct pipe* pipe = node->data;
     if (pipe->sig == PIPE_SIGNATURE) {
         pipe->broken = true;
@@ -56,12 +56,12 @@ void BreakPipe(struct vnode* node) {
     }
 }
 
-struct vnode* CreatePipe(void)
+struct vnode* KeCreatePipe(void)
 {
-    struct vnode* node = CreateVnode(dev_ops, (struct stat) {
+    struct vnode* node = KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFIFO | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,
-        .st_dev = NextDevId()
+        .st_dev = KeNextDevId()
     });
 
     struct pipe* pipe = AllocHeap(sizeof(struct pipe));

@@ -20,9 +20,9 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     if (ico == NULL) {
         return NULL;
     }
-    InitUserObject(ico, UOBJ_ICON);
+    KeInitUserObject(ico, UOBJ_ICON);
 
-    int res = OpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &ico->omf);
+    int res = KeOpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &ico->omf);
     if (res != 0) {
         FreeHeap(ico);
         return NULL;
@@ -69,7 +69,7 @@ export pageable struct icon* CdOpenIcon(const char* file) {
 
 fail_after_open:
     /* CleanupIcon closes the Omf and frees tf. */
-    DerefObject(ico);
+    KeDerefObject(ico);
     return NULL;
 }
 
@@ -86,5 +86,5 @@ static void CleanupIcon(void* _ico) {
 }
 
 void CdInitIconSubsystem(void) {
-    RegisterUserObjectType(UOBJ_ICON, CleanupIcon);
+    KeRegisterUserObjectType(UOBJ_ICON, CleanupIcon);
 }

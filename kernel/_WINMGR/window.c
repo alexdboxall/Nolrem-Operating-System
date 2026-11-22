@@ -21,11 +21,11 @@ export void WmSetForegroundWindow(struct window* win, bool lock) {
     if (win != foreground_window) {
         if (foreground_window != NULL) {
             WmInvalidateWindow(foreground_window, false);
-            DerefObject(foreground_window);
+            KeDerefObject(foreground_window);
         }
         foreground_window = win;
         if (win != NULL) {
-            RefObject(win);
+            KeRefObject(win);
             WmInvalidateWindow(win, false);
         }
     }
@@ -34,20 +34,20 @@ export void WmSetForegroundWindow(struct window* win, bool lock) {
 
 static void CleanupWindow(void* _win) {
     struct window* win = _win;
-    DerefObject(win->winclass);
+    KeDerefObject(win->winclass);
     FreeHeap(win);
 }
 
 void WmInitWindowSubsystem(void) {
-    RegisterUserObjectType(UOBJ_WINDOW, CleanupWindow);
+    KeRegisterUserObjectType(UOBJ_WINDOW, CleanupWindow);
 }
 
 void WmLock(void) {
-    AcquireSpinlock(&winmgr_lock);
+    KeAcquireSpinlock(&winmgr_lock);
 }
 
 void WmUnlock(void) {
-    ReleaseSpinlock(&winmgr_lock);
+    KeReleaseSpinlock(&winmgr_lock);
 }
 
 static void WmAssertLocked(void) {
@@ -344,7 +344,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     if (win == NULL) {
         return NULL;
     }
-    InitUserObject(win, UOBJ_WINDOW);
+    KeInitUserObject(win, UOBJ_WINDOW);
 
     if (lock) WmLock();
 
@@ -368,7 +368,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     if (app != NULL) {
         win->app_next_win = app->win_list_head;
         app->win_list_head = win;
-        RefObject(app);
+        KeRefObject(app);
     }
    
     win->app = app;
@@ -479,7 +479,7 @@ extern void WmInitDesktopWindowSubsystem();
 extern void WmInitAppSubsystem();
 
 void WmInit(void) {
-    InitSpinlock(&winmgr_lock);
+    KeInitSpinlock(&winmgr_lock);
     WmInitSystemMessageBox();
     WmInitDcCache();
     WmInitWindowClassSubsystem();
@@ -506,7 +506,7 @@ export struct dc* WmBeginPaint(struct window* win) {
     CdSetTranslation(dc, win->global_offset_cached.x, win->global_offset_cached.y);
 
     if (!(win->winclass->flags & CS_ALLCLIENT)) {
-        LogPrintf("Dispatching WM_NCPAINT...\n");
+        KeLogPrintf("Dispatching WM_NCPAINT...\n");
         WmDispatchMessage((struct msg) {
             .type = WM_NCPAINT,
             .p_arg = dc,

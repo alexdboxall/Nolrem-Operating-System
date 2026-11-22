@@ -31,7 +31,7 @@ static void WmAppInvertCaret(struct app* app, uint64_t now) {
 }
 
 export void WmAppRestartCaretBlink(struct app* app, uint64_t blink_duration) {
-    uint64_t now = GetTimeSinceBoot();
+    uint64_t now = KeGetTimeSinceBoot();
     if (WmAppCaretEligible(app) && app->caret_inverted) {
         WmAppInvertCaret(app, now);
     }
@@ -72,7 +72,7 @@ static void WmCheckGenerateSynthMessages(struct app* app) {
     struct window* win = app->win_list_head;
     while (win) {
         if (WmCheckIfPaintRequired(win)) {
-            LogPrintf("Dispatching WM_PAINT (WmCheckGenerateSynthMessages)...\n");
+            KeLogPrintf("Dispatching WM_PAINT (WmCheckGenerateSynthMessages)...\n");
             WmUnlock();
             WmDispatchMessage((struct msg) {
                 .win = win,
@@ -94,7 +94,7 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
      * held across the peek and the synth call.
      */
     WmLock();
-    app->timeof_last_entry_to_getmessage = GetTimeSinceBoot();
+    app->timeof_last_entry_to_getmessage = KeGetTimeSinceBoot();
     int res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
     if (res == EAGAIN) {
         WmCheckGenerateSynthMessages(app);
@@ -108,7 +108,7 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
     }
 
     for (;;) {
-        uint64_t now = GetTimeSinceBoot();
+        uint64_t now = KeGetTimeSinceBoot();
         uint64_t timeout = TIMEOUT_INFINITE;
 
         WmLock();
@@ -153,14 +153,14 @@ struct app* WmCreateApp(void) {
     if (app == NULL) {
         return NULL;
     }
-    InitUserObject(app, UOBJ_APP);
+    KeInitUserObject(app, UOBJ_APP);
     app->caret_inverted = false;
     app->caret_level = 0;
     app->caret_owner = NULL;
     app->caret_timeout_time = 0;
     app->timeof_last_caret_invert = 0;
     app->win_list_head = NULL;
-    app->mbox = CreateMessageBox(sizeof(struct msg), APP_QUEUE_SIZE);
+    app->mbox = KeCreateMessageBox(sizeof(struct msg), APP_QUEUE_SIZE);
     if (app->mbox == NULL) {
         FreeHeap(app);
         return NULL;
@@ -173,10 +173,10 @@ static void CleanupApp(void* _app) {
     if (app == NULL) {
         return;
     }
-    DerefObject(app->mbox);
+    KeDerefObject(app->mbox);
     FreeHeap(app);
 }
 
 void WmInitAppSubsystem(void) {
-    RegisterUserObjectType(UOBJ_APP, CleanupApp);
+    KeRegisterUserObjectType(UOBJ_APP, CleanupApp);
 }

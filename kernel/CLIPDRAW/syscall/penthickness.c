@@ -20,7 +20,7 @@ pageable size_t SysPenThickness(size_t a, size_t op, size_t thickness, size_t) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
         KeSetLastUserError(EINVAL);
         return op == OP_GET ? 0 : EINVAL;
     }
@@ -37,7 +37,7 @@ pageable size_t SysPenThickness(size_t a, size_t op, size_t thickness, size_t) {
     } else {
         retv = (size_t) CdSetPenThickness(pen, (int) thickness);
     }
-    DerefObject(pen);
+    KeDerefObject(pen);
     return retv;
 }
 

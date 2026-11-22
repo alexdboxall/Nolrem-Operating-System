@@ -19,20 +19,20 @@ static void SelectAddress(uint8_t addr) {
 }
 
 uint8_t ReadCmos(uint8_t reg) {
-    AcquireSpinlock(&cmos_spinlock);
+    KeAcquireSpinlock(&cmos_spinlock);
     SelectAddress(reg);
     uint8_t retv = inb(CMOS_DATA);
     CmosDelay();
-    ReleaseSpinlock(&cmos_spinlock);
+    KeReleaseSpinlock(&cmos_spinlock);
     return retv;
 } 
 
 void WriteCmos(uint8_t reg, uint8_t data) {
-    AcquireSpinlock(&cmos_spinlock);
+    KeAcquireSpinlock(&cmos_spinlock);
     SelectAddress(reg);
     outb(CMOS_DATA, data);
     CmosDelay();
-    ReleaseSpinlock(&cmos_spinlock);
+    KeReleaseSpinlock(&cmos_spinlock);
 } 
 
 void SetNmiEnable(bool enable) {
@@ -45,6 +45,6 @@ void SetNmiEnable(bool enable) {
 }
 
 void x86InitCmos(void) {
-    InitSpinlock(&cmos_spinlock);
+    KeInitSpinlock(&cmos_spinlock);
     SetNmiEnable(true);
 }

@@ -4,7 +4,7 @@
    longer. EDX can be trashed, so the compiler doesn't need to push/pop it.
 
    x86HandleInterrupt is of course in on the game:
-    r->eax = PerformSystemCall(r->eax, r->edx, r->ecx, r->ebx, r->esi);
+    r->eax = KePerformSystemCall(r->eax, r->edx, r->ecx, r->ebx, r->esi);
  */
 
 size_t SystemCall(size_t arg1, size_t arg2, size_t arg3, size_t arg4, size_t arg5) {

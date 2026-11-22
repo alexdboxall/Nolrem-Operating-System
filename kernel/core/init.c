@@ -34,13 +34,13 @@
 
 #include <_test.h>
 
-export _Noreturn void InitKernelResidentPortion(void) {
+export _Noreturn void KeInitKernelResidentPortion(void) {
     extern void CdInit();
     extern void WmInit();
     extern _Noreturn void WmMainloop();
 
-    MarkPageableSegmentsDiscardable();
-    while (DiscardPage() != NULL) {
+    KeMarkPageableSegmentsDiscardable();
+    while (KeDiscardPage() != NULL) {
         ;
     }
 
@@ -58,42 +58,42 @@ export _Noreturn void InitKernelResidentPortion(void) {
  * This stuff will be discardable, so we'd better finish up this before we turn
  * on the discarder!
  */
-export _Noreturn pageable void InitKernel(struct kernel_boot_info* boot_info) {
-    InitLog();
-    InitBootstrapHeap();
-    InitVmm();
-    InitCpuTable();
-    InitKernelVirtArena();
-    InitTimer();
+export _Noreturn pageable void KeInitKernel(struct kernel_boot_info* boot_info) {
+    KeInitLog();
+    KeInitBootstrapHeap();
+    KeInitVmm();
+    KeInitCpuTable();
+    KeInitKernelVirtArena();
+    KeInitTimer();
     ArchInit();
     ArchCallGlobalConstructors();
 
-    InitPhys(
+    KeInitPhys(
         (void*)((size_t) boot_info->ram_table + ARCH_KRNL_MAPPING_BASE), 
         boot_info->num_ram_table_entries
     );
     
     /* We can't use the boot table from this point forwards, as
-     * InitPhys ends by reclaiming the RAM used behind `boot_info`. */
+     * KeInitPhys ends by reclaiming the RAM used behind `boot_info`. */
     boot_info = NULL;
 
-    InitSem();
-    InitThread();
-    CreateInitialVas();
-    InitScheduler();
+    KeInitSem();
+    KeInitThread();
+    KeCreateInitialVas();
+    KeInitScheduler();
     ArchEnableInterrupts();
-    InitCpzImages();
-    InitMessageBox();
-    InitModule();
-    InitVnode();
-    InitDiskUtil();
-    InitFile();
-    InitFilesystemTable();
-    InitUserObjectType();
-    InitVfs();
-    InitNullDevice();
+    KeInitCpzImages();
+    KeInitMessageBox();
+    KeInitModule();
+    KeInitVnode();
+    KeInitDiskUtil();
+    KeInitFile();
+    KeInitFilesystemTable();
+    KeInitUserObjectType();
+    KeInitVfs();
+    KeInitNullDevice();
     ArchInit2();
-    LoadKernelModule();
-    CreateThreadEx(GetKernelVas(), LowPriorityBackgroundThread, NULL, 1024);
-    InitKernelResidentPortion();
+    KeLoadKernelModule();
+    KeCreateThreadEx(KeGetKernelVas(), KeLowPriorityBackgroundThread, NULL, 1024);
+    KeInitKernelResidentPortion();
 }

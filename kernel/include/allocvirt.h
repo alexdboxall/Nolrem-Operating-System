@@ -11,11 +11,11 @@ struct virt_arena {
 };
 
 void InitVirtArena(struct virt_arena* va, size_t start, size_t bytes);
-void InitKernelVirtArena(void);
-struct virt_arena* GetKernelVirtArena(void);
+void KeInitKernelVirtArena(void);
+struct virt_arena* KeGetKernelVirtArena(void);
 
 size_t AllocVirtEx(struct virt_arena* va, size_t bytes);
-size_t AllocVirt(size_t bytes);
+size_t KeAllocVirt(size_t bytes);
 
 void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes);
-void FreeVirt(size_t start_addr, size_t bytes);
+void KeFreeVirt(size_t start_addr, size_t bytes);

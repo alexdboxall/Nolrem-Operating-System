@@ -9,7 +9,7 @@
 #define CUSTOM_PEN_MAX_SIZE     8
 
 pageable size_t SysCreateCustomPen(size_t colour, size_t width, size_t height, size_t rows_ptr) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
@@ -20,8 +20,8 @@ pageable size_t SysCreateCustomPen(size_t colour, size_t width, size_t height, s
 
     /* One byte per row. */
     uint8_t rows[CUSTOM_PEN_MAX_SIZE];
-    struct transfer tr = CreateTransferReadingFromUser((const void*) rows_ptr, height, 0);
-    int res = PerformTransfer(rows, &tr, height);
+    struct transfer tr = KeCreateTransferReadingFromUser((const void*) rows_ptr, height, 0);
+    int res = KePerformTransfer(rows, &tr, height);
     if (res != 0) {
         KeSetLastUserError(res);
         return 0;

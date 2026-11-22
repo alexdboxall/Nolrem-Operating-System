@@ -16,20 +16,20 @@ pageable size_t SysSetGraphicsObject(size_t dc_ptr, size_t obj_ptr, size_t, size
     struct dc* dc = (struct dc*) dc_ptr;
     void* obj = (void*) obj_ptr;
 
-    if (!ValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(obj, UOBJ_ANYTYPE)) {
-        DerefObject(dc);
+    if (!KeValidateUserObjectAndAtomicallyRef(obj, UOBJ_ANYTYPE)) {
+        KeDerefObject(dc);
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
 
     int res = CdSetGraphicsObject(dc, obj);
 
-    DerefObject(obj);
-    DerefObject(dc);
+    KeDerefObject(obj);
+    KeDerefObject(dc);
 
     if (res != 0) {
         KeSetLastUserError(res);

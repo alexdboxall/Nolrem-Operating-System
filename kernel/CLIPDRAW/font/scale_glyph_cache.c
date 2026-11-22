@@ -23,7 +23,7 @@ export pageable uint8_t* GetCacheScaledGlyph(struct font* font, font_style_id st
     if (c < 0x20 || c > 0x7F || index_out == NULL) {
         return NULL;
     }
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     for (int i = 0; i < NUM_CACHED_GLYPHS; ++i) {
         if (scaled_font_cache[i].fnt == font 
             && scaled_font_cache[i].ascii == c 
@@ -31,21 +31,21 @@ export pageable uint8_t* GetCacheScaledGlyph(struct font* font, font_style_id st
             && scaled_font_cache[i].data != NULL
         ) {
             scaled_font_cache[i].in_use++;
-            ReleaseSpinlock(&lock);
+            KeReleaseSpinlock(&lock);
             scaled_font_cache->lru |= 0x8000;
             *index_out = 1;
             return scaled_font_cache->data;
         }
     }
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
     return NULL;
 }
 
 export pageable void ReleaseCachedScaledGlyph(int index) {
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     if (index >= NUM_CACHED_GLYPHS || index < 0) {
         uint8_t remaining = --scaled_font_cache[index].in_use;
-        if (remaining == 0 && IsMemoryLow()) {
+        if (remaining == 0 && KeIsMemoryLow()) {
             FreeHeap(scaled_font_cache[index].data);
             scaled_font_cache[index].data = NULL;
             --num_cached;
@@ -55,16 +55,16 @@ export pageable void ReleaseCachedScaledGlyph(int index) {
         FreeHeap(scaled_font_cache);
         scaled_font_cache = NULL;
     }
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
 }
 
 /* Not pageable, as we need to be able to purge while we're paging! */
 void PurgeScaledGlyphCacheIfNeeded(void) {
-    if (!IsMemoryRunningLow() || num_cached == 0) {
+    if (!KeIsMemoryRunningLow() || num_cached == 0) {
         return;
     }
-    bool very_low = IsMemoryLow();
-    AcquireSpinlock(&lock);
+    bool very_low = KeIsMemoryLow();
+    KeAcquireSpinlock(&lock);
     for (int i = 0; i < NUM_CACHED_GLYPHS; ++i) {
         if (scaled_font_cache[i].in_use == 0 && scaled_font_cache[i].data != NULL) {
             if (very_low || scaled_font_cache[i].lru == 0) {
@@ -78,21 +78,21 @@ void PurgeScaledGlyphCacheIfNeeded(void) {
         FreeHeap(scaled_font_cache);
         scaled_font_cache = NULL;
     }
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
 }
 
 export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_id style, uint32_t c, uint8_t* bitmap, size_t size) {
-    if (c < 0x20 || c > 0x7F || IsMemoryRunningLow()) {
+    if (c < 0x20 || c > 0x7F || KeIsMemoryRunningLow()) {
         return;
     }
     uint16_t lowest_lru = 0xFFFF;
     int lowest_index = 0;
     bool found_exact_match = false;
-    AcquireSpinlock(&lock);
+    KeAcquireSpinlock(&lock);
     if (scaled_font_cache == NULL) {
         scaled_font_cache = AllocHeap(sizeof(struct glyph_cache_entry) * NUM_CACHED_GLYPHS);
         if (scaled_font_cache == NULL) {
-            ReleaseSpinlock(&lock);
+            KeReleaseSpinlock(&lock);
             return;
         }
         memset(scaled_font_cache, 0, NUM_CACHED_GLYPHS);
@@ -127,7 +127,7 @@ export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_
         }
         scaled_font_cache[lowest_index].data = AllocHeap(size);
         if (scaled_font_cache[lowest_index].data == NULL) {
-            ReleaseSpinlock(&lock);
+            KeReleaseSpinlock(&lock);
             return;
         }
         memcpy(scaled_font_cache[lowest_index].data, bitmap, size);
@@ -137,9 +137,9 @@ export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_
         scaled_font_cache[lowest_index].fnt = font;
         /* in_use stays zero, as you're expected to use the original copy */
     }
-    ReleaseSpinlock(&lock);
+    KeReleaseSpinlock(&lock);
 }
 
 void InitScaledGlyphCache(void) {
-    InitSpinlock(&lock);
+    KeInitSpinlock(&lock);
 }

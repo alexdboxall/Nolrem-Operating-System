@@ -19,7 +19,7 @@ struct uregion* RegionToUserRegion(struct region rgn) {
     if (ur == NULL) {
         return NULL;
     }
-    InitUserObject(ur, UOBJ_REGION);
+    KeInitUserObject(ur, UOBJ_REGION);
     ur->rgn = rgn;
     return ur;
 }
@@ -30,5 +30,5 @@ struct region UserRegionToRegion(struct uregion* urgn) {
 }
     
 void CdInitUserRegionSubsystem(void) {
-    RegisterUserObjectType(UOBJ_REGION, CleanupUserRegion);
+    KeRegisterUserObjectType(UOBJ_REGION, CleanupUserRegion);
 }

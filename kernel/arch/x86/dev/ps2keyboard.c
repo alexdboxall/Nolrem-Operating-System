@@ -42,7 +42,7 @@ static uint8_t TranslateCharacter(uint8_t scancode) {
 }
 
 static void SendKeystrokeConsole(char c) {
-    LogPrintf("%c", c);
+    KeLogPrintf("%c", c);
 }
 
 static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
@@ -196,12 +196,12 @@ void InitPs2Keyboard(void) {
 
     /* Enable scanning. */
     if (Ps2DeviceWrite(0xF4, false) != 0) {
-        LogPrintf("[keyboard] WARNING: enable-scanning not ACKed\n");
+        KeLogPrintf("[keyboard] WARNING: enable-scanning not ACKed\n");
     }
 
     /* Flush stray bytes. */
     Ps2ControllerFlushOutputBuffer();
 
     /* Register handler. */
-    RegisterInterruptHandler(1, Ps2KeyboardIrqHandler);
+    KeRegisterInterruptHandler(1, Ps2KeyboardIrqHandler);
 }

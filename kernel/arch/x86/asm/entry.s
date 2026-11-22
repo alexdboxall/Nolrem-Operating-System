@@ -28,7 +28,7 @@ stack_top:
 ; This is loaded at 1MB, not at 0xC0000000 + 1MB, so it must go in a special
 ; section. Information from the bootloader is in EBX, so we must preserve it!
 section .lowram.text
-extern InitKernel
+extern KeInitKernel
 extern _kernel_end
 global _start
 _start:
@@ -120,7 +120,7 @@ KernelEntryPoint:
 	; Call the kernel main function, passing it in the table given to us by the
 	; bootloader.
 	push ebx
-	call InitKernel
+	call KeInitKernel
 
 	; We should never get here, but halt just in case
 	cli

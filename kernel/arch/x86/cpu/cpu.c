@@ -20,7 +20,7 @@ int ArchGetCpuNum(void) {
 }
 
 void ArchInitPlatformSpecificData(struct cpu_data* cpu) {
-    cpu->platform_specific = AllocPermanentHeap(sizeof(platform_cpu_data_t));
+    cpu->platform_specific = KeAllocPermanentHeap(sizeof(platform_cpu_data_t));
     /* The TSS, GDT and IDT are allocated by x86InitTss/Gdt/Idt, which run on
        the CPU that owns them. */
     cpu->platform_specific->tss = NULL;

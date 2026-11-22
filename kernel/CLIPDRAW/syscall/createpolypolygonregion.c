@@ -17,7 +17,7 @@ struct polypoly {
 #define MAX_POINTS      50000
 
 pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, size_t mode) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
@@ -27,9 +27,9 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
     }
 
     struct polypoly pp;
-    struct transfer tr = CreateTransferReadingFromUser((const void*) ppp, sizeof(struct polypoly), 0);
+    struct transfer tr = KeCreateTransferReadingFromUser((const void*) ppp, sizeof(struct polypoly), 0);
     
-    int res = PerformTransfer(&pp, &tr, sizeof(struct polypoly));
+    int res = KePerformTransfer(&pp, &tr, sizeof(struct polypoly));
     if (res != 0) {
         KeSetLastUserError(res);
         return res;
@@ -46,8 +46,8 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
         return 0;
     }
 
-    tr = CreateTransferReadingFromUser((const void*) pp.counts, sizeof(int) * polygons, 0);
-    res = PerformTransfer(cc, &tr, sizeof(int) * polygons);
+    tr = KeCreateTransferReadingFromUser((const void*) pp.counts, sizeof(int) * polygons, 0);
+    res = KePerformTransfer(cc, &tr, sizeof(int) * polygons);
     if (res != 0) {
         FreeHeap(cc);
         KeSetLastUserError(res);
@@ -79,13 +79,13 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
         return 0;
     }
 
-    tr = CreateTransferReadingFromUser((const void*) pp.x, sizeof(int) * calculated_sum, 0);
-    if (PerformTransfer(xx, &tr, sizeof(int) * calculated_sum) != 0) {
+    tr = KeCreateTransferReadingFromUser((const void*) pp.x, sizeof(int) * calculated_sum, 0);
+    if (KePerformTransfer(xx, &tr, sizeof(int) * calculated_sum) != 0) {
         goto cleanup;
     }
 
-    tr = CreateTransferReadingFromUser((const void*) pp.y, sizeof(int) * calculated_sum, 0);
-    if (PerformTransfer(yy, &tr, sizeof(int) * calculated_sum) != 0) {
+    tr = KeCreateTransferReadingFromUser((const void*) pp.y, sizeof(int) * calculated_sum, 0);
+    if (KePerformTransfer(yy, &tr, sizeof(int) * calculated_sum) != 0) {
         goto cleanup;
     }
 

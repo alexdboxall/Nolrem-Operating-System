@@ -46,7 +46,7 @@ static void HandleWmPaint(struct window* win) {
         0x00  // 
     };
 
-    VGADrawGlyph(GetKernelGraphicsDriver(), 100, 100, (struct rect) {
+    VGADrawGlyph(KeGetKernelGraphicsDriver(), 100, 100, (struct rect) {
         .x = 0, .y = 0, .w = 640, .h = 480,
     }, BlackColour(), 8, 16, g);
 
@@ -95,7 +95,7 @@ static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
         );
     }
     
-    DerefObject(blue);
+    KeDerefObject(blue);
 
     CdPaintRectWithBrush(dc, 
         0,
@@ -175,7 +175,7 @@ static int HandleHitTest(struct window* win, struct point p) {
 static int HandleToplevelMousedown(struct window* win, struct msg msg) {
     static uint64_t prev_time = 0;
     static struct point prev_pt;
-    uint64_t time = GetTimeSinceBoot();
+    uint64_t time = KeGetTimeSinceBoot();
     uint64_t time_delta = time - prev_time;
     prev_time = time;
 
@@ -189,7 +189,7 @@ static int HandleToplevelMousedown(struct window* win, struct msg msg) {
     bool send_app_activate = send_activate && old_fg != NULL && win->app != old_fg->app;
     bool send_deactivate = old_fg != NULL && old_fg != WmGetDesktop();
     if (send_deactivate) {
-        RefObject(old_fg);
+        KeRefObject(old_fg);
     } else {
         old_fg = NULL;
     }
@@ -211,7 +211,7 @@ static int HandleToplevelMousedown(struct window* win, struct msg msg) {
                 .i_arg = WA_DEACTIVATE,
             });
         }
-        DerefObject(old_fg);
+        KeDerefObject(old_fg);
     }
     if (send_app_activate) {
         WmDispatchMessage((struct msg) {
@@ -310,7 +310,7 @@ export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
         return 0;
 
     case WM_HITTEST:
-        LogPrintf("Doing hit test...\n");
+        KeLogPrintf("Doing hit test...\n");
         return HandleHitTest(win, msg.point_arg1);
 
     case WM_TOPLEVEL_MOUSEDOWN:

@@ -17,7 +17,7 @@
 /*
  * REQUIRES in <thread.h>:
  *     bool idling;
- * inside `struct thread`. It must be initialised to false in CreateThread
+ * inside `struct thread`. It must be initialised to false in KeCreateThread
  * (and is protected by `sched_lock`).
  *
  * `idling` means: some CPU is parked in `IdleUntilRunnable` on this thread's
@@ -40,19 +40,19 @@ static bool has_defer_msg = 0;
 /* Used so the low priority bg task can be more aggro when it's been running for a while */
 volatile uint64_t last_task_switch_time = 0;
 
-bool IsSchedulingInitialised(void) {
+bool KeIsSchedulingInitialised(void) {
     return sched_init;
 }
 
-export struct thread* GetCurrentThread(void) {
+export struct thread* KeGetCurrentThread(void) {
     return current_thread;
 }
 
-export void AcquireScheduler(void) {
-    AcquireIrqPrevent();
-    AcquireSpinlock(&sched_lock);
+export void KeAcquireScheduler(void) {
+    KeAcquireIrqPrevent();
+    KeAcquireSpinlock(&sched_lock);
     sched_prevent_count++;
-    ReleaseSpinlock(&sched_lock);
+    KeReleaseSpinlock(&sched_lock);
 }
 
 static bool CanThreadRunOnThisCpu(struct thread* thr) {
@@ -105,14 +105,14 @@ static bool IsCurrentThreadIdling(void) {
     return sched_init && current_thread != NULL && current_thread->idling;
 }
 
-void SwitchToThread(struct thread* thr);
+void KeSwitchToThread(struct thread* thr);
 
-export void ReleaseScheduler(void) {
+export void KeReleaseScheduler(void) {
     if (ArchAreInterruptsEnabled()) {
-        LogPrintf("A\n");
-        Panic(PANIC_FUCK_ME);
+        KeLogPrintf("A\n");
+        KePanic(PANIC_FUCK_ME);
     }
-    AcquireSpinlock(&sched_lock);
+    KeAcquireSpinlock(&sched_lock);
     bool zero = (--sched_prevent_count) == 0;
     if (zero && sched_postponed) {
         sched_postponed = false;
@@ -128,11 +128,11 @@ export void ReleaseScheduler(void) {
                 ++something_unblocked_seq;
             }
         } else {
-            SwitchToThread(thr);
+            KeSwitchToThread(thr);
         }
     }
-    ReleaseSpinlock(&sched_lock);
-    ReleaseIrqPrevent();
+    KeReleaseSpinlock(&sched_lock);
+    KeReleaseIrqPrevent();
 }
 
 struct msg irq_msg_queue[32];
@@ -207,18 +207,18 @@ static int DequeueIrqMessage(struct msg* msg_out) {
     }
 }
 
-export void PostMessageIrq(struct msg msg) {
+export void KePostMessageIrq(struct msg msg) {
     EnqueueIrqMessage(msg);
     has_defer_msg = true;
 }
 
-void ProcessIrqPostMessage(void) {
+void KeProcessIrqPostMessage(void) {
     static struct msg prev_mouse_msg;
     static bool has_prev_mouse_msg = true;
     extern struct msgbox* WmGetSystemMessageBox(void);
     struct msgbox* sysbox = WmGetSystemMessageBox();
     if (has_defer_msg) {
-        AcquireScheduler();
+        KeAcquireScheduler();
         has_defer_msg = false;
         struct msg defer_msg;
         while (DequeueIrqMessage(&defer_msg) == 0) {
@@ -238,7 +238,7 @@ void ProcessIrqPostMessage(void) {
                 has_prev_mouse_msg = true;
             }
         }
-        ReleaseScheduler();
+        KeReleaseScheduler();
     }
 }
 
@@ -248,14 +248,14 @@ static void SetupInitialThread(void) {
     current_thread->state = THREAD_STATE_RUNNING;
 }
 
-void BeginNewThread(void) {
+void KeBeginNewThread(void) {
     bool zero = sched_prevent_count == 0;
-    ReleaseSpinlock(&sched_lock);
+    KeReleaseSpinlock(&sched_lock);
     if (zero) {
-        ReleaseIrqPrevent();
+        KeReleaseIrqPrevent();
     } else {
-        LogPrintf("B\n");
-        Panic(PANIC_FUCK_ME);
+        KeLogPrintf("B\n");
+        KePanic(PANIC_FUCK_ME);
     }
 }
 
@@ -266,7 +266,7 @@ void BeginNewThread(void) {
  * Called with `sched_lock` held and interrupts off; returns the same way.
  * Returns either:
  *   - `current_thread` (it was unblocked while we idled; it is NOT on the
- *     ready queue, because UnblockThread never queues an idling thread), or
+ *     ready queue, because KeUnblockThread never queues an idling thread), or
  *   - a thread freshly removed from the ready queue.
  */
 static struct thread* IdleUntilRunnable(void) {
@@ -278,13 +278,13 @@ static struct thread* IdleUntilRunnable(void) {
         /* Read under the lock, after our last FindNextThread: any unblock
          * after this point must take the lock, so it will bump the seq. */
         uint32_t og_seq = something_unblocked_seq;
-        ReleaseSpinlock(&sched_lock);
+        KeReleaseSpinlock(&sched_lock);
         ArchEnableInterrupts();
         do {
             ArchIdle();
         } while (something_unblocked_seq == og_seq);
         ArchDisableInterrupts();
-        AcquireSpinlock(&sched_lock);
+        KeAcquireSpinlock(&sched_lock);
 
         /* Prefer resuming ourselves: we're already off the queue, so no queue
          * fixup is needed, and no other CPU can have touched us. */
@@ -308,12 +308,12 @@ static struct thread* IdleUntilRunnable(void) {
  * If `thr` is NON-NULL, then it ought to already NOT BE on the list, and it
  * will switch to it.
  */
-void SwitchToThread(struct thread* thr) {
+void KeSwitchToThread(struct thread* thr) {
     if (!sched_init) {
         return;
     }
     if (ArchAreInterruptsEnabled() || sched_prevent_count > 0 || sched_lock.lock != 1) {
-        Panic(PANIC_FUCK_ME);
+        KePanic(PANIC_FUCK_ME);
     }
     if (current_thread->state == THREAD_STATE_RUNNING) {
         if (ready_list_head == NULL && thr == NULL) {
@@ -330,8 +330,8 @@ void SwitchToThread(struct thread* thr) {
                  * was just queued, and it can obviously run on this CPU, so
                  * FindNextThread would at worst have returned it. We can't
                  * idle on a stack that's sitting on the ready queue. */
-                LogPrintf("SwitchToThread: current thread in unexpected state\n");
-                Panic(PANIC_FUCK_ME);
+                KeLogPrintf("KeSwitchToThread: current thread in unexpected state\n");
+                KePanic(PANIC_FUCK_ME);
             }
             thr = IdleUntilRunnable();
         }
@@ -345,8 +345,8 @@ void SwitchToThread(struct thread* thr) {
         }
     } else {
         if (!CanThreadRunOnThisCpu(thr)) {
-            LogPrintf("SwitchToThread: called with a thread with wrong affinity\n");
-            Panic(PANIC_FUCK_ME);
+            KeLogPrintf("KeSwitchToThread: called with a thread with wrong affinity\n");
+            KePanic(PANIC_FUCK_ME);
         }
     }
 
@@ -355,11 +355,11 @@ void SwitchToThread(struct thread* thr) {
     current_thread->state = THREAD_STATE_RUNNING;
     current_thread->next_ready = NULL;
 
-    last_task_switch_time = GetTimeSinceBoot();
+    last_task_switch_time = KeGetTimeSinceBoot();
     /* TODO: set the VAS */
 
-    //LogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);
-    struct cpu_data* cpu = GetCpu();
+    //KeLogPrintf("Actual switch: 0x%X -> 0x%X\n", old_thr, current_thread);
+    struct cpu_data* cpu = KeGetCpu();
     old_thr->irq_disable_counter     = cpu->irq_disable_counter;   /* per-thread copies in struct thread */
     old_thr->saved_interrupt_enabled = cpu->saved_interrupt_enabled;
     cpu->irq_disable_counter         = thr->irq_disable_counter;
@@ -369,21 +369,21 @@ void SwitchToThread(struct thread* thr) {
 
     /* NOTHING GOES HERE! We need the tail of the call chain to be as
      * little and invariant as possible, so new tasks can replicate it okay in 
-     * `BeginNewThread` */
+     * `KeBeginNewThread` */
 }
 
-void BlockThread(void) {
+void KeBlockThread(void) {
     // Scheduler lock must already be held!
-    GetCurrentThread()->state = THREAD_STATE_BLOCKED;
-    GetCurrentThread()->block_return_val = 0;
-    Schedule();
+    KeGetCurrentThread()->state = THREAD_STATE_BLOCKED;
+    KeGetCurrentThread()->block_return_val = 0;
+    KeSchedule();
 }
 
 static bool ShouldPreempt(struct thread* thr) {
     if (!sched_init) {
         return false;
     }
-    if (GetCurrentThread()->state != THREAD_STATE_RUNNING) {
+    if (KeGetCurrentThread()->state != THREAD_STATE_RUNNING) {
         /* Current is blocked / on its way out: there is nothing to preempt, 
          * so the woken thread should just be queued. */
         return false;
@@ -392,7 +392,7 @@ static bool ShouldPreempt(struct thread* thr) {
         /* Can't switch to it from here; queue it for a CPU that can. */
         return false;
     }
-    return ready_list_head == NULL || thr->priority < GetCurrentThread()->priority;
+    return ready_list_head == NULL || thr->priority < KeGetCurrentThread()->priority;
 }
 
 /*
@@ -400,13 +400,13 @@ static bool ShouldPreempt(struct thread* thr) {
  * 1 or more means an ERRNO code
  * 0 or negative means that it is semaphore number -N that returned. 
  */
-void UnblockThread(struct thread* thr, int retv) {
+void KeUnblockThread(struct thread* thr, int retv) {
     // Scheduler lock must already be held!
     if (thr->waiting_sem_or_clot != NULL) {
-        CancelSems(thr);
+        KeCancelSems(thr);
     }
     if (thr->wakeup_time_ns != 0) {
-        CancelTimer(thr);
+        KeCancelTimer(thr);
     }
     thr->block_return_val = retv;
     thr->next_ready = NULL;
@@ -442,16 +442,16 @@ void UnblockThread(struct thread* thr, int retv) {
     ++something_unblocked_seq;
 }
 
-export void Schedule(void) {
-    AcquireScheduler();
+export void KeSchedule(void) {
+    KeAcquireScheduler();
     sched_postponed = true;
-    ReleaseScheduler();
+    KeReleaseScheduler();
 }
 
-void InitScheduler(void) {
+void KeInitScheduler(void) {
     sched_prevent_count = 0;
-    InitSpinlock(&sched_lock);
-    CreateThread(GetKernelVas(), NULL, NULL);
+    KeInitSpinlock(&sched_lock);
+    KeCreateThread(KeGetKernelVas(), NULL, NULL);
     sched_init = true;
     SetupInitialThread();
 }

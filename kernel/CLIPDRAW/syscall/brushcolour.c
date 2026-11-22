@@ -26,12 +26,12 @@ pageable size_t SysBrushColour(size_t a, size_t op, size_t argb, size_t) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
         KeSetLastUserError(EINVAL);
         return IsGetOp(op) ? 0 : EINVAL;
     }
     if (!IsGetOp(op) && CdIsStockBrush(br)) {
-        DerefObject(br);
+        KeDerefObject(br);
         KeSetLastUserError(EACCES);
         return EACCES;
     }
@@ -51,7 +51,7 @@ pageable size_t SysBrushColour(size_t a, size_t op, size_t argb, size_t) {
         retv = CdSetBrushSecondaryColour(br, (colour_t) argb);
         break;
     }
-    DerefObject(br);
+    KeDerefObject(br);
     return retv;
 }
 

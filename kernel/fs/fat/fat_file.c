@@ -63,7 +63,7 @@ static int FatReadLinear(struct fat* fat, uint64_t disk_byte, uint64_t count, st
             size_t transfer_size = MIN((uint64_t) FAT_SECTOR_SIZE - sector_offset, count);
 
             /* This advances our transfer. */
-            status = PerformTransfer(sector_buffer + sector_offset, io, transfer_size);
+            status = KePerformTransfer(sector_buffer + sector_offset, io, transfer_size);
             if (status != 0) {
                 return status;
             }
@@ -253,7 +253,7 @@ static int FatWriteLinear(struct fat* fat, uint64_t disk_byte, uint64_t count, s
 
             if (io != NULL) {
                 /* This advances our transfer. */
-                status = PerformTransfer(sector_buffer + sector_offset, io, transfer_size);
+                status = KePerformTransfer(sector_buffer + sector_offset, io, transfer_size);
                 if (status != 0) {
                     return status;
                 }
@@ -386,7 +386,7 @@ int FatWriteFileSync(struct fat* fat, struct fat_file* file, struct transfer* io
 
     uint64_t total = MIN((uint64_t) io->length_remaining, FAT_MAX_FILE_SIZE - start);
 
-    AcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
 
     uint32_t old_first_cluster = file->first_cluster;
     uint32_t old_size = file->size;
@@ -440,7 +440,7 @@ int FatWriteFileSync(struct fat* fat, struct fat_file* file, struct transfer* io
         entry_status = FatUpdateEntry(fat, file);
     }
 
-    ReleaseMutex(fat->write_lock);
+    KeReleaseMutex(fat->write_lock);
 
     if (status != 0 && io->offset > start) {
         status = 0;
@@ -467,7 +467,7 @@ int FatTruncateFileSync(struct fat* fat, struct fat_file* file, uint64_t new_siz
         return EIO;
     }
 
-    AcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
 
     uint32_t old_first_cluster = file->first_cluster;
     uint32_t old_size = file->size;
@@ -516,7 +516,7 @@ int FatTruncateFileSync(struct fat* fat, struct fat_file* file, uint64_t new_siz
         }
     }
 
-    ReleaseMutex(fat->write_lock);
+    KeReleaseMutex(fat->write_lock);
 
     return status;
 }

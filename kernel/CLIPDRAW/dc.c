@@ -29,12 +29,12 @@ struct graphics_driver* GetOutputDriver(struct dc* dc) {
 
 void CdMapDCCoordinates(struct dc* dc, int* x1, int* y1, int* x2, int* y2) {
     // TODO: the future add viewport/window origin/extents
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     *x1 += dc->trans_x;
     *x2 += dc->trans_x;
     *y1 += dc->trans_y;
     *y2 += dc->trans_y;
-    UnlockUserObject(dc);
+    KeUnlockUserObject(dc);
 }
 
 
@@ -45,32 +45,32 @@ void CdLogicalToDevice(struct dc* dc, int* x, int* y) {
 
 
 void CdSetTranslation(struct dc* dc, int x, int y) {
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     dc->trans_x = x;
     dc->trans_y = y;
-    UnlockUserObject(dc);
+    KeUnlockUserObject(dc);
 }
 
 // Makes a COPY of the input region
 export int CdSetClipRegion(struct dc* dc, struct region rgn) {
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     CdFreeRegion(dc->cliprgn);
     dc->cliprgn = CdCopyRegion(rgn);
-    UnlockUserObject(dc);
+    KeUnlockUserObject(dc);
     return 0;
 }
 
 export int CdRestrictClipRegion(struct dc* dc, struct region rgn) {
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     CdIntersectRegionInPlace(&dc->cliprgn, rgn);
-    UnlockUserObject(dc);
+    KeUnlockUserObject(dc);
     return 0;
 }
 
 export struct region CdGetCopyOfClipRegion(struct dc* dc) {
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     struct region retv = CdCopyRegion(dc->cliprgn);
-    UnlockUserObject(dc);
+    KeUnlockUserObject(dc);
     return retv;
 }
 
@@ -79,40 +79,40 @@ export struct region CdGetCopyOfClipRegion(struct dc* dc) {
 //       CdGetRegionCombinationEx(op, a, b, dc) that uses DC coords on `b`
 //       and apply dc->trans_x, dc->trans_y as  a simple offset
 export struct region CdIntersectWithClipRegion(struct dc* dc, struct region rgn) {
-    //LockUserObject(dc);
+    //KeLockUserObject(dc);
     // TODO: the DC gets locked on scaling within this function.
     // might need to pass in the scale params in a struct?
     // copying the DC or the region sound slow
     struct region retv = CdGetRegionCombinationEx(REGION_COMBINE_INTERSECT, dc->cliprgn, rgn, dc);
-    //UnlockUserObject(dc);
+    //KeUnlockUserObject(dc);
     return retv;
 }
 
 export int CdSetGraphicsObject(struct dc* dc, void* obj) {
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     struct user_obj_header* hdr = obj;
     switch (hdr->user_type) {
     case UOBJ_BRUSH:
-        RefObject(obj);
-        DerefObject(dc->brush);
+        KeRefObject(obj);
+        KeDerefObject(dc->brush);
         dc->brush = obj;
-        UnlockUserObject(dc);
+        KeUnlockUserObject(dc);
         return 0;
     case UOBJ_PEN:
-        RefObject(obj);
-        DerefObject(dc->pen);
+        KeRefObject(obj);
+        KeDerefObject(dc->pen);
         dc->pen = obj;
-        UnlockUserObject(dc);
+        KeUnlockUserObject(dc);
         return 0;
     default:
-        UnlockUserObject(dc);
+        KeUnlockUserObject(dc);
         return EINVAL;
     }
 }
 
 export void* CdGetGraphicsObject(struct dc* dc, int type) {
     void* retv = NULL;
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     switch (type) {
     case UOBJ_BRUSH:
         retv = dc->brush;
@@ -121,11 +121,11 @@ export void* CdGetGraphicsObject(struct dc* dc, int type) {
         retv = dc->pen;
         break;
     default:
-        UnlockUserObject(dc);
+        KeUnlockUserObject(dc);
         return NULL;
     }
-    RefObject(retv);
-    UnlockUserObject(dc);
+    KeRefObject(retv);
+    KeUnlockUserObject(dc);
     return retv;
 }
 
@@ -134,14 +134,14 @@ void CleanupDc(void* _dc) {
     if (dc == NULL) {
         return;
     }
-    DerefObject(dc->brush);
-    DerefObject(dc->pen);
+    KeDerefObject(dc->brush);
+    KeDerefObject(dc->pen);
     CdFreeRegion(dc->cliprgn);
     FreeHeap(dc);
 }
 
 void CdInitDcSubsystem(void) {
-    RegisterUserObjectType(UOBJ_DC, CleanupDc);
+    KeRegisterUserObjectType(UOBJ_DC, CleanupDc);
 }
 
 export struct dc* CdCreateDc(void) {
@@ -149,14 +149,14 @@ export struct dc* CdCreateDc(void) {
     if (dc == NULL) {
         return NULL;
     }
-    InitUserObject(dc, UOBJ_DC);
-    dc->drv = GetKernelGraphicsDriver();    
+    KeInitUserObject(dc, UOBJ_DC);
+    dc->drv = KeGetKernelGraphicsDriver();    
     dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);
     dc->pen = CdGetStockPen(STOCK_PEN_BLACK_1);
     // CdGetStockBrush doesn't add a ref, but on brush/pen change we deref,
     // so we need to ref here
-    RefObject(dc->brush);
-    RefObject(dc->pen);
+    KeRefObject(dc->brush);
+    KeRefObject(dc->pen);
     dc->cliprgn = CdEverythingRegion();
     dc->trans_x = 0;
     dc->trans_y = 0;
@@ -165,22 +165,22 @@ export struct dc* CdCreateDc(void) {
 }
 
 void CdResetDC(struct dc* dc) {
-    LockUserObject(dc);
+    KeLockUserObject(dc);
     
     CdFreeRegion(dc->cliprgn);
     dc->cliprgn = CdEverythingRegion();
     dc->trans_x = 0;
     dc->trans_y = 0;
 
-    dc->drv = GetKernelGraphicsDriver();
+    dc->drv = KeGetKernelGraphicsDriver();
     AddGraphicsFallbacksWhereNeeded(dc->drv);
 
-    DerefObject(dc->brush);
-    DerefObject(dc->pen);
+    KeDerefObject(dc->brush);
+    KeDerefObject(dc->pen);
     dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);
     dc->pen = CdGetStockPen(STOCK_PEN_BLACK_1);
-    RefObject(dc->brush);
-    RefObject(dc->pen);
+    KeRefObject(dc->brush);
+    KeRefObject(dc->pen);
 
-    UnlockUserObject(dc);
+    KeUnlockUserObject(dc);
 }

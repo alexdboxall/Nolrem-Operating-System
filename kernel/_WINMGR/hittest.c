@@ -15,7 +15,7 @@ struct window* WmGetToplevelAtPoint(int x, int y, bool lock) {
     struct window* win = WmGetDesktop()->first_child;
     while (win) {
         if (WmIsPointInRect(x, y, WmGetGlobalPosition(win, false))) {
-            RefObject(win);
+            KeRefObject(win);
             if (lock) WmUnlock();
             return win;
         }

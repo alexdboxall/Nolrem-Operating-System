@@ -24,14 +24,14 @@ pageable size_t SysGetGraphicsObject(size_t dc_ptr, size_t type, size_t, size_t)
         KeSetLastUserError(EINVAL);
         return 0;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
 
     /* Comes back with a kernel reference, which keeps it alive for us below. */
     void* obj = CdGetGraphicsObject(dc, (int) type);
-    DerefObject(dc);
+    KeDerefObject(dc);
     if (obj == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
@@ -39,15 +39,15 @@ pageable size_t SysGetGraphicsObject(size_t dc_ptr, size_t type, size_t, size_t)
 
     bool is_stock = (type == UOBJ_BRUSH) ? CdIsStockBrush(obj) : CdIsStockPen(obj);
     if (!is_stock) {
-        int res = UserRef(obj);
+        int res = KeUserRef(obj);
         if (res != 0) {
-            DerefObject(obj);
+            KeDerefObject(obj);
             KeSetLastUserError(res);
             return 0;
         }
     }
 
-    DerefObject(obj);
+    KeDerefObject(obj);
     return (size_t) obj;
 }
 

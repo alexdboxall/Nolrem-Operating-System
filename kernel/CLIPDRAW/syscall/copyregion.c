@@ -8,18 +8,18 @@
 pageable size_t SysCopyRegion(size_t a, size_t, size_t, size_t) {
     struct uregion* ua = (struct uregion*) a;
 
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
 
     struct region rgn2 = CdCopyRegion(ua->rgn);
     size_t retv = (size_t) RegionToUserRegion(rgn2);
-    DerefObject(ua);
+    KeDerefObject(ua);
     return retv;
 }
 

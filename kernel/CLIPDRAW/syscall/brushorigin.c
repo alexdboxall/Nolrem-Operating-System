@@ -21,22 +21,22 @@ pageable size_t SysBrushOrigin(size_t br_ptr, size_t op, size_t a, size_t b) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
 
     if (op == OP_SET) {
         int res = CdIsStockBrush(br) ? EACCES : CdSetBrushOrigin(br, (int) a, (int) b);
-        DerefObject(br);
+        KeDerefObject(br);
         return res;
     }
 
     struct point origin = CdGetBrushOrigin(br);
-    DerefObject(br);
+    KeDerefObject(br);
 
-    struct transfer tr = CreateTransferWritingToUser((void*) a, sizeof(struct point), 0);
-    return PerformTransfer(&origin, &tr, sizeof(struct point));
+    struct transfer tr = KeCreateTransferWritingToUser((void*) a, sizeof(struct point), 0);
+    return KePerformTransfer(&origin, &tr, sizeof(struct point));
 }
 
 export pageableuserexec struct point GetBrushOrigin(brush_t br) {

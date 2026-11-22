@@ -22,30 +22,30 @@ struct filesystem {
 static struct filesystem* registered_filesystems = NULL;
 static struct mutex fs_table_lock;
 
-void InitFilesystemTable(void) {
-    InitStaticMutex(&fs_table_lock);
+void KeInitFilesystemTable(void) {
+    KeInitStaticMutex(&fs_table_lock);
     InitFat();
 }
 
-export int RegisterFilesystem(char* fs_name, fs_mount_creator mount) {
+export int KeRegisterFilesystem(char* fs_name, fs_mount_creator mount) {
     if (fs_name == NULL || mount == NULL) {
         return EINVAL;
     }
 
-    struct filesystem* fs = AllocPermanentHeap(sizeof(struct filesystem) + strlen(fs_name) + 1);
+    struct filesystem* fs = KeAllocPermanentHeap(sizeof(struct filesystem) + strlen(fs_name) + 1);
     fs->mount_creator = mount;
     strcpy(fs->name, fs_name);
 
-    AcquireMutex(&fs_table_lock, TIMEOUT_INFINITE);
+    KeAcquireMutex(&fs_table_lock, TIMEOUT_INFINITE);
     fs->next = registered_filesystems;
     registered_filesystems = fs;
-    ReleaseMutex(&fs_table_lock);
+    KeReleaseMutex(&fs_table_lock);
   
     return 0;
 }
 
-export int MountFilesystemForDisk(struct file* partition) {
-    AcquireMutex(&fs_table_lock, TIMEOUT_INFINITE);
+export int KeMountFilesystemForDisk(struct file* partition) {
+    KeAcquireMutex(&fs_table_lock, TIMEOUT_INFINITE);
 
     struct filesystem* fs = registered_filesystems;
     struct file* file_out;
@@ -56,7 +56,7 @@ export int MountFilesystemForDisk(struct file* partition) {
         }
         fs = fs->next;
     }
-    ReleaseMutex(&fs_table_lock);
+    KeReleaseMutex(&fs_table_lock);
 
     if (file_out == NULL) {
         return ENODEV;
@@ -67,5 +67,5 @@ export int MountFilesystemForDisk(struct file* partition) {
         return res;
     }
 
-    return Mount(file_out->node, GenerateNewMountedDiskName());
+    return KeMount(file_out->node, KeGenerateNewMountedDiskName());
 }

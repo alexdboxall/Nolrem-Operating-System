@@ -20,7 +20,7 @@ struct page_origin;
 
 /*
  * Custom loader for a file-backed page. A copy is stored by value in every
- * page_origin created by AllocFileMemory(), so the caller keeps no ownership
+ * page_origin created by KeAllocFileMemory(), so the caller keeps no ownership
  * obligations over the struct itself. Callbacks should treat it as read-only:
  * they can run concurrently for the same origin on different frames.
  *
@@ -32,8 +32,8 @@ struct page_origin;
  * unmap_func:  Called once the frame has been detached from its origin and is
  *              about to be freed, with the frame contents still intact. Runs
  *              with no VMM locks held when the page is released via
- *              FreeMemory(), but under the phys_page spinlock when reclaimed
- *              by DiscardPage() - it must not block in that case. Its return
+ *              KeFreeMemory(), but under the phys_page spinlock when reclaimed
+ *              by KeDiscardPage() - it must not block in that case. Its return
  *              value is currently ignored.
  *
  * Either may be NULL (default read / nothing). Only meaningful for file pages.
@@ -106,9 +106,9 @@ struct phys_page {
     uint16_t lru;
     /*
      * Wire COUNT: nonzero prevents the page being discarded (and being freed
-     * via FreeMemory - that asserts). A count rather than a flag so
+     * via KeFreeMemory - that asserts). A count rather than a flag so
      * independent users can wire the same frame. Protected by 'lock'.
-     * Doesn't fault anything in; see WireVirt() for that.
+     * Doesn't fault anything in; see KeWireVirt() for that.
      */
     uint16_t wired;
     struct spinlock lock;
@@ -132,47 +132,53 @@ struct vas {
 #define VP_USER     2
 #define VP_EXEC     4
 
-void InitVmm(void);
+void KeInitVmm(void);
 
-struct vas* CreateVas(void);
-void CreateInitialVas(void);
+struct vas* KeCreateVas(void);
+void KeCreateInitialVas(void);
 
-void* AllocAnonMemory(size_t bytes, int flags);
-void* AllocFixedMemory(size_t phys, size_t bytes, int flags);
+void* KeAllocAnonMemory(size_t bytes, int flags);
+void* KeAllocFixedMemory(size_t phys, size_t bytes, int flags);
 /* 'loader' may be NULL (plain demand-load from the file); it is copied. */
-void* AllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
+void* KeAllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
                       int flags, const struct virt_loader* loader);
-void* AllocCompressedFileMemory(struct cpz_image* image, size_t offset, size_t bytes, int flags);
-void FreeMemory(void* ptr, size_t bytes);
+void* KeAllocCompressedFileMemory(struct cpz_image* image, size_t offset, size_t bytes, int flags);
+void KeFreeMemory(void* ptr, size_t bytes);
 
 /*
  * Faults in every page overlapping [ptr, ptr + bytes) in the current VAS and
- * pins them in physical memory, so DiscardPage() can't take them, until the
- * matching UnwireVirt(). Calls nest (it's a count). Returns 0, or an errno
+ * pins them in physical memory, so KeDiscardPage() can't take them, until the
+ * matching KeUnwireVirt(). Calls nest (it's a count). Returns 0, or an errno
  * (and leaves nothing wired) if part of the range isn't mapped.
  *
  * May block and take page faults, so call it with no spinlocks held. Wire
  * only what you need and unwire promptly: wired pages are unreclaimable.
- * Pass UnwireVirt() exactly the range given to WireVirt().
+ * Pass KeUnwireVirt() exactly the range given to KeWireVirt().
  */
-int  WireVirt(void* ptr, size_t bytes);
-void UnwireVirt(void* ptr, size_t bytes);
+int  KeWireVirt(void* ptr, size_t bytes);
+void KeUnwireVirt(void* ptr, size_t bytes);
 
 /* Helpers for use inside custom loaders. */
 int   VmmDefaultReload(size_t frame, struct virt_loader* vr, struct page_origin* po);
 void* VmmMapFrame(size_t frame);        /* temporary kernel mapping, NULL on failure */
 void  VmmUnmapFrame(void* virt);
 
-void HandlePageFault(size_t virt, int reason);
-struct vas* GetKernelVas(void);
-struct vas* GetCurrentVas(void); 
+void KeHandlePageFault(size_t virt, int reason);
+struct vas* KeGetKernelVas(void);
+struct vas* KeGetCurrentVas(void); 
 
-void ZeroPhysPage(size_t phys);
+void KeZeroPhysPage(size_t phys);
 
-struct phys_page* DiscardPage(void);
+struct phys_page* KeDiscardPage(void);
 
-void MarkPageableSegmentsDiscardable(void);
+void KeMarkPageableSegmentsDiscardable(void);
 
 
-void* AllocVmmHeap(size_t bytes);
-void FreeVmmHeap(void* ptr);
+void* KeAllocVmmHeap(size_t bytes);
+void KeFreeVmmHeap(void* ptr);
+
+#ifdef COMPILE_KERNEL
+/* Used by mem/allocvirtex.c, which is shared with usermode. See spinlock.h. */
+#define AllocVmmHeap(bytes) KeAllocVmmHeap(bytes)
+#define FreeVmmHeap(ptr) KeFreeVmmHeap(ptr)
+#endif

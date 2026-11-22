@@ -57,4 +57,4 @@ size_t SystemCall3(size_t arg1, size_t arg2, size_t arg3);
 size_t SystemCall4(size_t arg1, size_t arg2, size_t arg3, size_t arg4);
 
 // Kernel side - handles it
-size_t PerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d);
+size_t KePerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d);

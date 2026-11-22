@@ -36,7 +36,7 @@ static bool IsMatchingSymbol(const char* id, struct symbol* sym) {
     }
 }
 
-struct symbol_list* CreateSymbolList(int total_syms) {
+struct symbol_list* KeCreateSymbolList(int total_syms) {
     struct symbol_list* sl = AllocHeap(sizeof(struct symbol_list) + total_syms * sizeof(struct symbol));
     sl->num = total_syms;
     memset(sl->syms, 0x77, total_syms * sizeof(struct symbol));
@@ -51,18 +51,18 @@ static size_t MakeSymbol(const char* id, bool use_hash) {
     }
 }
 
-void AddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr) {
+void KeAddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr) {
     sl->syms[index].addr = addr;
     sl->syms[index].hash_or_str = hash << 1;
 }
 
-void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr) {
+void KeAddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr) {
     sl->syms[index].addr = addr;
     sl->syms[index].hash_or_str = MakeSymbol(id, use_hash);
 }
 
 // ASSUMES SOME LOCK IS ALREADY HELD!
-struct symbol* FindSymbol(struct symbol_list* sl, const char* id) {
+struct symbol* KeFindSymbol(struct symbol_list* sl, const char* id) {
     for (int i = 0; i < sl->num; ++i) {
         if (IsMatchingSymbol(id, &sl->syms[i])) {
             return &sl->syms[i];

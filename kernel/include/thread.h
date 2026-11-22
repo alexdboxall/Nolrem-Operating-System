@@ -48,18 +48,18 @@ struct thread {
     int flags;
 };
 
-struct thread* CreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size);
-struct thread* CreateThread(struct vas* vas, void(*entry)(void*), void* context);
-uint8_t GetThreadPriority(struct thread* thr);
-void SetThreadPriority(struct thread* thr, uint8_t priority);
+struct thread* KeCreateThreadEx(struct vas* vas, void(*entry)(void*), void* context, size_t kstack_size);
+struct thread* KeCreateThread(struct vas* vas, void(*entry)(void*), void* context);
+uint8_t KeGetThreadPriority(struct thread* thr);
+void KeSetThreadPriority(struct thread* thr, uint8_t priority);
 
-size_t GetCurrentThreadKernelStackRemaining(void);
+size_t KeGetCurrentThreadKernelStackRemaining(void);
 
-struct thread* GetCurrentThread(void);
-void BlockThread(void);
-void UnblockThread(struct thread* thr, int retv);
+struct thread* KeGetCurrentThread(void);
+void KeBlockThread(void);
+void KeUnblockThread(struct thread* thr, int retv);
 
-void InitThread();
+void KeInitThread();
 
 /* 
  * Can be used for the kernel side of system calls (or elsewhere), to ensure we 

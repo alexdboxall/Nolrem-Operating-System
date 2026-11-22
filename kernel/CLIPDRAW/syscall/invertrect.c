@@ -10,7 +10,7 @@
  * Returns 0 on success, or an errno. Drawing is clipped to the DC's clip region.
  */
 pageable size_t SysInvertRect(size_t a, size_t args_ptr, size_t, size_t) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return ENOMEM;
     }
@@ -23,14 +23,14 @@ pageable size_t SysInvertRect(size_t a, size_t args_ptr, size_t, size_t) {
     }
 
     struct dc* dc = (struct dc*) a;
-    if (!ValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
 
     res = CdInvertRect(dc, args.x, args.y, args.w, args.h);
 
-    DerefObject(dc);
+    KeDerefObject(dc);
     if (res != 0) {
         KeSetLastUserError(res);
     }

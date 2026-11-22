@@ -48,7 +48,7 @@ struct gdt
 };
 
 static struct gdt* x86GetGdt(void) {
-	return GetCpu()->platform_specific->gdt;
+	return KeGetCpu()->platform_specific->gdt;
 }
 
 void x86LoadGdt(size_t gdtPtr) {
@@ -67,9 +67,9 @@ void x86LoadGdt(size_t gdtPtr) {
 }
 
 void x86InitGdt(void) {
-	platform_cpu_data_t* cpu_data = GetCpu()->platform_specific;
+	platform_cpu_data_t* cpu_data = KeGetCpu()->platform_specific;
 
-	cpu_data->gdt = AllocPermanentHeap(sizeof(struct gdt));
+	cpu_data->gdt = KeAllocPermanentHeap(sizeof(struct gdt));
 	struct gdt* gdt = cpu_data->gdt;
 
 	gdt->entries[0] = CreateGdtEntry(0, 0, 0, 0);			   // null segment

@@ -21,20 +21,20 @@ int ActualPaintRectWithBrush(struct dc* dc, int x1, int y1, int x2, int y2,
 
     struct graphics_driver* drv = GetOutputDriver(dc);
 
-    LockUserObject(brush);
+    KeLockUserObject(brush);
     colour_t primary = brush->primary;
     colour_t secondary = brush->secondary;
     uint8_t pattern_type = brush->pattern_type;
 
     if (primary == secondary || pattern_type == BRUSH_PATTERN_SOLID) {
-        UnlockUserObject(brush);
+        KeUnlockUserObject(brush);
         CdStartVideoUpdate(x1, y1, x2, y2);
         drv->fill_rect(drv, x1, y1, x2, y2, primary);
         CdEndVideoUpdate(x1, y1, x2, y2);
     } else {
         uint8_t pattern[8];
         NormaliseBrushPattern(pattern, brush);
-        UnlockUserObject(brush);
+        KeUnlockUserObject(brush);
         CdStartVideoUpdate(x1, y1, x2, y2);
         drv->brush_rect(
             drv, x1, y1, x2, y2,

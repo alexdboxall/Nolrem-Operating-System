@@ -113,9 +113,9 @@ struct vnode {
 };
 
 
-void InitVnode(void);
+void KeInitVnode(void);
 
-struct vnode* CreateVnode(struct vnode_operations ops, struct stat st);
+struct vnode* KeCreateVnode(struct vnode_operations ops, struct stat st);
 
 int VnodeCheckOpen(struct vnode* node, int flags);
 int VnodeRead(struct aio* aio);

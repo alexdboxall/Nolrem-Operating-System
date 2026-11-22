@@ -11,16 +11,16 @@ struct module;
 #define MODVER_EXACT                           3   // e.g. "3.5" for request "3.5"
 
 
-void InitModule(void);
+void KeInitModule(void);
 
-struct module* CreateModule(const char* path);
-struct module* LoadKernelModule(void);
+struct module* KeCreateModule(const char* path);
+struct module* KeLoadKernelModule(void);
 
-uint16_t GetModuleMajorVersion(struct module* mod);
-uint16_t GetModuleMinorVersion(struct module* mod);
+uint16_t KeGetModuleMajorVersion(struct module* mod);
+uint16_t KeGetModuleMinorVersion(struct module* mod);
 
-bool IsMatchingModuleVersion(struct module* mod, int ver_mode, uint16_t major, uint16_t minor);
-size_t ResolveSymbol(const char* sym, const char* mod_name, int ver_mode, uint16_t major, uint16_t minor);
+bool KeIsMatchingModuleVersion(struct module* mod, int ver_mode, uint16_t major, uint16_t minor);
+size_t KeResolveSymbol(const char* sym, const char* mod_name, int ver_mode, uint16_t major, uint16_t minor);
 
 struct symbol_list;
 struct symbol {
@@ -28,7 +28,7 @@ struct symbol {
     size_t addr;
 } __attribute__((packed));
 
-struct symbol_list* CreateSymbolList(int total_syms);
-void AddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);
-void AddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr);
-struct symbol* FindSymbol(struct symbol_list* sl, const char* id);
+struct symbol_list* KeCreateSymbolList(int total_syms);
+void KeAddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);
+void KeAddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr);
+struct symbol* KeFindSymbol(struct symbol_list* sl, const char* id);

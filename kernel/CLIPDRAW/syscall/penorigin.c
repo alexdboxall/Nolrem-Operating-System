@@ -21,22 +21,22 @@ pageable size_t SysPenOrigin(size_t pen_ptr, size_t op, size_t a, size_t b) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!ValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
 
     if (op == OP_SET) {
         int res = CdIsStockPen(pen) ? EACCES : CdSetPenOrigin(pen, (int) a, (int) b);
-        DerefObject(pen);
+        KeDerefObject(pen);
         return res;
     }
 
     struct point origin = CdGetPenOrigin(pen);
-    DerefObject(pen);
+    KeDerefObject(pen);
 
-    struct transfer tr = CreateTransferWritingToUser((void*) a, sizeof(struct point), 0);
-    return PerformTransfer(&origin, &tr, sizeof(struct point));
+    struct transfer tr = KeCreateTransferWritingToUser((void*) a, sizeof(struct point), 0);
+    return KePerformTransfer(&origin, &tr, sizeof(struct point));
 }
 
 export pageableuserexec struct point GetPenOrigin(pen_t pen) {

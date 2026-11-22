@@ -155,12 +155,12 @@ struct cpz_image {
 
 static void CleanupCpzImage(void* _img) {
     struct cpz_image* img = _img;
-    DerefObject(img->file);
+    KeDerefObject(img->file);
     FreeHeap(img);
 }
 
-void InitCpzImages(void) {
-    RegisterObjectType(OBJTYPE_CPZ_INST, CleanupCpzImage);
+void KeInitCpzImages(void) {
+    KeRegisterObjectType(OBJTYPE_CPZ_INST, CleanupCpzImage);
 }
 
 /*
@@ -170,11 +170,11 @@ void InitCpzImages(void) {
  */
 static int CpzReadFile(struct file* file, size_t offset, void* buf, size_t len) {
     struct aio aio;
-    struct transfer tr = CreateKernelTransfer(buf, len, offset, TRANSFER_READ);
-    CreateIO(&aio, file, tr, NULL, NULL);
-    int res = ReadFile(&aio);
+    struct transfer tr = KeCreateKernelTransfer(buf, len, offset, TRANSFER_READ);
+    KeCreateIO(&aio, file, tr, NULL, NULL);
+    int res = KeReadFile(&aio);
     if (res == 0) {
-        res = WaitIO(&aio, TIMEOUT_INFINITE);
+        res = KeWaitIO(&aio, TIMEOUT_INFINITE);
     }
     return res;
 }
@@ -402,9 +402,9 @@ static int CpzDecodePage(struct file* file, const struct cpz_page* page, uint8_t
 /*
  * Reads the first 3 bytes of 'file' and sets *is_cpz to whether they are the CPZ signature ('C' 'P' 'Z'). Returns 0, or the
  * read's error: a file that could not be read is NOT "not CPZ", and the caller must not go on to treat it as plain data.
- * A file shorter than 3 bytes is simply not CPZ. This says nothing about whether the rest is sound: OpenCpzImage() decides that.
+ * A file shorter than 3 bytes is simply not CPZ. This says nothing about whether the rest is sound: KeOpenCpzImage() decides that.
  */
-export int CheckCpzSignature(struct file* file, bool* is_cpz) {
+export int KeCheckCpzSignature(struct file* file, bool* is_cpz) {
     uint8_t sig[3] = { 0, 0, 0 };
     *is_cpz = false;
     if (file == NULL) {
@@ -418,7 +418,7 @@ export int CheckCpzSignature(struct file* file, bool* is_cpz) {
     return 0;
 }
 
-export struct cpz_image* OpenCpzImage(struct file* file) {
+export struct cpz_image* KeOpenCpzImage(struct file* file) {
     if (file == NULL) {
         return NULL;
     }
@@ -439,35 +439,35 @@ export struct cpz_image* OpenCpzImage(struct file* file) {
     if (img == NULL) {
         return NULL;
     }
-    InitObject(img, OBJTYPE_CPZ_INST);
-    RefObject(file);
+    KeInitObject(img, OBJTYPE_CPZ_INST);
+    KeRefObject(file);
     img->file = file;
     img->pages = (uint32_t) pages;
     img->size = size;
     memset(img->table, 0, table_bytes);
 
     if (CpzReadFile(file, CPZ_HEADER_SIZE, img->table, table_bytes) != 0) {
-        DerefObject(img);
+        KeDerefObject(img);
         return NULL;
     }
     CpzLoadTable(img->table, pages);
 
     /* A truncated file reads back as zeros, which fails this (no end marker). */
     if (CpzValidateTable(img->table, pages) != 0) {
-        DerefObject(img);
+        KeDerefObject(img);
         return NULL;
     }
     return img;
 }
 
 /* The size of the original file. (Mapping it gives zeros from there to the end of the last page, like any file.) */
-export size_t GetCpzImageSize(struct cpz_image* image) {
+export size_t KeGetCpzImageSize(struct cpz_image* image) {
     return image->size;
 }
 
 /*
  * The reload_func for CPZ mappings. For this loader po->file_offset is a position in the DECOMPRESSED image
- * (AllocCompressedFileMemory() starts the range at the offset it was given and the VMM adds PAGE_SIZE per
+ * (KeAllocCompressedFileMemory() starts the range at the offset it was given and the VMM adds PAGE_SIZE per
  * page), so it picks the table entry; the compressed bytes themselves are read from po->file at the offset
  * the table gives.
  *
@@ -520,7 +520,7 @@ static int CpzReload(size_t frame, struct virt_loader* vr, struct page_origin* p
     return res;
 }
 
-export void* AllocCompressedFileMemory(struct cpz_image* image, size_t offset, size_t bytes, int flags) {
+export void* KeAllocCompressedFileMemory(struct cpz_image* image, size_t offset, size_t bytes, int flags) {
     if (image == NULL || bytes == 0 || offset % PAGE_SIZE != 0) {
         return NULL;
     }
@@ -536,5 +536,5 @@ export void* AllocCompressedFileMemory(struct cpz_image* image, size_t offset, s
     loader.context_s = sizeof(*image) + CpzTableBytes(image->pages);
     loader.context_p = image;
 
-    return AllocFileMemory(image->file, offset, bytes, flags, &loader);
+    return KeAllocFileMemory(image->file, offset, bytes, flags, &loader);
 }

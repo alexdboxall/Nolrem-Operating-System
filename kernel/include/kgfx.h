@@ -5,7 +5,7 @@
 
 #include <CLIPDRAW/gfx_driver.h>
 
-void RegisterPrimaryGraphicsDriver(struct graphics_driver drv);
-void KernelDisplayPanic(const char* s);
-void KernelDisplayLog(char c);
-struct graphics_driver* GetKernelGraphicsDriver(void);
+void KeRegisterPrimaryGraphicsDriver(struct graphics_driver drv);
+void KeDisplayPanic(const char* s);
+void KeDisplayLog(char c);
+struct graphics_driver* KeGetKernelGraphicsDriver(void);

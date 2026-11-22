@@ -45,16 +45,16 @@ struct user_obj_header {
     struct spinlock lock;
 };
 
-void RegisterObjectType(uint8_t type, void(*cleanup_func)(void*));
-void InitObject(void* obj, uint8_t type);
-void RefObject(void* obj);
-void DerefObject(void* obj);
+void KeRegisterObjectType(uint8_t type, void(*cleanup_func)(void*));
+void KeInitObject(void* obj, uint8_t type);
+void KeRefObject(void* obj);
+void KeDerefObject(void* obj);
 
-void RegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*));
-void InitUserObjectType(void);
-void InitUserObject(void* obj, uint8_t user_type);
-void LockUserObject(void* obj);
-void UnlockUserObject(void* obj);
+void KeRegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*));
+void KeInitUserObjectType(void);
+void KeInitUserObject(void* obj, uint8_t user_type);
+void KeLockUserObject(void* obj);
+void KeUnlockUserObject(void* obj);
 
-int UserRef(void* obj);
-int UserDeref(void* obj);
+int KeUserRef(void* obj);
+int KeUserDeref(void* obj);

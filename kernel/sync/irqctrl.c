@@ -4,27 +4,27 @@
 #include <panic.h>
 #include <log.h>
 
-void AcquireIrqPrevent(void) {
+void KeAcquireIrqPrevent(void) {
     bool were_irqs_on = ArchAreInterruptsEnabled();
     ArchDisableInterrupts();
-    struct cpu_data* cpu = GetCpu();
+    struct cpu_data* cpu = KeGetCpu();
     if (cpu->irq_disable_counter++ == 0) {
         cpu->saved_interrupt_enabled = were_irqs_on;
     }
 //#ifndef NDEBUG
     if (cpu->irq_disable_counter == 0) {
-        LogPrintf("irq_disable_counter was -1\n");
-        Panic(PANIC_FUCK_ME);
+        KeLogPrintf("irq_disable_counter was -1\n");
+        KePanic(PANIC_FUCK_ME);
     }
 //#endif
 }
 
-void ReleaseIrqPrevent(void) {
-    struct cpu_data* cpu = GetCpu();
+void KeReleaseIrqPrevent(void) {
+    struct cpu_data* cpu = KeGetCpu();
 //#ifndef NDEBUG
     if (cpu->irq_disable_counter == 0) {
-        LogPrintf("irq_disable_counter will be -1\n");
-        Panic(PANIC_FUCK_ME);
+        KeLogPrintf("irq_disable_counter will be -1\n");
+        KePanic(PANIC_FUCK_ME);
     }
 //#endif
     if (--cpu->irq_disable_counter == 0) {

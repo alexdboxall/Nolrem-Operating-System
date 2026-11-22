@@ -39,7 +39,7 @@ static int Ps2Wait(bool writing) {
         }
     }
 
-    LogPrintf(writing ? "PS/2 INPUT BUFFER STUCK\n" : "PS/2 NO REPLY\n");
+    KeLogPrintf(writing ? "PS/2 INPUT BUFFER STUCK\n" : "PS/2 NO REPLY\n");
     return EIO;
 }
 
@@ -49,7 +49,7 @@ static int Ps2Wait(bool writing) {
  */
 static void Ps2ControllerWrite(uint8_t data) {
     if (Ps2Wait(true) != 0) {
-        LogPrintf("  (retrying after wait timeout) cmd 0x%X\n", data);
+        KeLogPrintf("  (retrying after wait timeout) cmd 0x%X\n", data);
     }
     outb(0x64, data);
 }
@@ -61,7 +61,7 @@ static void Ps2ControllerWrite(uint8_t data) {
 static void Ps2ControllerWrite2(uint8_t data1, uint8_t data2) {
     Ps2ControllerWrite(data1);
     if (Ps2Wait(true) != 0) {
-        LogPrintf("  (retrying after wait timeout) param 0x%X\n", data2);
+        KeLogPrintf("  (retrying after wait timeout) param 0x%X\n", data2);
     }
     outb(0x60, data2);
 }
@@ -153,7 +153,7 @@ int Ps2DeviceWrite(uint8_t data, bool port2) {
         }
     }
 
-    LogPrintf("PS/2 device write: gave up after\n10 retries\n");
+    KeLogPrintf("PS/2 device write: gave up after\n10 retries\n");
     return ETIMEDOUT;
 }
 
@@ -172,7 +172,7 @@ int Ps2ControllerTestPort(bool port2) {
         return EIO;
     }
     if (result != 0x00) {
-        LogPrintf("PS/2 port test fault code 0x%X\n", result);
+        KeLogPrintf("PS/2 port test fault code 0x%X\n", result);
         return EIO;
     }
     return 0;

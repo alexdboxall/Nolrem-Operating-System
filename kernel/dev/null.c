@@ -27,12 +27,12 @@ static const struct vnode_operations dev_ops = {
     .write          = ReadWrite,
 };
 
-void InitNullDevice(void) {
-    struct vnode* node = CreateVnode(dev_ops, (struct stat) {
+void KeInitNullDevice(void) {
+    struct vnode* node = KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFCHR | S_IRWXU | S_IRWXG | S_IRWXO,
         .st_nlink = 1,
-        .st_dev = NextDevId()
+        .st_dev = KeNextDevId()
     });
-    Mount(node, "null");
-    DerefObject(node);      // let the mount keep the last reference
+    KeMount(node, "null");
+    KeDerefObject(node);      // let the mount keep the last reference
 }

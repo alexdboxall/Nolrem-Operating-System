@@ -22,7 +22,7 @@ struct paint_polygon_args {
  * Returns 0 on success, or an errno. Drawing is clipped to the DC's clip region.
  */
 pageable size_t SysPaintPolygon(size_t a, size_t args_ptr, size_t points, size_t mode) {
-    if (IsOutOfMemory()) {
+    if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return ENOMEM;
     }
@@ -37,8 +37,8 @@ pageable size_t SysPaintPolygon(size_t a, size_t args_ptr, size_t points, size_t
     }
 
     struct paint_polygon_args args;
-    struct transfer tr = CreateTransferReadingFromUser((const void*) args_ptr, sizeof(args), 0);
-    int res = PerformTransfer(&args, &tr, sizeof(args));
+    struct transfer tr = KeCreateTransferReadingFromUser((const void*) args_ptr, sizeof(args), 0);
+    int res = KePerformTransfer(&args, &tr, sizeof(args));
     if (res != 0) {
         KeSetLastUserError(res);
         return res;
@@ -56,13 +56,13 @@ pageable size_t SysPaintPolygon(size_t a, size_t args_ptr, size_t points, size_t
         goto free_points;
     }
 
-    tr = CreateTransferReadingFromUser((const void*) args.x, bytes, 0);
-    res = PerformTransfer(xx, &tr, bytes);
+    tr = KeCreateTransferReadingFromUser((const void*) args.x, bytes, 0);
+    res = KePerformTransfer(xx, &tr, bytes);
     if (res != 0) {
         goto free_points;
     }
-    tr = CreateTransferReadingFromUser((const void*) args.y, bytes, 0);
-    res = PerformTransfer(yy, &tr, bytes);
+    tr = KeCreateTransferReadingFromUser((const void*) args.y, bytes, 0);
+    res = KePerformTransfer(yy, &tr, bytes);
     if (res != 0) {
         goto free_points;
     }

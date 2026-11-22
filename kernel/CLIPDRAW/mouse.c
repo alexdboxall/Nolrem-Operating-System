@@ -53,7 +53,7 @@ struct cursor* CdCreateCursor(void* file_data, size_t length) {
     if (cur == NULL) {
         return NULL;
     }
-    InitUserObject(cur, UOBJ_CURSOR);
+    KeInitUserObject(cur, UOBJ_CURSOR);
     cur->len = length;
     if (file_data == standard_mouse_file) {
         cur->data = standard_mouse_file;     /* shared, never freed */
@@ -94,12 +94,12 @@ static int mouse_screen_h = 0;
 static struct graphics_driver* GetMouseDriver(void) {
     static struct graphics_driver* drv = NULL;
     if (drv == NULL) {
-        drv = GetKernelGraphicsDriver();
+        drv = KeGetKernelGraphicsDriver();
         struct graphics_capabilities caps = drv->get_capabilities(drv);
         int bytes = 32 * 32 * 4;
         if (caps.desired_mouse_restore_buffer_mode == MOUSE_BUFFER_UINT8) bytes /= 4;
         if (caps.desired_mouse_restore_buffer_mode == MOUSE_BUFFER_UINT16) bytes /= 2;
-        drv->mouse_restore_buffer = AllocPermanentHeap(bytes);
+        drv->mouse_restore_buffer = KeAllocPermanentHeap(bytes);
     }
     return drv;
 }
@@ -206,7 +206,7 @@ static void ApplyPendingCursor(void) {
     /* The shape is decoded into the live arrays now, so the pending reference is no longer needed.
      * This is never the last reference: a pending cursor is always the latest request, which
      * prev_cursor also references, so nothing is freed here (this can run from the mouse IRQ). */
-    DerefObject(cur);
+    KeDerefObject(cur);
 }
 
 static void DoBufferedMouse(void) {
@@ -223,10 +223,10 @@ static void DoBufferedMouse(void) {
 
 /* x, y are accepted for API compatibility; the cursor is removed from wherever it was drawn. */
 void CdRemoveMouse(void) {
-    if (TryAcquireSpinlock(&video_lock)) {
+    if (KeTryAcquireSpinlock(&video_lock)) {
         DoBufferedMouse();
         RealRemoveMouse();
-        ReleaseSpinlock(&video_lock);
+        KeReleaseSpinlock(&video_lock);
     } else {
         need_mouse_remove = true;
     }
@@ -237,10 +237,10 @@ void CdDrawMouse(int x, int y) {
     pointer_x = x;
     pointer_y = y;
     pointer_valid = true;
-    if (TryAcquireSpinlock(&video_lock)) {
+    if (KeTryAcquireSpinlock(&video_lock)) {
         DoBufferedMouse();
         RealDrawMouse(x, y);
-        ReleaseSpinlock(&video_lock);
+        KeReleaseSpinlock(&video_lock);
     } else {
         need_mouse_draw = true;
     }
@@ -249,7 +249,7 @@ void CdDrawMouse(int x, int y) {
 static bool hid_mouse = false;
 
 void CdStartVideoUpdate(int x1, int y1, int x2, int y2) {
-    AcquireSpinlock(&video_lock);
+    KeAcquireSpinlock(&video_lock);
 
     if (mouse_onscreen &&
         mouse_screen_x < x2 && mouse_screen_x + mouse_screen_w > x1 &&
@@ -279,7 +279,7 @@ void CdEndVideoUpdate(int x1, int y1, int x2, int y2) {
     }
 
     hid_mouse = false;
-    ReleaseSpinlock(&video_lock);
+    KeReleaseSpinlock(&video_lock);
 }
 
 
@@ -349,13 +349,13 @@ export int CdSetCursor(struct cursor* cur, size_t cursor_index) {
         return 0;
     }
 
-    RefObject(cur);
+    KeRefObject(cur);
 
     const uint8_t* rec;
     bool flip_vt;
     int err = FindCursorRecord(cur, cursor_index, &rec, &flip_vt);
     if (err != 0) {
-        DerefObject(cur);
+        KeDerefObject(cur);
         return err;
     }
 
@@ -363,24 +363,24 @@ export int CdSetCursor(struct cursor* cur, size_t cursor_index) {
     struct cursor* old_prev = __atomic_exchange_n(&prev_cursor, cur, __ATOMIC_ACQ_REL);
     prev_cursor_index = cursor_index;
 
-    if (TryAcquireSpinlock(&video_lock)) {
+    if (KeTryAcquireSpinlock(&video_lock)) {
         DoBufferedMouse();
         ApplyCursorRecord(rec, flip_vt);
-        ReleaseSpinlock(&video_lock);
+        KeReleaseSpinlock(&video_lock);
     } else {
         /* A video update is in progress; applied in CdEndVideoUpdate. The pending change holds its own
          * reference until then, so cur's file data stays valid even if every other reference goes away. */
-        RefObject(cur);
+        KeRefObject(cur);
         pending_cursor_record = rec;
         pending_cursor_flip_vt = flip_vt;
         struct cursor* old_pending = __atomic_exchange_n(&pending_cursor, cur, __ATOMIC_ACQ_REL);
         if (old_pending != NULL) {
-            DerefObject(old_pending);    /* superseded before it was ever applied */
+            KeDerefObject(old_pending);    /* superseded before it was ever applied */
         }
     }
 
     if (old_prev != NULL) {
-        DerefObject(old_prev);           /* may free the old cursor; we are not holding the video lock here */
+        KeDerefObject(old_prev);           /* may free the old cursor; we are not holding the video lock here */
     }
     return 0;
 }
@@ -393,8 +393,8 @@ export int CdSetStandardCursor(int index) {
 }
 
 void CdInitMouseSubsystem(void) {
-    InitSpinlock(&video_lock);
-    RegisterUserObjectType(UOBJ_CURSOR, CleanupCursor);
+    KeInitSpinlock(&video_lock);
+    KeRegisterUserObjectType(UOBJ_CURSOR, CleanupCursor);
     standard_cursor = CdCreateCursor(standard_mouse_file, sizeof(standard_mouse_file));
     CdSetStandardCursor(CURSOR_WAIT);
 }

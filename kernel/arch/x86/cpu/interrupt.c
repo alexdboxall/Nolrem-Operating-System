@@ -39,7 +39,7 @@ void x86HandleInterrupt(struct x86_regs* r) {
     int num = r->int_no;
 
     if (num == ISR_SYSTEM_CALL) {
-        r->eax = PerformSystemCall(r->eax, r->edx, r->ecx, r->ebx, r->esi);
+        r->eax = KePerformSystemCall(r->eax, r->edx, r->ecx, r->ebx, r->esi);
         return;
     }
 
@@ -51,26 +51,26 @@ void x86HandleInterrupt(struct x86_regs* r) {
         if (r->err_code & 4) reason |= PF_USER;
         if (r->err_code & 8) reason |= PF_FETCH;
 
-        LogPrintf("Page fault: EIP 0x%X\n", r->eip);
-        LogPrintf("            CR2 0x%X\n", cr2);
-        LogPrintf("         REASON 0x%X\n", reason);
+        KeLogPrintf("Page fault: EIP 0x%X\n", r->eip);
+        KeLogPrintf("            CR2 0x%X\n", cr2);
+        KeLogPrintf("         REASON 0x%X\n", reason);
 
-        HandlePageFault(cr2, reason);
+        KeHandlePageFault(cr2, reason);
         return;
     }
 
     if (num < PIC_IRQ_BASE) {
-        LogPrintf("Interrupt %d\nEIP = 0x%X", num, r->eip);
+        KeLogPrintf("Interrupt %d\nEIP = 0x%X", num, r->eip);
         while (true) {
             ;
         }
     }
     
     if (num >= PIC_IRQ_BASE && num < PIC_IRQ_BASE + 16) {
-        HandleInterrupt(num - PIC_IRQ_BASE, r);
+        KeHandleInterrupt(num - PIC_IRQ_BASE, r);
         SendPicEoi(num);
     }
 
-    ProcessIrqPostMessage();    
+    KeProcessIrqPostMessage();    
 }
 

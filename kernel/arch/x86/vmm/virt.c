@@ -35,11 +35,11 @@ static size_t scratch_virt_region;
 
 static struct vas* kernel_vas;
 
-static void Invalidate(size_t virt) {
+static void x86Invalidate(size_t virt) {
     asm volatile("invlpg (%0)" : : "r"(virt) : "memory");
 }
 
-static size_t* GetRecursiveTable(size_t table_num) {
+static size_t* x86GetRecursiveTable(size_t table_num) {
     return ((size_t*) RECURSIVE_BASE_TABLES) + (table_num * PAGE_SIZE / sizeof(size_t));
 }
 
@@ -56,12 +56,12 @@ bool ArchTryHandleSpecialPageFault(size_t virt) {
     if (table_idx < KRNL_TABLES_START) {
         return false;
     }
-    size_t* cr3 = GetRecursiveTable(1023);
+    size_t* cr3 = x86GetRecursiveTable(1023);
     if (!(cr3[table_idx] & PAGE_PRESENT) 
         && kernel_page_tables_phys[table_idx - KRNL_TABLES_START] != 0
     ) {
         cr3[table_idx] = kernel_page_tables_phys[table_idx - KRNL_TABLES_START] | PAGE_PRESENT | PAGE_WRITE;
-        Invalidate((size_t) GetRecursiveTable(table_idx));
+        x86Invalidate((size_t) x86GetRecursiveTable(table_idx));
         return true;
     }
     return false;
@@ -72,11 +72,11 @@ void ArchSwitchToVas(struct vas* vas) {
     asm volatile ("mov %0, %%cr3" : : "r" (vas->arch_data));
 }
 
-static bool InKernelRange(size_t virt) {
+static bool x86InKernelRange(size_t virt) {
     return virt >= ARCH_KRNL_MAPPING_BASE;
 }
 
-static size_t TranslateToEntry(struct virt_page* vp) {
+static size_t x86TranslateToEntry(struct virt_page* vp) {
     size_t phys = vp->phys & ~0xFFF;
     size_t flags = 0;
     
@@ -89,7 +89,7 @@ static size_t TranslateToEntry(struct virt_page* vp) {
      * this bit, even though it's meant to be reserved as zero. So it's fine to
      * set.
      */
-    flags |= InKernelRange(vp->virt) ? PAGE_GLOBAL : 0;
+    flags |= x86InKernelRange(vp->virt) ? PAGE_GLOBAL : 0;
     
     return phys | flags;
 }
@@ -99,26 +99,26 @@ void ArchReadVirtDirtyAndAccessed(struct virt_page* vp) {
     size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
     size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
     
-    size_t* directory = GetRecursiveTable(1023);
+    size_t* directory = x86GetRecursiveTable(1023);
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Can't be dirty or accessed if it doesn't exist. */
         return;
     }
 
-    size_t* table = GetRecursiveTable(level1_index);
+    size_t* table = x86GetRecursiveTable(level1_index);
     size_t entry = table[level2_index];
     vp->dirty = !!(entry & PAGE_DIRTY);
     vp->accessed = !!(entry & PAGE_ACCESSED);
     *table &= ~(PAGE_DIRTY | PAGE_ACCESSED);
 }
 
-static void SetPte(struct vas* vas, size_t virt, size_t entry) {
-    // TODO: do we need to check if this VAS is currently in? and if not, 
-    //       temporarily map it in?
-    // or does this only ever get called on the current vas?
-
+static void x86SetPte(struct vas* vas, size_t virt, size_t entry) {
+    /*
+     * This only ever operates through the recursive mapping, so it can only
+     * touch the VAS that is currently loaded.
+     */
     if (vas != KeGetCurrentVas()){ 
-        KeLogPrintf("SetPte called in non-current VAS!");
+        KeLogPrintf("x86SetPte called in non-current VAS!");
         KePanic(PANIC_INVALID_ARCH_OPERATION);
     }
 
@@ -126,42 +126,41 @@ static void SetPte(struct vas* vas, size_t virt, size_t entry) {
     size_t level1_index = virt_index / (PAGE_SIZE / sizeof(size_t));
     size_t level2_index = virt_index % (PAGE_SIZE / sizeof(size_t));
     
-    size_t* directory = GetRecursiveTable(1023);
+    size_t* directory = x86GetRecursiveTable(1023);
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Time to map a new table. */
         size_t phys = KeAllocPhys(true);
         directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
-        size_t* table = GetRecursiveTable(level1_index);
-        Invalidate((size_t) table);
+        size_t* table = x86GetRecursiveTable(level1_index);
+        x86Invalidate((size_t) table);
         memset(table, 0, PAGE_SIZE);
 
-        if (InKernelRange(virt)) {
+        if (x86InKernelRange(virt)) {
             kernel_page_tables_phys[level1_index - ARCH_KRNL_MAPPING_BASE / (PAGE_SIZE * PAGE_SIZE / sizeof(size_t))] = phys;
         }
     }
 
-    size_t* table = GetRecursiveTable(level1_index);
+    size_t* table = x86GetRecursiveTable(level1_index);
     table[level2_index] = entry;
-    // TODO: only needed if current VAS
-    Invalidate(virt);
+    x86Invalidate(virt);   /* always the current VAS, see above */
 }
 
 void ArchSyncVirt(struct vas* vas, struct virt_page* vp) {
-    SetPte(vas, vp->virt, TranslateToEntry(vp));
+    x86SetPte(vas, vp->virt, x86TranslateToEntry(vp));
 }
 
 size_t ArchGetTemporaryPage(size_t phys) {
     size_t cpu_num = ArchGetCpuNum();
-    SetPte(KeGetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
+    x86SetPte(KeGetCurrentVas(), scratch_virt_region + cpu_num * PAGE_SIZE, phys | PAGE_PRESENT | PAGE_WRITE);
     return scratch_virt_region + cpu_num * PAGE_SIZE;
 }
 
 void ArchReleaseTemporaryPage(size_t virt) {
-    SetPte(KeGetCurrentVas(), virt, 0);
+    x86SetPte(KeGetCurrentVas(), virt, 0);
 }
 
 void ArchMapKernelPageDirectly(size_t phys, size_t virt) {
-    SetPte(KeGetCurrentVas(), virt, (phys & ~0xFFF) | PAGE_PRESENT | PAGE_WRITE);
+    x86SetPte(KeGetCurrentVas(), virt, (phys & ~0xFFF) | PAGE_PRESENT | PAGE_WRITE);
 }
 
 void ArchInitVas(struct vas* vas, bool first) {
@@ -190,19 +189,19 @@ void ArchInitVas(struct vas* vas, bool first) {
          * those anyway).
          */
         for (size_t i = user_start_page; i < user_end_page; ++i) {
-            size_t* table = GetRecursiveTable(i / (PAGE_SIZE / sizeof(size_t)));
+            size_t* table = x86GetRecursiveTable(i / (PAGE_SIZE / sizeof(size_t)));
             table[i % (PAGE_SIZE / sizeof(size_t))] |= PAGE_USER;
             table[i % (PAGE_SIZE / sizeof(size_t))] &= ~PAGE_WRITE;
         }
         for (size_t i = userpageable_start_page; i < userpageable_end_page; ++i) {
-            size_t* table = GetRecursiveTable(i / (PAGE_SIZE / sizeof(size_t)));
+            size_t* table = x86GetRecursiveTable(i / (PAGE_SIZE / sizeof(size_t)));
             table[i % (PAGE_SIZE / sizeof(size_t))] |= PAGE_USER;
             table[i % (PAGE_SIZE / sizeof(size_t))] &= ~PAGE_WRITE;
         }
 
         scratch_virt_region = KeAllocVirt(PAGE_SIZE * ARCH_MAX_CPUS);
         for (size_t i = 0; i < (size_t) ARCH_MAX_CPUS; ++i) {
-            SetPte(vas, scratch_virt_region + i * PAGE_SIZE, 0);
+            x86SetPte(vas, scratch_virt_region + i * PAGE_SIZE, 0);
         }
     
     } else {

@@ -2,10 +2,10 @@
 #include <interrupt.h>
 #include <log.h>
 #include <errno.h>
+#include <input.h>
 #include <machine/x86.h>
 #include "ps2controller.h"
 
-extern void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, int scrollx, int scrolly);
 
 #define PS2_MOUSE_CMD_ENABLE_DATA_REPORTING  0xF4
 #define PS2_MOUSE_CMD_SET_DEFAULTS            0xF6
@@ -119,11 +119,11 @@ static void Ps2MouseIrqHandler(struct x86_regs*) {
             }
         }
 
-        WmHandleMouseInput(click_bits, delta_x, delta_y, scrollx, scrolly);
+        KeReportMouseInput(click_bits, delta_x, delta_y, scrollx, scrolly);
     }
 }
 
-void InitPs2Mouse(void) {
+void Ps2InitMouse(void) {
     /* Enable port 2. */
     Ps2ControllerEnableDevice(true);
 

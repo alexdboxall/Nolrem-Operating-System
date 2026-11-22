@@ -8,7 +8,7 @@ struct intersection {
     int direction;      // +1 or -1
 };
 
-static pageable int IntersectionComparator(void* a, void* b, int n) {
+static pageable int CdIntersectionComparator(void* a, void* b, int n) {
     (void) n;
 
     struct intersection ai = *(struct intersection*)a;
@@ -51,11 +51,11 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
 
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
-    BuildNewRegion(&rgn, (int16_t)y_min, &ctxt);
+    CdBuildNewRegion(&rgn, (int16_t)y_min, &ctxt);
 
     // 2. Process each scanline row by row
     for (int y = y_min; y < y_max; ++y) {
-        struct dynamic_array intersections = CreateDynamicArray(sizeof(struct intersection), 8);
+        struct dynamic_array intersections = CdCreateDynamicArray(sizeof(struct intersection), 8);
 
         int poly_offset = 0;
         for (int p = 0; p < polygons; ++p) {
@@ -73,7 +73,7 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
                         // Linear interpolation to find X at this integer Y
                         isect.x = x0 + (int)((long)(x1 - x0) * (y - y0) / (y1 - y0));
                         isect.direction = (y0 < y1) ? 1 : -1;
-                        InsertDynamicArray(&intersections, &isect);
+                        CdInsertDynamicArray(&intersections, &isect);
                     }
                 }
             }
@@ -81,12 +81,12 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
         }
 
         if (intersections.used == 0) {
-            AddScanline(&rgn, &ctxt, 0, NULL, false);
-            FreeDynamicArray(intersections);
+            CdAddScanline(&rgn, &ctxt, 0, NULL, false);
+            CdFreeDynamicArray(intersections);
             continue;
         }
 
-        SortDynamicArray(&intersections, IntersectionComparator);
+        CdSortDynamicArray(&intersections, CdIntersectionComparator);
 
         int num_spans = 0;
         if (mode == POLYGON_ALTERNATE) {
@@ -121,11 +121,11 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
             }
         }
 
-        AddScanline(&rgn, &ctxt, num_spans, scanline_x, false);
-        FreeDynamicArray(intersections);
+        CdAddScanline(&rgn, &ctxt, num_spans, scanline_x, false);
+        CdFreeDynamicArray(intersections);
     }
 
     FreeHeap(scanline_x);
-    FinishRegion(&rgn, &ctxt);
+    CdFinishRegion(&rgn, &ctxt);
     return rgn;
 }

@@ -1,3 +1,3 @@
 #pragma once
 
-void InitPs2Keyboard(void);
+void Ps2InitKeyboard(void);

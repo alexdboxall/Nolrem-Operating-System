@@ -18,7 +18,7 @@ struct wait_clot {
     void** nexts;
 };
 
-static void AbandonSemLocked(struct sem* sem) {
+static void KeAbandonSemLocked(struct sem* sem) {
     while (sem->waiting_list_start != NULL) {
         void* head = sem->waiting_list_start;
         struct thread* thr;
@@ -38,17 +38,17 @@ static void AbandonSemLocked(struct sem* sem) {
 
 void KeAbandonSem(struct sem* sem) {
     KeAcquireScheduler();
-    AbandonSemLocked(sem);
+    KeAbandonSemLocked(sem);
     KeReleaseScheduler();
 }
 
-static void CleanupSem(void* _sem) {
+static void KeCleanupSem(void* _sem) {
     struct sem* sem = _sem;
     KeAbandonSem(sem);
     FreeHeap(sem);
 }
 
-static void CleanupWaitClot(void* _clot) {
+static void KeCleanupWaitClot(void* _clot) {
     struct wait_clot* clot = _clot;
     FreeHeap(clot->sems);
     FreeHeap(clot->nexts);
@@ -60,8 +60,8 @@ void KeDestroyStaticSem(struct sem* sem) {
 }
 
 void KeInitSem(void) {
-    KeRegisterObjectType(OBJTYPE_SEM, CleanupSem);
-    KeRegisterObjectType(OBJTYPE_WAITCLOT, CleanupWaitClot);
+    KeRegisterObjectType(OBJTYPE_SEM, KeCleanupSem);
+    KeRegisterObjectType(OBJTYPE_WAITCLOT, KeCleanupWaitClot);
 }
 
 export void KeInitStaticSem(struct sem* sem, int max, int initial) {
@@ -85,7 +85,7 @@ export struct mutex* KeCreateMutex(void) {
     return (struct mutex*) KeCreateSem(1, 0);
 }
 
-static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread* thr) {
+static struct wait_clot* KeCreateClot(struct sem** sems, int count, struct thread* thr) {
     struct wait_clot* clot = AllocHeap(sizeof(struct wait_clot));
     if (clot == NULL) {
         return NULL;
@@ -110,7 +110,7 @@ static struct wait_clot* CreateClot(struct sem** sems, int count, struct thread*
     return clot;
 }
 
-static int LookupClotIndex(struct wait_clot* clot, struct sem* sem) {
+static int KeLookupClotIndex(struct wait_clot* clot, struct sem* sem) {
     for (int i = 0; i < clot->count; ++i) {
         if (clot->sems[i] == sem) {
             return i;
@@ -119,10 +119,10 @@ static int LookupClotIndex(struct wait_clot* clot, struct sem* sem) {
     return -1;
 }
 
-static int AddThreadToSemQueues(struct thread* thr, struct sem** sems, int count) {
+static int KeAddThreadToSemQueues(struct thread* thr, struct sem** sems, int count) {
     void* to_add;
     if (count > 1) {
-        to_add = CreateClot(sems, count, thr);
+        to_add = KeCreateClot(sems, count, thr);
         if (to_add == NULL) {
             return ENOMEM;
         }
@@ -142,7 +142,7 @@ static int AddThreadToSemQueues(struct thread* thr, struct sem** sems, int count
                 ((struct thread*) sem->waiting_list_end)->next_waiting_sem = to_add;
             } else {
                 struct wait_clot* clot = sem->waiting_list_end;
-                int index = LookupClotIndex(clot, sem);
+                int index = KeLookupClotIndex(clot, sem);
                 clot->nexts[index] = to_add;
             }
         }
@@ -154,7 +154,7 @@ static int AddThreadToSemQueues(struct thread* thr, struct sem** sems, int count
     return 0;
 }
 
-static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
+static void KeCleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
     for (int i = 0; i < count; ++i) {
         struct sem* sem = sems[i];
 
@@ -169,7 +169,7 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
         } else if (head_hdr_type == OBJTYPE_WAITCLOT && ((struct wait_clot*) sem->waiting_list_start)->thr == thr) {
             /* Remove from head. */
             struct wait_clot* clot = sem->waiting_list_start;
-            int index = LookupClotIndex(clot, sem);
+            int index = KeLookupClotIndex(clot, sem);
             sem->waiting_list_start = clot->nexts[index];
             if (sem->waiting_list_start == NULL) {
                 sem->waiting_list_end = NULL;
@@ -183,7 +183,7 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
                 curr = ((struct thread*) prev)->next_waiting_sem;
             } else {
                 struct wait_clot* clot = prev;
-                int index = LookupClotIndex(clot, sem);
+                int index = KeLookupClotIndex(clot, sem);
                 curr = clot->nexts[index];
             }
             while (curr != NULL) {
@@ -193,8 +193,8 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
                 struct wait_clot* prev_as_clot = prev;
                 struct thread* prev_as_thr = prev;
                 bool prev_is_clot = KeGetObjectType(prev) == OBJTYPE_WAITCLOT;
-                int curr_clot_idx = curr_is_clot ? LookupClotIndex(curr_as_clot, sem) : -1;
-                int prev_clot_idx = prev_is_clot ? LookupClotIndex(prev_as_clot, sem) : -1;
+                int curr_clot_idx = curr_is_clot ? KeLookupClotIndex(curr_as_clot, sem) : -1;
+                int prev_clot_idx = prev_is_clot ? KeLookupClotIndex(prev_as_clot, sem) : -1;
 
                 if ((!curr_is_clot && curr_as_thr == thr) || (curr_is_clot && curr_as_clot->thr == thr)) {
                     void* rhs = curr_is_clot ? curr_as_clot->nexts[curr_clot_idx] : curr_as_thr->next_waiting_sem;
@@ -211,7 +211,7 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
 
                 prev = curr;
                 if (curr_is_clot) {
-                    int index = LookupClotIndex(curr_as_clot, sem);
+                    int index = KeLookupClotIndex(curr_as_clot, sem);
                     curr = curr_as_clot->nexts[index];
                 } else {
                     curr = curr_as_thr->next_waiting_sem;
@@ -224,11 +224,11 @@ static void CleanupAfterSem(struct sem** sems, int count, struct thread* thr) {
 void KeCancelSems(struct thread* thr) {
     if (KeGetObjectType(thr->waiting_sem_or_clot) == OBJTYPE_WAITCLOT) {
         struct wait_clot* clot = thr->waiting_sem_or_clot;
-        CleanupAfterSem(clot->sems, clot->count, thr);
+        KeCleanupAfterSem(clot->sems, clot->count, thr);
         KeDerefObject(clot);
     } else {
         struct sem* sem = thr->waiting_sem_or_clot;
-        CleanupAfterSem(&sem, 1, thr);
+        KeCleanupAfterSem(&sem, 1, thr);
     }
 
     thr->waiting_sem_or_clot = NULL;
@@ -268,7 +268,7 @@ export int KeAcquireSemFromMany(struct sem** sems, int count, int64_t timeout, i
     }
 
     struct thread* curr_thread = KeGetCurrentThread();
-    int res = AddThreadToSemQueues(curr_thread, sems, count);
+    int res = KeAddThreadToSemQueues(curr_thread, sems, count);
     if (res != 0) {
         KeReleaseScheduler();
         return res;
@@ -310,7 +310,7 @@ export int KeReleaseSem(struct sem* sem) {
                 KeUnblockThread((struct thread*) sem->waiting_list_start, 0);
             } else {
                 struct wait_clot* clot = sem->waiting_list_start;
-                KeUnblockThread(clot->thr, -LookupClotIndex(clot, sem));
+                KeUnblockThread(clot->thr, -KeLookupClotIndex(clot, sem));
             }
         }
 

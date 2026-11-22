@@ -22,7 +22,7 @@
 #include "winmgr_internal.h"
 
 int WmHardError(int herrno) {
-    struct msgbox* sysbox = WmGetSystemMessageBox();
+    struct msgbox* sysbox = KeGetSystemMessageBox();
     struct graphics_driver* drv = KeGetKernelGraphicsDriver();
     int sw = WmGetDesktop()->local_client_bound.w;
     int sh = WmGetDesktop()->local_client_bound.h;

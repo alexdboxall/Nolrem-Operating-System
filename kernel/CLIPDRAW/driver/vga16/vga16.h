@@ -34,15 +34,15 @@ static inline uint8_t inb(uint16_t port) {
     return ret;
 }
 
-void GetDither(uint32_t col, uint8_t* outbuffer);
+void VgaGetDither(uint32_t col, uint8_t* outbuffer);
 
 uint8_t VgaNearestColour(uint32_t col);
 
-void SwitchToMode12h(void);
-void ReadVgaGlyphs(void);
-uint8_t* GetVgaGlyph(char c);
-colour_t ConvertVgaColourToARGB(int vgacol);
-void InitVgaPalette(void);
+void VgaSwitchToMode12h(void);
+void VgaReadGlyphs(void);
+uint8_t* VgaGetGlyph(char c);
+colour_t VgaConvertColourToARGB(int vgacol);
+void VgaInitPalette(void);
 
 void VGADrawGlyph(struct graphics_driver*, int x, int y, struct rect bound, uint32_t col,
     int glyph_w_px, int glyph_h, uint8_t* glyph_col_maj_order);

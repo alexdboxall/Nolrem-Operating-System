@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <ctype.h>
 
-static bool IsValidSFNCharacter(char c) {
+static bool FatIsValidSFNCharacter(char c) {
     if (isalnum(c)) return true;
     const char* other_valid = "!#$%&'()-@^_`{}~";
     for (int i = 0; other_valid[i]; ++i) {
@@ -14,7 +14,7 @@ static bool IsValidSFNCharacter(char c) {
     return false;
 }
 
-static const char* GetShortFileExtensionStart(const char* lfn) {
+static const char* FatGetShortFileExtensionStart(const char* lfn) {
     const char* long_ext_start = NULL;
     for (int i = 0; lfn[i]; ++i) {
         if (lfn[i] == '.') {
@@ -27,7 +27,7 @@ static const char* GetShortFileExtensionStart(const char* lfn) {
     return long_ext_start;
 }
 
-static void GetShortFileExtension(const char* long_ext_start, char* ext_out) {
+static void FatGetShortFileExtension(const char* long_ext_start, char* ext_out) {
     strcpy(ext_out, "   ");
     if (long_ext_start == NULL) {
         return;
@@ -36,29 +36,29 @@ static void GetShortFileExtension(const char* long_ext_start, char* ext_out) {
     int ext_written = 0;
     for (int i = 0; long_ext_start[i] && ext_written < 3; ++i) {
         char c = long_ext_start[i];
-        if (IsValidSFNCharacter(c)) {
+        if (FatIsValidSFNCharacter(c)) {
             ext_out[ext_written++] = toupper(c);
         }
     }
 }
 
-static int GetShortFileMainName(const char* lfn, const char* ext_start, char* name_out) {
+static int FatGetShortFileMainName(const char* lfn, const char* ext_start, char* name_out) {
     memset(name_out, ' ', 8);
 
     int name_written = 0;
     for (int i = 0; lfn[i] && (lfn + i) != ext_start && name_written < 8; ++i) {
         char c = lfn[i];
-        if (IsValidSFNCharacter(c)) {
+        if (FatIsValidSFNCharacter(c)) {
             name_out[name_written++] = toupper(c);
         }
     }
     return name_written;
 }
 
-export int GetShortFilename(const char* lfn, int clash_num, char* sfn_out) {
-    const char* long_ext_start = GetShortFileExtensionStart(lfn);
-    GetShortFileExtension(long_ext_start, sfn_out + 8);
-    int main_len = GetShortFileMainName(lfn, long_ext_start, sfn_out);
+export int FatGetShortFilename(const char* lfn, int clash_num, char* sfn_out) {
+    const char* long_ext_start = FatGetShortFileExtensionStart(lfn);
+    FatGetShortFileExtension(long_ext_start, sfn_out + 8);
+    int main_len = FatGetShortFileMainName(lfn, long_ext_start, sfn_out);
     if (main_len == 0) {
         return EINVAL;
     }

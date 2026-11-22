@@ -24,7 +24,7 @@ static struct mutex fs_table_lock;
 
 void KeInitFilesystemTable(void) {
     KeInitStaticMutex(&fs_table_lock);
-    InitFat();
+    FatInit();
 }
 
 export int KeRegisterFilesystem(char* fs_name, fs_mount_creator mount) {

@@ -79,7 +79,7 @@ struct font {
 font_style_id MakeFontStyle(int points, int points_20ths, bool bold, bool italic);
 bool IsFontStyleBold(font_style_id id);
 bool IsFontStyleItalic(font_style_id id);
-int GetFontStylePointsIn20ths(font_style_id id);
+int CdGetFontStylePointsIn20ths(font_style_id id);
 
 struct typeface* CdOpenTypeface(const char* file);
 font_style_id CdEnumerateTypefaceStyle(struct typeface* tf, int index);

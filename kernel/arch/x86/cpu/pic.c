@@ -14,11 +14,11 @@
 #define ICW1_INIT       0x10
 #define ICW4_8086       0x01
 
-static void IoWait(void) {
+static void x86IoWait(void) {
     x86IoDelay();
 }
 
-void SendPicEoi(int irq_num) {
+void x86SendPicEoi(int irq_num) {
     if (irq_num >= PIC_IRQ_BASE + 8) {
         outb(PIC2_COMMAND, PIC_EOI);
     }
@@ -30,27 +30,27 @@ void SendPicEoi(int irq_num) {
 * use interrupts 0 through 15, which isn't very good as it conflicts with the
 * interrupt numbers for the CPU exceptions. 
 */
-static void RemapPic(int offset) {
+static void x86RemapPic(int offset) {
     uint8_t mask1 = inb(PIC1_DATA);
     uint8_t mask2 = inb(PIC2_DATA);
 
     outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4);
-    IoWait();
+    x86IoWait();
     outb(PIC2_COMMAND, ICW1_INIT | ICW1_ICW4);
-    IoWait();
+    x86IoWait();
     outb(PIC1_DATA, offset);
-    IoWait();
+    x86IoWait();
     outb(PIC2_DATA, offset + 8);
-    IoWait();
+    x86IoWait();
     outb(PIC1_DATA, 4);
-    IoWait();
+    x86IoWait();
     outb(PIC2_DATA, 2);
-    IoWait();
+    x86IoWait();
 
     outb(PIC1_DATA, ICW4_8086);
-    IoWait();
+    x86IoWait();
     outb(PIC2_DATA, ICW4_8086);
-    IoWait();
+    x86IoWait();
 
     outb(PIC1_DATA, mask1);
     outb(PIC2_DATA, mask2);
@@ -60,7 +60,7 @@ static void RemapPic(int offset) {
  * Set which IRQ numbers are disabled. `disabled_irqs` is a bitfield, with a set
  * bit indicating a disabled IRQ line. 0x0000 enables all, 0xFFFF disables all.
  */
-void DisablePicLines(uint16_t disabled_irqs) {
+void x86DisablePicLines(uint16_t disabled_irqs) {
     static uint16_t prev = 0xFFFF;
     if (prev != disabled_irqs) {
         outb(PIC1_DATA, disabled_irqs & 0xFF);
@@ -70,6 +70,6 @@ void DisablePicLines(uint16_t disabled_irqs) {
 }
 
 void x86InitPic(void) {
-    RemapPic(PIC_IRQ_BASE);
-    DisablePicLines(0x0000);
+    x86RemapPic(PIC_IRQ_BASE);
+    x86DisablePicLines(0x0000);
 }

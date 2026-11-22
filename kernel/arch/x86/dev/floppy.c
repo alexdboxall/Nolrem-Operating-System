@@ -26,7 +26,7 @@
 
 
 /* DUMMY!!! */
-void play_sound(uint32_t frequency) {
+void x86PlaySound(uint32_t frequency) {
     (void) frequency;
     /*if (frequency == 0) return;
     uint32_t divisor = 1193180 / frequency;
@@ -39,7 +39,7 @@ void play_sound(uint32_t frequency) {
     }*/
 }
 
-void nosound(void) {
+void x86NoSound(void) {
     //uint8_t speaker_state = inb(0x61) & 0xFC;
     //outb(0x61, speaker_state);
 }
@@ -251,11 +251,11 @@ static void FloppyMotor(struct floppy_data* flp, bool on) {
     if (on) {
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_ON);
         if (!flp->motor_on) {
-            play_sound(55);
+            x86PlaySound(55);
             KeSleepMilli(MOTOR_SPINUP_MS);
         }
     } else {
-        nosound();
+        x86NoSound();
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_OFF);
     }
     flp->motor_on = on;
@@ -331,7 +331,7 @@ static int FloppySenseInterrupt(struct floppy_data* flp, int* st0, int* cyl) {
  * to see if we ended up at the right cylinder.
  */
 static int FloppyStep(struct floppy_data* flp, const uint8_t* cmd, int length, int target_cylinder) {
-    play_sound(99);
+    x86PlaySound(99);
     for (int attempt = 0; attempt < 5; ++attempt) {
         int st0 = -1;
         int cyl = -1;
@@ -350,7 +350,7 @@ static int FloppyStep(struct floppy_data* flp, const uint8_t* cmd, int length, i
          */
         if ((st0 & (ST0_IC | ST0_EC)) == 0 && (st0 & ST0_SE) && cyl == target_cylinder) {
             KeSleepMilli(HEAD_SETTLE_MS);
-            play_sound(55);
+            x86PlaySound(55);
             return 0;
         }
     }
@@ -510,7 +510,7 @@ static void FloppyDmaInit(struct floppy_data* flp, size_t length, bool write) {
  * Returns EROFS if the disk is write protected, EIO for any other failure.
  */
 static int FloppyTransferRun(struct floppy_data* flp, bool write, int cylinder, int head, int sector, int count) {
-    play_sound(99);
+    x86PlaySound(99);
     const uint8_t cmd[] = {
         (write ? CMD_WRITE : CMD_READ) | CMD_FLAG_MFM,  /* No multi-track: we never cross a track. */
         head << 2,                  /* Head and drive 0. */
@@ -546,7 +546,7 @@ static int FloppyTransferRun(struct floppy_data* flp, bool write, int cylinder, 
     if (res[2] & ST2_ERRORS) return EIO;
     if (res[6] != 2) return EIO;
 
-    play_sound(55);
+    x86PlaySound(55);
 
     return 0;
 }
@@ -666,14 +666,14 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
     return error;
 }
 
-static int ReadWrite(struct aio* aio) {
+static int FloppyReadWrite(struct aio* aio) {
     if (floppy_drives_installed[0] != NULL) {
         return KePostMessage(floppy_drives_installed[0]->msgbox, (const void*) &aio, TIMEOUT_INSTANT);
     }
     return ENODEV;
 }
 
-static int Create(struct vnode* node, struct vnode** partition, const char* name, int, mode_t) {
+static int FloppyCreate(struct vnode* node, struct vnode** partition, const char* name, int, mode_t) {
     KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
     struct floppy_data* flp = node->data;
     int res = KeDiskCreateHelper(&flp->partitions, partition, name);
@@ -681,7 +681,7 @@ static int Create(struct vnode* node, struct vnode** partition, const char* name
     return res;
 }
 
-static int Follow(struct vnode* node, struct vnode** output, const char* name) {
+static int FloppyFollow(struct vnode* node, struct vnode** output, const char* name) {
     KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
     struct floppy_data* flp = node->data;
     int res = KeDiskFollowHelper(&flp->partitions, output, name);
@@ -690,13 +690,13 @@ static int Follow(struct vnode* node, struct vnode** output, const char* name) {
 }
 
 static const struct vnode_operations dev_ops = {
-    .read           = ReadWrite,
-    .write          = ReadWrite,
-    .create         = Create,
-    .follow         = Follow,
+    .read           = FloppyReadWrite,
+    .write          = FloppyReadWrite,
+    .create         = FloppyCreate,
+    .follow         = FloppyFollow,
 };
 
-static bool DetectFloppy(void) {
+static bool FloppyDetect(void) {
     /*
      * Lowest bit of offset 0x10 into the BIOS Data Area tells us if the BIOS
      * detected any floppy drives.
@@ -710,7 +710,7 @@ static bool DetectFloppy(void) {
      * The high nibble refers to the first drive. If it is zero, there is no
      * drive. Otherwise, it refers to the drive type.
      */
-    uint8_t cmos_val = ReadCmos(0x10);
+    uint8_t cmos_val = x86ReadCmos(0x10);
     return (cmos_val >> 4);
 }
 
@@ -744,19 +744,33 @@ void FloppyDriverThread(void* _flp) {
     }
 }
 
-/* TODO: checking AllocHeap for NULL, proper free of the virt on error */
-void InitFloppy(void) {
-    if (!DetectFloppy()) {
+void FloppyInit(void) {
+    if (!FloppyDetect()) {
         return;
     }
 
     size_t phys_buffer = KeAllocPhys(true);
+    if (phys_buffer == 0) {
+        KeLogPrintf("FDC: no memory for the DMA buffer\n");
+        return;
+    }
     size_t virt_buffer = (size_t) KeAllocFixedMemory(phys_buffer, PAGE_SIZE, VP_WRITE);
+    if (virt_buffer == 0) {
+        KeLogPrintf("FDC: couldn't map the DMA buffer\n");
+        KeFreeDiscardedPhys(KeGetPhysPage(phys_buffer));
+        return;
+    }
     
     /*
      * We will only support the first floppy drive that a system has.
      */
     struct floppy_data* flp = AllocHeap(sizeof(struct floppy_data));
+    if (flp == NULL) {
+        KeLogPrintf("FDC: no memory for the drive data\n");
+        KeFreeMemory((void*) virt_buffer, PAGE_SIZE);
+        KeFreeDiscardedPhys(KeGetPhysPage(phys_buffer));
+        return;
+    }
 
     *flp = (struct floppy_data) {
         .disk_num = 0,
@@ -786,6 +800,8 @@ void InitFloppy(void) {
     int res = FloppyReset(flp);
     if (res != 0) {
         KeLogPrintf("FDC doesn't work...\n");
+        /* Unmap before the frame goes back to the allocator. */
+        KeFreeMemory((void*) virt_buffer, PAGE_SIZE);
         KeFreeDiscardedPhys(KeGetPhysPage(phys_buffer));
         outb(flp->base + FLOPPY_DOR, DOR_MOTOR_OFF);
         FreeHeap(flp);

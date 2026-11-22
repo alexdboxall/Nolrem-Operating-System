@@ -2,8 +2,7 @@
 #include <obj.h>
 #include <string.h>
 #include <syscall.h>
-#include "../api.h"
-#include "../clipdraw_internal.h"
+#include <uobj.h>
 
 #define TYPE_REF    0
 #define TYPE_DEREF  1
@@ -15,15 +14,8 @@ pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
         return 0;
     }
 
-    /* Stock brushes/pens are shared and permanent. A user Deref must never be
-       able to free them, so Ref/Deref on them is a no-op. */
-    struct user_obj_header* hdr = uo;
-    if ((hdr->user_type == UOBJ_BRUSH && CdIsStockBrush(uo))
-        || (hdr->user_type == UOBJ_PEN && CdIsStockPen(uo))) {
-        KeDerefObject(uo);
-        return 0;
-    }
-
+    /* Objects marked permanent (e.g. the stock brushes) ignore this: KeUserRef
+       and KeUserDeref do nothing to them, so a user Deref can't free them. */
     int retv;
     if (type == TYPE_REF) {
         retv = KeUserRef(uo);

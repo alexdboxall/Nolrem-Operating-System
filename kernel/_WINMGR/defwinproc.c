@@ -11,7 +11,7 @@
 #define TITLEBAR_INACTIVE_COL_1     0xFF404040
 #define TITLEBAR_INACTIVE_COL_2     0xFF808080
 
-static void HandleWmPaint(struct window* win) {
+static void WmHandleWmPaint(struct window* win) {
     struct dc* dc = WmBeginPaint(win);
 
     CdPaintRectWithBrush(
@@ -53,14 +53,14 @@ static void HandleWmPaint(struct window* win) {
     WmEndPaint(win, dc);
 }
 
-static bool UseGradientTitlebar(struct dc* dc) {
-    struct graphics_driver* drv = GetOutputDriver(dc);
+static bool WmUseGradientTitlebar(struct dc* dc) {
+    struct graphics_driver* drv = CdGetOutputDriver(dc);
     struct graphics_capabilities caps = drv->get_capabilities(drv);
     return caps.bits_per_pixel >= 15;
 }
 
-static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
-    bool has_border = DoesWindowShowBorder(win);
+static void WmDefaultNonClientPaint(struct dc* dc, struct window* win) {
+    bool has_border = WmDoesWindowShowBorder(win);
     int border_width = has_border ? BORDER_WIDTH : 0;
     int shadow = has_border ? SHADOW_CUT_IN : 0;
 
@@ -73,7 +73,7 @@ static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
 
     struct brush* blue = CdCreateSolidBrush(col1);
 
-    if (UseGradientTitlebar(dc)) {
+    if (WmUseGradientTitlebar(dc)) {
         int initial_part = width / 3;
         int remaining_part = width - initial_part;
         int gradient_part = remaining_part / 4 * 3;
@@ -143,8 +143,8 @@ static void DefaultNonClientPaint(struct dc* dc, struct window* win) {
 
 
 /* Point relative to the top-left of the window. */
-static int HandleHitTest(struct window* win, struct point p) {
-    bool has_border = DoesWindowShowBorder(win);
+static int WmHandleHitTest(struct window* win, struct point p) {
+    bool has_border = WmDoesWindowShowBorder(win);
     int shadow = has_border ? SHADOW_CUT_IN : 0;
 
     int retv = 0;
@@ -172,7 +172,7 @@ static int HandleHitTest(struct window* win, struct point p) {
     return retv;
 }
 
-static int HandleToplevelMousedown(struct window* win, struct msg msg) {
+static int WmHandleToplevelMousedown(struct window* win, struct msg msg) {
     static uint64_t prev_time = 0;
     static struct point prev_pt;
     uint64_t time = KeGetTimeSinceBoot();
@@ -263,7 +263,7 @@ static int HandleToplevelMousedown(struct window* win, struct msg msg) {
     return retv;
 }
 
-static int HandleSetCursor(struct window* win, struct msg msg) {
+static int WmHandleSetCursor(struct window* win, struct msg msg) {
     /* 
      * WM_SETCURSOR message goes to most nested child possible. Often they'll
      * just default win proc it up to the parent, and through the chain until
@@ -271,7 +271,7 @@ static int HandleSetCursor(struct window* win, struct msg msg) {
      */
     WmLock();
     if (win->parent == WmGetDesktop() || win->parent == NULL) {
-        int hit = HandleHitTest(win, msg.point_arg1);
+        int hit = WmHandleHitTest(win, msg.point_arg1);
         if ((hit & HIT_RIGHT_BORDER) && (hit & HIT_BOTTOM_BORDER)) {
             CdSetStandardCursor(CURSOR_TLDR);
         } else if ((hit & HIT_LEFT_BORDER) && (hit & HIT_TOP_BORDER)) {
@@ -302,22 +302,22 @@ static int HandleSetCursor(struct window* win, struct msg msg) {
 export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
     switch (msg.type) {
     case WM_PAINT:
-        HandleWmPaint(win);
+        WmHandleWmPaint(win);
         return 0;
 
     case WM_NCPAINT:
-        DefaultNonClientPaint((struct dc*) msg.p_arg, win);
+        WmDefaultNonClientPaint((struct dc*) msg.p_arg, win);
         return 0;
 
     case WM_HITTEST:
         KeLogPrintf("Doing hit test...\n");
-        return HandleHitTest(win, msg.point_arg1);
+        return WmHandleHitTest(win, msg.point_arg1);
 
     case WM_TOPLEVEL_MOUSEDOWN:
-        return HandleToplevelMousedown(win, msg);
+        return WmHandleToplevelMousedown(win, msg);
 
     case WM_SETCURSOR:
-        return HandleSetCursor(win, msg);
+        return WmHandleSetCursor(win, msg);
 
     default:
         return -1;

@@ -1,3 +1,3 @@
-void Dummy() {
+void WmDummy() {
 	
 }

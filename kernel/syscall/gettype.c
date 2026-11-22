@@ -2,8 +2,7 @@
 #include <obj.h>
 #include <string.h>
 #include <syscall.h>
-#include "../api.h"
-#include "../clipdraw_internal.h"
+#include <uobj.h>
 
 pageable size_t SysGetObjectType(size_t handle, size_t, size_t, size_t) {
     struct user_obj_header* uo = (void*) handle;

@@ -24,6 +24,6 @@ export pageableuserexec bool IsFontStyleItalic(font_style_id id) {
     return (id >> 30) & 1;
 }
 
-export int GetFontStylePointsIn20ths(font_style_id id) {
+export int CdGetFontStylePointsIn20ths(font_style_id id) {
     return id & 0xFFFF;
 }

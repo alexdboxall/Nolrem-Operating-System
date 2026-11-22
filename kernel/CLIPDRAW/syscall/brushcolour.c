@@ -10,7 +10,7 @@
 #define OP_GET_SECONDARY    2
 #define OP_SET_SECONDARY    3
 
-static bool IsGetOp(size_t op) {
+static bool CdIsGetOp(size_t op) {
     return op == OP_GET_PRIMARY || op == OP_GET_SECONDARY;
 }
 
@@ -28,9 +28,9 @@ pageable size_t SysBrushColour(size_t a, size_t op, size_t argb, size_t) {
     }
     if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
         KeSetLastUserError(EINVAL);
-        return IsGetOp(op) ? 0 : EINVAL;
+        return CdIsGetOp(op) ? 0 : EINVAL;
     }
-    if (!IsGetOp(op) && CdIsStockBrush(br)) {
+    if (!CdIsGetOp(op) && CdIsStockBrush(br)) {
         KeDerefObject(br);
         KeSetLastUserError(EACCES);
         return EACCES;

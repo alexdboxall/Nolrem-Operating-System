@@ -3,6 +3,8 @@
 #include <log.h>
 #include <mutex.h>
 #include <kgfx.h>
+#include <input.h>
+#include <harderror.h>
 #include "winmgr_internal.h"
 
 #define MAX_NESTED_WIN_DEPTH 6
@@ -32,14 +34,14 @@ export void WmSetForegroundWindow(struct window* win, bool lock) {
     if (lock) WmUnlock();
 }
 
-static void CleanupWindow(void* _win) {
+static void WmCleanupWindow(void* _win) {
     struct window* win = _win;
     KeDerefObject(win->winclass);
     FreeHeap(win);
 }
 
 void WmInitWindowSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_WINDOW, CleanupWindow);
+    KeRegisterUserObjectType(UOBJ_WINDOW, WmCleanupWindow);
 }
 
 void WmLock(void) {
@@ -190,7 +192,7 @@ static void WmInvalidateExposedRegion(struct window* win, struct region* exposed
     }
 }
 
-bool DoesWindowShowBorder(struct window* win) {
+bool WmDoesWindowShowBorder(struct window* win) {
     return !(win->style & WS_MAXIMISED) && !(win->winclass->flags & CS_ALLCLIENT);
 }
 
@@ -201,7 +203,7 @@ bool DoesWindowShowBorder(struct window* win) {
  * window. The returned region is borrowed from `parent` - do not free it.
  *
  * Both regions are themselves already clipped against the parent's own parent
- * (see SetInternalWindowBounds), so clipping against this clips against every
+ * (see WmSetInternalWindowBounds), so clipping against this clips against every
  * ancestor, not just the immediate one.
  */
 static struct region WmGetChildClipRegion(struct window* parent) {
@@ -216,8 +218,8 @@ static struct region WmGetChildClipRegion(struct window* parent) {
  * WmCreateWindow (the parent already exists) and for WmChangePosition (a window
  * is updated before the recursion into its children).
  */
-static void SetInternalWindowBounds(struct window* win, struct rect local_r) {
-    bool has_border = DoesWindowShowBorder(win);
+static void WmSetInternalWindowBounds(struct window* win, struct rect local_r) {
+    bool has_border = WmDoesWindowShowBorder(win);
     int border_width = has_border ? BORDER_WIDTH : 0;
     int shadow = has_border ? SHADOW_CUT_IN : 0;
 
@@ -255,7 +257,7 @@ static void SetInternalWindowBounds(struct window* win, struct rect local_r) {
     CdFreeRegion(raw_client_rgn);
 }
 
-static void ClipOurVisibility(struct window* win) {
+static void WmClipOurVisibility(struct window* win) {
     /* 
      * Clip against earlier siblings. 
      * Do this if `win` is a toplevel, or WS_CLIPSIBLINGS set.
@@ -291,7 +293,7 @@ export void WmChangePosition(struct window* win, struct rect local_r, bool lock)
     /* The easy bit. */
     struct region old_win_bounds = win->win_rgn;
     CdFreeRegion(win->client_rgn);
-    SetInternalWindowBounds(win, local_r);
+    WmSetInternalWindowBounds(win, local_r);
     
     /* Add to visible regions of what we exposed. */
     struct region exposed_rgn = CdSubtractRegion(old_win_bounds, win->win_rgn);
@@ -325,7 +327,7 @@ export void WmChangePosition(struct window* win, struct rect local_r, bool lock)
     /* Figure out our own visible region. */
     CdFreeRegion(win->vis_rgn);
     win->vis_rgn = CdCopyRegion(win->win_rgn);
-    ClipOurVisibility(win);
+    WmClipOurVisibility(win);
 
     if (lock) WmUnlock();
 }
@@ -382,7 +384,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
         parent->first_child = win;
     }
 
-    SetInternalWindowBounds(win, local_r);
+    WmSetInternalWindowBounds(win, local_r);
 
     struct region covered_rgn = CdCopyRegion(win->win_rgn);
     if (!CdIsRegionEmpty(covered_rgn)) {
@@ -392,7 +394,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     CdFreeRegion(covered_rgn);
     win->dirty_rgn = CdCopyRegion(win->win_rgn);
     win->vis_rgn = CdCopyRegion(win->win_rgn);
-    ClipOurVisibility(win);
+    WmClipOurVisibility(win);
 
     if (parent == WmGetDesktop()) {
         WmSetForegroundWindow(win, false);
@@ -411,7 +413,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
 static void WmRecomputeVisibilityRecursive(struct window* win) {
     struct region old_vis = win->vis_rgn;
     win->vis_rgn = CdCopyRegion(win->win_rgn);
-    ClipOurVisibility(win);
+    WmClipOurVisibility(win);
 
     struct region newly_visible = CdSubtractRegion(win->vis_rgn, old_vis);
     if (!CdIsRegionEmpty(newly_visible)) {
@@ -478,9 +480,14 @@ extern void WmInitWindowClassSubsystem();
 extern void WmInitDesktopWindowSubsystem();
 extern void WmInitAppSubsystem();
 
-void WmInit(void) {
+export void WmInit(void) {
     KeInitSpinlock(&winmgr_lock);
-    WmInitSystemMessageBox();
+    /*
+     * The kernel owns the system message box and the hardware hooks; this is
+     * where the window manager takes on the jobs that need a user interface.
+     */
+    KeSetMouseHandler(WmHandleMouseInput);
+    KeSetHardErrorHandler(WmHardError);
     WmInitDcCache();
     WmInitWindowClassSubsystem();
     WmInitDesktopWindowSubsystem();    

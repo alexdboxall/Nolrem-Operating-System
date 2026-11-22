@@ -7,7 +7,7 @@
 #include "clipdraw_internal.h"
 
 export struct compat_bitmap* CdCreateCompatibleBitmapStretched(struct dc* dc, struct file* bmp, int w, int h) {
-    struct graphics_driver* drv = GetOutputDriver(dc);
+    struct graphics_driver* drv = CdGetOutputDriver(dc);
     return drv->create_compatible_bitmap(drv, bmp, w, h);
 }
 
@@ -22,7 +22,7 @@ struct context {
     struct compat_bitmap* bmp;
 };
 
-static int PaintBitmapPartialCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
+static int CdPaintBitmapPartialCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
     struct context* ctxt = _ctxt;
     struct rect src;
     
@@ -37,7 +37,7 @@ static int PaintBitmapPartialCallback(struct rect r, void* _ctxt, int rv, bool* 
     dest.x = r.x;
     dest.y = r.y;
 
-    ActualBitmapBlit(ctxt->dc, ctxt->bmp, src, dest);
+    CdActualBitmapBlit(ctxt->dc, ctxt->bmp, src, dest);
     *cancel = false;
     return rv;
 }
@@ -60,7 +60,7 @@ export int CdPaintBitmapPartial(struct dc* dc, struct compat_bitmap* bitmap, str
     struct region clipped = CdIntersectWithClipRegion(dc, rrgn);
     CdFreeRegion(rrgn);
 
-    int retv = IterateRegion(clipped, PaintBitmapPartialCallback, &ctxt, 0);
+    int retv = CdIterateRegion(clipped, CdPaintBitmapPartialCallback, &ctxt, 0);
     CdFreeRegion(clipped);
 
     return retv;

@@ -34,7 +34,7 @@ void CdLogicalToDevice(struct dc* dc, int* x, int* y);
 
 struct region_iteration_context;
 
-int IterateRegionCoroutine(
+int CdIterateRegionCoroutine(
     struct region rgn,
     int retv,
     void* context,
@@ -44,23 +44,24 @@ int IterateRegionCoroutine(
     struct dc* dc
 );
 
-int IterateRegion(
+int CdIterateRegion(
     struct region rgn, 
     int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel), 
     void* context,
     int init_rv
 );
 
-struct graphics_driver* GetOutputDriver(struct dc*);
+struct graphics_driver* CdGetOutputDriver(struct dc*);
 
 void CdInitBrushSubsystem(void);
 void CdInitUserRegionSubsystem(void);
 void CdInitPenSubsystem(void);
 void CdInitDcSubsystem(void);
 void CdInitMouseSubsystem(void);
+void CdInitSyscalls(void);
 void CdInitTypefaceSubsystem(void);
 
-void PurgeScaledGlyphCacheIfNeeded(void);
+void CdPurgeScaledGlyphCacheIfNeeded(void);
 
 void CdRemoveMouse();
 void CdDrawMouse(int x, int y);
@@ -74,12 +75,10 @@ struct uregion {
 
 struct region CdGetRegionCombinationEx(int mode, struct region a, struct region b, struct dc* scale_dc);
 
-struct uregion* RegionToUserRegion(struct region rgn);
-struct region UserRegionToRegion(struct uregion* urgn);
+struct uregion* CdRegionToUserRegion(struct region rgn);
+struct region CdUserRegionToRegion(struct uregion* urgn);
 
 void CdSetTranslation(struct dc* dc, int x, int y);
-
-bool KeValidateUserObjectAndAtomicallyRef(void* obj, int type);
 
 struct region CdBadRegion(void);
 bool CdIsRegionBad(struct region rgn);
@@ -143,10 +142,10 @@ struct pen {
 
 
 
-int ActualPaintRectWithBrush(struct dc* dc, int x, int y, int x2, int y2, 
+int CdActualPaintRectWithBrush(struct dc* dc, int x, int y, int x2, int y2, 
     struct brush* brush);
-int ActualInvertRect(struct dc* dc, int x, int y, int x2, int y2, bool half);
-int ActualBitmapBlit(struct dc* dc, struct compat_bitmap* bitmap, struct rect src, struct point dest);
+int CdActualInvertRect(struct dc* dc, int x, int y, int x2, int y2, bool half);
+int CdActualBitmapBlit(struct dc* dc, struct compat_bitmap* bitmap, struct rect src, struct point dest);
 
 void CdResetDC(struct dc* dc);
 

@@ -5,10 +5,10 @@ export pageable struct region CdCreateRegionFromBitmask(int x, int y, int width,
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
 
-    BuildNewRegion(&rgn, (int16_t)y, &ctxt);
+    CdBuildNewRegion(&rgn, (int16_t)y, &ctxt);
 
     if (width <= 0 || height <= 0 || data == NULL) {
-        FinishRegion(&rgn, &ctxt);
+        CdFinishRegion(&rgn, &ctxt);
         return rgn;
     }
 
@@ -40,7 +40,7 @@ export pageable struct region CdCreateRegionFromBitmask(int x, int y, int width,
                     spans[0] = (int16_t)span_start_x;
                     spans[1] = (int16_t)(x + dx);
                     
-                    AddScanline(&rgn, &ctxt, 1, spans, false);
+                    CdAddScanline(&rgn, &ctxt, 1, spans, false);
                     inside_span = 0;
                 }
             }
@@ -52,10 +52,10 @@ export pageable struct region CdCreateRegionFromBitmask(int x, int y, int width,
             spans[0] = (int16_t)span_start_x;
             spans[1] = (int16_t)(x + width);
             
-            AddScanline(&rgn, &ctxt, 1, spans, false);
+            CdAddScanline(&rgn, &ctxt, 1, spans, false);
         }
     }
 
-    FinishRegion(&rgn, &ctxt);
+    CdFinishRegion(&rgn, &ctxt);
     return rgn;
 }

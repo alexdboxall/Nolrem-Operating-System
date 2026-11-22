@@ -3,6 +3,22 @@
 #include <machine/config.h>
 #include <common.h>
 
+/*
+ * The architecture interface.
+ *
+ * Every function named Arch...() is part of the generic interface between the
+ * architecture-independent kernel and the architecture it is built for. Each
+ * architecture must provide all of them, and they are all declared in this file
+ * (so if you need a new one, add it here).
+ *
+ * Anything that is internal to an architecture is not called Arch...(), but is
+ * instead named after that architecture (x86...() for x86), and is declared in
+ * that architecture's own headers (e.g. arch/x86/include/x86.h) or kept static
+ * in its source file. Code outside arch/ must not call those.
+ */
+
+/* ---- Startup, CPU and idling ------------------------------------------------ */
+
 void ArchIndicateSpinLoop(void);
 void ArchIdle(void);
 
@@ -23,6 +39,8 @@ void ArchInit2(void);   // after VFS, VMM, scheduler, etc. active
 * Non-inclusive of ARCH_USER_AREA_LIMIT
 */
 
+/* ---- Time ------------------------------------------------------------------- */
+
 /*
  * We give `timezone_offset` in case the architecture/configuration wants to use
  * local time to store the RTC.
@@ -38,6 +56,8 @@ export int ArchSetUtcTime(uint64_t time, int64_t timezone_offset);
 
 void ArchCallGlobalConstructors();
 
+
+/* ---- Virtual memory --------------------------------------------------------- */
 
 struct virt_page;
 struct vas;
@@ -55,6 +75,9 @@ void ArchUnlockFromCpu(size_t rv);
 void ArchMapKernelPageDirectly(size_t phys, size_t virt);
 size_t ArchGetTemporaryPage(size_t phys);
 void ArchReleaseTemporaryPage(size_t virt);
+
+/* ---- CPUs and interrupts ---------------------------------------------------- */
+
 int ArchGetCpuNum(void);
 
 bool ArchAreInterruptsEnabled(void);
@@ -65,12 +88,18 @@ struct cpu_data;
 
 void ArchInitPlatformSpecificData(struct cpu_data* cpu);
 
+/* ---- Threads ---------------------------------------------------------------- */
+
 struct thread;
 void ArchSwitchThread(struct thread* old_thr, struct thread* new_thr);
 void ArchSetupNewThreadEntry(struct thread* thr, void(*entry)(void*), void*);
 
+/* ---- Debugging -------------------------------------------------------------- */
+
 /* If true, the hardware timer will not call KeAdvanceTimer */
 void ArchDebugInhibitTimerAdvance(bool inhibit);
+
+/* ---- Modules ---------------------------------------------------------------- */
 
 struct module;
 struct file;

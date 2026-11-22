@@ -3,7 +3,7 @@
 
 #include <log.h>
 
-void BrushRectFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2, colour_t primary, colour_t secondary, uint8_t* pattern) {
+void CdBrushRectFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2, colour_t primary, colour_t secondary, uint8_t* pattern) {
     CdStartVideoUpdate(x1, y1, x2, y2);
     while (y1 < y2) {
         uint8_t row_pattern = pattern[y1 & 7];

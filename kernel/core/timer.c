@@ -10,14 +10,14 @@ static uint64_t ns_since_boot = 1;
 static uint64_t next_wakeup_ns = 0;
 static struct thread* first_waiting_timer = NULL;
 
-uint64_t KeGetTimeSinceBoot(void) {
+export uint64_t KeGetTimeSinceBoot(void) {
     KeAcquireSpinlock(&timer_spinlock);
     uint64_t retv = ns_since_boot;
     KeReleaseSpinlock(&timer_spinlock);
     return retv;
 }
 
-static void DoWakeups(uint64_t ns) {
+static void KeDoWakeups(uint64_t ns) {
     while (first_waiting_timer != NULL) {
         struct thread* thr = first_waiting_timer;
         if (ns >= thr->wakeup_time_ns) {
@@ -37,7 +37,7 @@ void KeAdvanceTimer(uint64_t ns) {
     KeAcquireSpinlock(&timer_spinlock);
     ns_since_boot += ns;
     if (next_wakeup_ns != 0 && next_wakeup_ns <= ns_since_boot) {
-        DoWakeups(ns_since_boot);
+        KeDoWakeups(ns_since_boot);
     }
     KeReleaseSpinlock(&timer_spinlock);
     KeReleaseScheduler();
@@ -47,7 +47,7 @@ void KeCancelTimer(struct thread* thr) {
     // Scheduler lock must already be held!
 
     if (thr->wakeup_time_ns == 0) {
-        /* Already cancelled, i.e. DoWakeups woke it, so KeCancelTimer as part
+        /* Already cancelled, i.e. KeDoWakeups woke it, so KeCancelTimer as part
          * of KeUnblockThread doesn't need to do anything. */
         return;
     }

@@ -14,7 +14,7 @@
  * registering pass, so they can never disagree about how many symbols there
  * are (KeCreateSymbolList() needs the exact count up front).
  */
-static bool IsVisibleSymbol(const struct Elf32_Sym* symbol) {
+static bool x86IsVisibleSymbol(const struct Elf32_Sym* symbol) {
     if (symbol->st_value == 0) {
         return false;
     }
@@ -41,7 +41,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
     size_t mem = (size_t) map;
 
     struct Elf32_Ehdr* elf_header = (struct Elf32_Ehdr*) mem;
-    if (!IsElfValid(elf_header) || elf_header->e_shoff == 0) {
+    if (!x86IsElfValid(elf_header) || elf_header->e_shoff == 0) {
         return NULL;
     }
 
@@ -104,7 +104,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
      */
     int total_syms = 0;
     for (size_t i = 0; i < symbol_count; ++i) {
-        if (IsVisibleSymbol(&symbol_table[i])) {
+        if (x86IsVisibleSymbol(&symbol_table[i])) {
             ++total_syms;
         }
     }
@@ -124,7 +124,7 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
     int next = 0;
     for (size_t i = 0; i < symbol_count; ++i) {
         const struct Elf32_Sym* symbol = &symbol_table[i];
-        if (!IsVisibleSymbol(symbol)) {
+        if (!x86IsVisibleSymbol(symbol)) {
             continue;
         }
         KeAddToSymbolList(sym_list, next++, string_table + symbol->st_name,

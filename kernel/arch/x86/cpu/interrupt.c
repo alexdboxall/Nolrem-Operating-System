@@ -29,7 +29,7 @@ void ArchDisableInterrupts(void) {
     asm volatile ("cli");
 }
 
-static size_t GetCr2(void) {
+static size_t x86GetCr2(void) {
     size_t val;
     __asm__ __volatile__("mov %%cr2, %0" : "=r" (val) :: );
     return val;
@@ -44,7 +44,7 @@ void x86HandleInterrupt(struct x86_regs* r) {
     }
 
     if (num == ISR_PAGE_FAULT) {
-        size_t cr2 = GetCr2();
+        size_t cr2 = x86GetCr2();
         int reason = 0;
         if (r->err_code & 1) reason |= PF_PRESENT;
         if (r->err_code & 2) reason |= PF_WRITE;
@@ -68,7 +68,7 @@ void x86HandleInterrupt(struct x86_regs* r) {
     
     if (num >= PIC_IRQ_BASE && num < PIC_IRQ_BASE + 16) {
         KeHandleInterrupt(num - PIC_IRQ_BASE, r);
-        SendPicEoi(num);
+        x86SendPicEoi(num);
     }
 
     KeProcessIrqPostMessage();    

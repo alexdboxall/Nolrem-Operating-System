@@ -27,7 +27,7 @@ pageable size_t SysInvertRegion(size_t a, size_t rgn_ptr, size_t, size_t) {
         return EINVAL;
     }
 
-    int res = CdInvertRegion(dc, UserRegionToRegion(urgn));
+    int res = CdInvertRegion(dc, CdUserRegionToRegion(urgn));
 
     KeDerefObject(urgn);
     KeDerefObject(dc);

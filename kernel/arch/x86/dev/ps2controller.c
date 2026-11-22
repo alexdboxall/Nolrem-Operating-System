@@ -190,7 +190,7 @@ void Ps2ControllerSetIrqEnable(bool enable, bool port2) {
     Ps2ControllerSetConfiguration(config);
 }
 
-void InitPs2(void) {
+void Ps2Init(void) {
     Ps2ControllerDisableDevice(false);
     Ps2ControllerDisableDevice(true);
     Ps2ControllerFlushOutputBuffer();
@@ -200,11 +200,11 @@ void InitPs2(void) {
     Ps2ControllerSetIrqEnable(false, true);
 
     Ps2ControllerEnableDevice(false);  // <-- ENABLE before init
-    InitPs2Keyboard();
+    Ps2InitKeyboard();
     Ps2ControllerDisableDevice(false); // Disable again
 
     Ps2ControllerEnableDevice(true);   // <-- ENABLE before init
-    InitPs2Mouse();
+    Ps2InitMouse();
     Ps2ControllerDisableDevice(true);  // Disable again
 
     Ps2ControllerSetIrqEnable(true, false);

@@ -7,7 +7,7 @@
 
 #include "tables/brush_tables.h"
 
-static void CleanupBrush(void* _br) { 
+static void CdCleanupBrush(void* _br) { 
     struct brush* br = _br;
     if (br == NULL) {
         return;
@@ -151,9 +151,14 @@ export bool CdIsStockBrush(struct brush* br) {
 }
 
 void CdInitBrushSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_BRUSH, CleanupBrush);
+    KeRegisterUserObjectType(UOBJ_BRUSH, CdCleanupBrush);
     stock_brushes[STOCK_BRUSH_BLACK] = CdCreateSolidBrush(BlackColour());
     stock_brushes[STOCK_BRUSH_WHITE] = CdCreateSolidBrush(WhiteColour());
     stock_brushes[STOCK_BRUSH_TRANSPARENT] = CdCreateSolidBrush(TransparentColour());
     stock_brushes[STOCK_BRUSH_SYSTEM] = CdCreateSolidBrush(SystemColour());
+    for (int i = 0; i < 4; ++i) {
+        if (stock_brushes[i] != NULL) {
+            KeMarkUserObjectPermanent(stock_brushes[i]);
+        }
+    }
 }

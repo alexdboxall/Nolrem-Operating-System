@@ -11,7 +11,7 @@ void KeRegisterObjectType(uint8_t type, void(*cleanup_func)(void*)) {
     objtype_cleanup_handlers[type] = cleanup_func;
 }
 
-void KeRegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*)) {
+export void KeRegisterUserObjectType(uint8_t type, void(*cleanup_func)(void*)) {
     uobjtype_cleanup_handlers[type] = cleanup_func;
 }
 
@@ -36,26 +36,35 @@ export void KeDerefObject(void* obj) {
     }
 }
 
-static void CleanupUserObj(void* _obj) {
+static void KeCleanupUserObj(void* _obj) {
     struct user_obj_header* uo = _obj;
     uobjtype_cleanup_handlers[uo->user_type](uo);
 }
 
 void KeInitUserObjectType(void) {
-    KeRegisterObjectType(OBJTYPE_USEROBJ, CleanupUserObj);
+    KeRegisterObjectType(OBJTYPE_USEROBJ, KeCleanupUserObj);
 }
 
-void KeInitUserObject(void* obj, uint8_t user_type) {
+export void KeInitUserObject(void* obj, uint8_t user_type) {
     KeInitObject(obj, OBJTYPE_USEROBJ);
     struct user_obj_header* uo = obj;
     KeInitSpinlock(&uo->lock);
     uo->user_gone = false;
     uo->user_ref_count = 1;
     uo->user_type = user_type;
+    uo->user_permanent = false;
 }
 
-pageable int KeUserRef(void* obj) {
+export void KeMarkUserObjectPermanent(void* obj) {
     struct user_obj_header* uo = obj;
+    uo->user_permanent = true;
+}
+
+export pageable int KeUserRef(void* obj) {
+    struct user_obj_header* uo = obj;
+    if (uo->user_permanent) {
+        return 0;
+    }
     KeAcquireSpinlock(&uo->lock);
     if (uo->user_ref_count == 0xFFFFFF) {
         KeReleaseSpinlock(&uo->lock);
@@ -72,6 +81,9 @@ pageable int KeUserRef(void* obj) {
 
 pageable int KeUserDeref(void* obj) {
     struct user_obj_header* uo = obj;
+    if (uo->user_permanent) {
+        return 0;
+    }
     KeAcquireSpinlock(&uo->lock);
     if (uo->user_ref_count == 0) {
         KeReleaseSpinlock(&uo->lock);
@@ -92,12 +104,12 @@ pageable int KeUserDeref(void* obj) {
     return retv;
 }
 
-void KeLockUserObject(void* obj) {
+export void KeLockUserObject(void* obj) {
     struct user_obj_header* hdr = obj;
     KeAcquireSpinlock(&hdr->lock);
 }
 
-void KeUnlockUserObject(void* obj) {
+export void KeUnlockUserObject(void* obj) {
     struct user_obj_header* hdr = obj;
     KeReleaseSpinlock(&hdr->lock);
 }

@@ -5,6 +5,14 @@
 #include <stdbool.h>
 
 /*
+ * Lets whoever includes this decorate the definitions below. The kernel build
+ * sets it to `export`, so that other kernel modules can link against them.
+ */
+#ifndef CMN_STRING_ATTR
+#define CMN_STRING_ATTR
+#endif
+
+/*
  * memcpy and memset call the GCC's 'builtin' version of the function.
  * These may be optimised for the target platform, which increases efficiency
  * without resorting to writing custom versions for each architecture.
@@ -46,7 +54,7 @@ void* memcpy(void* restrict dst, const void* restrict src, size_t n)
 }
 */
 
-int strcmp(const char* s1, const char* s2)
+CMN_STRING_ATTR int strcmp(const char* s1, const char* s2)
 {
 	while ((*s1) && (*s1 == *s2)) {
 		++s1;
@@ -56,7 +64,7 @@ int strcmp(const char* s1, const char* s2)
 	return (*(uint8_t*) s1 - *(uint8_t*) s2);
 }
 
-char* strcpy(char* restrict dst, const char* restrict src)
+CMN_STRING_ATTR char* strcpy(char* restrict dst, const char* restrict src)
 {
 	char* ret = dst;
 
@@ -67,7 +75,7 @@ char* strcpy(char* restrict dst, const char* restrict src)
 	return ret;
 }
 
-size_t strlen(const char* str)
+CMN_STRING_ATTR size_t strlen(const char* str)
 {
 	size_t len = 0;
 	while (str[len]) {

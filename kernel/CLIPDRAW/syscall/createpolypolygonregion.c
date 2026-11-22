@@ -94,7 +94,7 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
     FreeHeap(xx);
     FreeHeap(yy);
     FreeHeap(cc);
-    return (size_t) RegionToUserRegion(rgn);
+    return (size_t) CdRegionToUserRegion(rgn);
 
 cleanup:
     FreeHeap(xx);

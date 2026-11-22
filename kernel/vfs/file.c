@@ -34,7 +34,7 @@ export struct file* KeCreateFile(
 	return file;
 }
 
-static void CleanupFile(void* _file) {
+static void KeCleanupFile(void* _file) {
     struct file* file = _file;
     
     if (IFTODT(file->node->stat.st_mode) == DT_FIFO) {
@@ -47,5 +47,5 @@ static void CleanupFile(void* _file) {
 }
 
 void KeInitFile(void) {
-    KeRegisterObjectType(OBJTYPE_FILE, CleanupFile);
+    KeRegisterObjectType(OBJTYPE_FILE, KeCleanupFile);
 }

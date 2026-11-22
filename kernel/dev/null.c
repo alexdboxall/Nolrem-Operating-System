@@ -14,7 +14,7 @@
 #include <dirent.h>
 #include <aio.h>
 
-static pageable int ReadWrite(struct aio* aio) {
+static pageable int KeNullReadWrite(struct aio* aio) {
     struct transfer* io = &aio->transfer;
     io->offset = 0;
     io->address = ((uint8_t*) io->address) + io->length_remaining;
@@ -23,8 +23,8 @@ static pageable int ReadWrite(struct aio* aio) {
 }
 
 static const struct vnode_operations dev_ops = {
-    .read           = ReadWrite,
-    .write          = ReadWrite,
+    .read           = KeNullReadWrite,
+    .write          = KeNullReadWrite,
 };
 
 void KeInitNullDevice(void) {

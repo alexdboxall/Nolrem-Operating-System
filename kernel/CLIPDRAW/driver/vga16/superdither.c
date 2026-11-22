@@ -2,7 +2,7 @@
 #include <string.h>
 #include "../../api.h"
 
-static void AddColour(uint32_t pseduo_valid, int weight, int* weights, bool recursive) {
+static void VgaAddColour(uint32_t pseduo_valid, int weight, int* weights, bool recursive) {
     uint8_t r = GetRed(pseduo_valid);
     uint8_t g = GetGreen(pseduo_valid);
     uint8_t b = GetBlue(pseduo_valid);
@@ -21,21 +21,21 @@ static void AddColour(uint32_t pseduo_valid, int weight, int* weights, bool recu
     } else if (!recursive) {    // not needed if inputs valid, but prevent malformed inputs from locking us up
         uint32_t lighter = ((r == 0x80 ? 0xFF : r) << 16) | ((g == 0x80 ? 0xFF : g) << 8) | (b == 0x80 ? 0xFF : b);
         uint32_t darker  = ((r == 0x80 ? 0x00 : r) << 16) | ((g == 0x80 ? 0x00 : g) << 8) | (b == 0x80 ? 0x00 : b);
-        AddColour(darker , weight - weight / 4, weights, true);
-        AddColour(lighter, weight / 4         , weights, true);
+        VgaAddColour(darker , weight - weight / 4, weights, true);
+        VgaAddColour(lighter, weight / 4         , weights, true);
     }
 }
 
-static int CorrectGamma128(int x) {
+static int VgaCorrectGamma128(int x) {
     return (x * x) >> 7;
 }
 
-static int CorrectGamma64(int x) {
+static int VgaCorrectGamma64(int x) {
     return (x * x) >> 6;
 }
 
 // weight out is between 0-128 inclusive, where 0 means 'all A' and 128 is 'all B'
-static void GetColourForChannel(uint8_t channel, uint32_t* a, uint32_t* b, int* weight, int shift) {
+static void VgaGetColourForChannel(uint8_t channel, uint32_t* a, uint32_t* b, int* weight, int shift) {
     if (channel == 0x00 || channel == 0xFF || channel == 0x80) {
         *a = channel << shift;
         *b = channel << shift;
@@ -43,15 +43,15 @@ static void GetColourForChannel(uint8_t channel, uint32_t* a, uint32_t* b, int* 
     } else if (channel < 0x80) {
         *a = 0x00 << shift;
         *b = 0x80 << shift;
-        *weight = CorrectGamma128(channel + 1);
+        *weight = VgaCorrectGamma128(channel + 1);
     } else {
         *a = 0x80 << shift;
         *b = 0xFF << shift;
-        *weight = CorrectGamma128(channel - 0x80 + 1);
+        *weight = VgaCorrectGamma128(channel - 0x80 + 1);
     }
 }
 
-static void FillDitherUsingWeights(int* vga_weights, uint8_t* outbuffer) {
+static void VgaFillDitherUsingWeights(int* vga_weights, uint8_t* outbuffer) {
     const int bayer_inverse[64] = {
         0,  36, 32, 4,  18, 54, 50, 22, 16, 52, 48, 20, 2,  38, 34, 6,
         9,  45, 41, 13, 27, 63, 59, 31, 25, 61, 57, 29, 11, 47, 43, 15,
@@ -91,7 +91,7 @@ static void FillDitherUsingWeights(int* vga_weights, uint8_t* outbuffer) {
     }
 }
 
-static void GetGreyDither(uint8_t channel, uint8_t* outbuffer) {
+static void VgaGetGreyDither(uint8_t channel, uint8_t* outbuffer) {
     int weights[16] = {0};
 
     if (channel == 0xFF) {
@@ -111,22 +111,22 @@ static void GetGreyDither(uint8_t channel, uint8_t* outbuffer) {
         return;
 
     } else if (channel > 0xC0) {
-        weights[7]  = 0x40 - CorrectGamma64((channel - 0xC0));
-        weights[15] = CorrectGamma64(channel - 0xC0 + 1);
+        weights[7]  = 0x40 - VgaCorrectGamma64((channel - 0xC0));
+        weights[15] = VgaCorrectGamma64(channel - 0xC0 + 1);
 
     } else if (channel > 0x80) {
-        weights[7] = CorrectGamma64(channel - 0x80);
-        weights[8] = 0x40 - CorrectGamma64((channel - 0x80));
+        weights[7] = VgaCorrectGamma64(channel - 0x80);
+        weights[8] = 0x40 - VgaCorrectGamma64((channel - 0x80));
 
     } else {
-        weights[8] = CorrectGamma64(channel / 2);
-        weights[0] = 0x40 - CorrectGamma64(channel / 2);
+        weights[8] = VgaCorrectGamma64(channel / 2);
+        weights[0] = 0x40 - VgaCorrectGamma64(channel / 2);
     }
 
-    FillDitherUsingWeights(weights, outbuffer);
+    VgaFillDitherUsingWeights(weights, outbuffer);
 }
 
-void NormaliseWeights(int* weights) // in/out, 16 entries, must sum to 64
+void VgaNormaliseWeights(int* weights) // in/out, 16 entries, must sum to 64
 {
     const int SHIFT = 15;              // 2^15 = 32768; 2,097,152 / 32768 = 64
     const int MASK  = (1 << SHIFT) - 1;
@@ -158,7 +158,7 @@ void NormaliseWeights(int* weights) // in/out, 16 entries, must sum to 64
 }
 
 // outbuffer just has 8x8 pixel grid, not planar grid
-export void GetDither(uint32_t col, uint8_t* outbuffer) {
+export void VgaGetDither(uint32_t col, uint8_t* outbuffer) {
     int vga_weights[16] = {0};
     uint8_t r = GetRed(col);
     uint8_t g = GetGreen(col);
@@ -166,7 +166,7 @@ export void GetDither(uint32_t col, uint8_t* outbuffer) {
 
     bool grey = (r == g && g == bl);
     if (grey) {
-        GetGreyDither(r, outbuffer);
+        VgaGetGreyDither(r, outbuffer);
         return;
     }
 
@@ -179,26 +179,26 @@ export void GetDither(uint32_t col, uint8_t* outbuffer) {
     int weight;
     int pseduo_weights[16] = {0};
 
-    GetColourForChannel(r, &a, &b, &weight, 16);
+    VgaGetColourForChannel(r, &a, &b, &weight, 16);
     for (int i = 0; i < 8; ++i) {
         pseduo_colours[i] |= (i & 1) ? b : a;
         pseduo_weights[i]  = (i & 1) ? weight : (128 - weight);
     }
-    GetColourForChannel(g, &a, &b, &weight, 8);
+    VgaGetColourForChannel(g, &a, &b, &weight, 8);
     for (int i = 0; i < 8; ++i) {
         pseduo_colours[i] |= (i & 2) ? b : a;
         pseduo_weights[i] *= (i & 2) ? weight : (128 - weight);
     }
-    GetColourForChannel(bl, &a, &b, &weight, 0);
+    VgaGetColourForChannel(bl, &a, &b, &weight, 0);
     for (int i = 0; i < 8; ++i) {
         pseduo_colours[i] |= (i & 4) ? b : a;
         pseduo_weights[i] *= (i & 4) ? weight : (128 - weight);
     }
 
     for (int i = 0; i < 8; ++i) {
-        AddColour(pseduo_colours[i], pseduo_weights[i], vga_weights, false);
+        VgaAddColour(pseduo_colours[i], pseduo_weights[i], vga_weights, false);
     }
 
-    NormaliseWeights(vga_weights);
-    FillDitherUsingWeights(vga_weights, outbuffer);
+    VgaNormaliseWeights(vga_weights);
+    VgaFillDitherUsingWeights(vga_weights, outbuffer);
 }

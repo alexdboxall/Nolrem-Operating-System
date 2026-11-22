@@ -22,7 +22,7 @@ export bool CdIsRegionEmpty(struct region rgn) {
     return rgn.data == NULL || ((struct region_data*) rgn.data)->num_bands == 0;
 }
 
-static int ExpandToFit(struct region* rgn, int extra_bytes) {
+static int CdExpandToFit(struct region* rgn, int extra_bytes) {
     size_t new_used = rgn->used_length + extra_bytes;
     size_t new_alloc = rgn->allocated_length;
 
@@ -51,7 +51,7 @@ static int ExpandToFit(struct region* rgn, int extra_bytes) {
     return 0;
 }
 
-int BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt) {
+int CdBuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt) {
     ctxt->prev_y1 = y0;
     ctxt->current_points = NULL;
 
@@ -73,12 +73,12 @@ int BuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* 
 }
 
 /*
- * Throws away a half-built region: call this if AddScanline or FinishRegion
+ * Throws away a half-built region: call this if CdAddScanline or CdFinishRegion
  * fails (or if you decide to give up on a build for any other reason). Frees
  * everything the builder owns and leaves `rgn` as NULL/0. Safe to call on a
- * builder whose BuildNewRegion failed.
+ * builder whose CdBuildNewRegion failed.
  */
-void AbortNewRegion(struct region* rgn, struct region_build_context* ctxt) {
+void CdAbortNewRegion(struct region* rgn, struct region_build_context* ctxt) {
     if (ctxt->current_points != NULL) {
         FreeHeap(ctxt->current_points);
         ctxt->current_points = NULL;
@@ -91,8 +91,8 @@ void AbortNewRegion(struct region* rgn, struct region_build_context* ctxt) {
     rgn->used_length = 0;
 }
 
-int FinishRegion(struct region* rgn, struct region_build_context* ctxt) {
-    int err = AddScanline(rgn, ctxt, -1, NULL, false);
+int CdFinishRegion(struct region* rgn, struct region_build_context* ctxt) {
+    int err = CdAddScanline(rgn, ctxt, -1, NULL, false);
     if (err != 0) {
         return err;
     }
@@ -117,7 +117,7 @@ int FinishRegion(struct region* rgn, struct region_build_context* ctxt) {
  * representation. This includes choosing the right encoding mode at all cases
  * (e.g. if you can use small/compact mode, you must!).
  */
-int AddScanline(
+int CdAddScanline(
     struct region* rgn,
     struct region_build_context* ctxt,
     int num_spans,
@@ -263,7 +263,7 @@ int AddScanline(
                 /* Same as the previous small output! */
 
                 if (ctxt->count0x7F == 0) {
-                    if (ExpandToFit(rgn, 1) != 0) {
+                    if (CdExpandToFit(rgn, 1) != 0) {
                         return ENOMEM;
                     }
                     ctxt->count0x7F = 1;
@@ -272,7 +272,7 @@ int AddScanline(
                     ptr[ctxt->current_ptr++] = 0x7F;
 
                 } else if (ctxt->count0x7F == 1) {
-                    if (ExpandToFit(rgn, 1) != 0) {
+                    if (CdExpandToFit(rgn, 1) != 0) {
                         return ENOMEM;
                     }
                     ctxt->count0x7F++;
@@ -292,7 +292,7 @@ int AddScanline(
                 }
             
             } else {
-                if (ExpandToFit(rgn, 1 + ctxt->current_spans) != 0) {
+                if (CdExpandToFit(rgn, 1 + ctxt->current_spans) != 0) {
                     return ENOMEM;
                 }
             
@@ -342,7 +342,7 @@ regular_mode:
                 }
             }
 
-            if (ExpandToFit(rgn, 3 + ctxt->current_spans * (compact_spans ? 2 : 4) + (compact_spans ? 1 : 0)) != 0) {
+            if (CdExpandToFit(rgn, 3 + ctxt->current_spans * (compact_spans ? 2 : 4) + (compact_spans ? 1 : 0)) != 0) {
                 return ENOMEM;
             }
             ptr = ((struct region_data*) rgn->data)->band_data;
@@ -356,7 +356,7 @@ regular_mode:
         } else {
             /* Full regular mode */
 
-            if (ExpandToFit(rgn, 6 + ctxt->current_spans * 4) != 0) {
+            if (CdExpandToFit(rgn, 6 + ctxt->current_spans * 4) != 0) {
                 return ENOMEM;
             }
             ptr = ((struct region_data*) rgn->data)->band_data;
@@ -418,13 +418,13 @@ done_encoding:
 
     /*
      * NULL it straight away, so that if the allocation below fails the builder
-     * doesn't hold a dangling pointer (AbortNewRegion would double free it).
+     * doesn't hold a dangling pointer (CdAbortNewRegion would double free it).
      */
     FreeHeap(ctxt->current_points);
     ctxt->current_points = NULL;
 
     /* 
-     * Used by FinishRegion to flush out the data.
+     * Used by CdFinishRegion to flush out the data.
      */
     if (num_spans == -1) {
         return 0;
@@ -480,13 +480,13 @@ struct region_iteration_context {
     bool done;
     uint8_t* prev_small_mode;       // caller must provide as must be stable memory address across calls
                                     // (we have cx.ptr pointing to within it, so can't be on a local frame
-                                    //  to IterateRegionCoroutine like it would be if we kept it in cx)
+                                    //  to CdIterateRegionCoroutine like it would be if we kept it in cx)
                                     // must be 16 bytes long of memory behind it, and must outlive the
                                     // context. A local array in whoever owns the context is perfect:
                                     // that way creating a context can't fail.
 };
 
-static struct region_iteration_context CreateIterationContext(struct region* rgn, uint8_t* prev_small_mode_buffer) {
+static struct region_iteration_context CdCreateIterationContext(struct region* rgn, uint8_t* prev_small_mode_buffer) {
     struct region_iteration_context ctxt;
     ctxt.num_repeats = 0;
     ctxt.used0x7E = false;
@@ -505,7 +505,7 @@ struct iterate_region_thunk_context {
     int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel);
 };
 
-static bool IterateRegionThunk(int y0, int y1, int x0, int x1, int* retv, void* context) {
+static bool CdIterateRegionThunk(int y0, int y1, int x0, int x1, int* retv, void* context) {
     struct iterate_region_thunk_context* thunk_context = (struct iterate_region_thunk_context*) context;
     struct rect r = (struct rect) {
         .x = (int) x0,
@@ -518,7 +518,7 @@ static bool IterateRegionThunk(int y0, int y1, int x0, int x1, int* retv, void* 
     return cancel;
 }
 
-int IterateRegion(
+int CdIterateRegion(
     struct region rgn, 
     int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel), 
     void* context,
@@ -534,11 +534,11 @@ int IterateRegion(
      * as stable as the context needs it to be. No allocation, so no failure.
      */
     uint8_t prev_small_mode[16];
-    struct region_iteration_context ctxt = CreateIterationContext(&rgn, prev_small_mode);
-    return IterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, IterateRegionThunk, NULL);
+    struct region_iteration_context ctxt = CdCreateIterationContext(&rgn, prev_small_mode);
+    return CdIterateRegionCoroutine(rgn, init_rv, (void*)&thunk_context, &ctxt, NULL, CdIterateRegionThunk, NULL);
 }
 
-int IterateRegionCoroutine(
+int CdIterateRegionCoroutine(
     struct region rgn,
     int retv,
     void* context,
@@ -570,8 +570,6 @@ int IterateRegionCoroutine(
     struct region_iteration_context cx = *ctxt;
 
     for (int i = cx.i; i < num_bands; ++i, cx.i++, cx.done_band_callback = false) {
-        // TODO: got to skip all this part if already done band callback
-
         if (!cx.done_band_callback) {
             cx.start_ptr = cx.ptr;
             cx.ctrl_byte = *cx.ptr++;
@@ -742,7 +740,7 @@ int IterateRegionCoroutine(
     return retv;
 }
 
-struct region CdCopyRegion(struct region rgn) {
+export struct region CdCopyRegion(struct region rgn) {
     /* Copying a bad region gives a bad region. */
     if (CdIsRegionBad(rgn)) {
         return CdBadRegion();
@@ -775,7 +773,7 @@ export void CdFreeRegion(struct region rgn) {
 }
 
 
-static bool RegionCombinationEdgeCallback(int y0, int y1, int* retv, void* context) {
+static bool CdRegionCombinationEdgeCallback(int y0, int y1, int* retv, void* context) {
     int16_t* y_edges = (int16_t*) context;
 
     y_edges[0] = (int16_t) y0;
@@ -785,7 +783,7 @@ static bool RegionCombinationEdgeCallback(int y0, int y1, int* retv, void* conte
     return true;                // Stop here!
 }
 
-static bool NopCallback(int y0, int y1, int* retv, void* context) {
+static bool CdNopCallback(int y0, int y1, int* retv, void* context) {
     (void) y0;
     (void) y1;
     (void) retv;
@@ -796,7 +794,7 @@ static bool NopCallback(int y0, int y1, int* retv, void* context) {
 
 #include <log.h>
 
-static bool RectCallback(int y0, int y1, int x0, int x1, int* retv, void* context) {
+static bool CdRectCallback(int y0, int y1, int x0, int x1, int* retv, void* context) {
     (void) y0;
     (void) y1;
 
@@ -808,7 +806,7 @@ static bool RectCallback(int y0, int y1, int x0, int x1, int* retv, void* contex
     return true;
 }
 
-static bool CheckRegionCondition(int mode, bool a, bool b) {
+static bool CdCheckRegionCondition(int mode, bool a, bool b) {
     switch (mode) {
         case REGION_COMBINE_INTERSECT:  return a && b;
         case REGION_COMBINE_UNION:      return a || b;
@@ -881,7 +879,7 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
     struct region_build_context build_context = {0};
     struct region out_rgn = {0};
 
-    /* Backing storage for the iteration contexts. See CreateIterationContext. */
+    /* Backing storage for the iteration contexts. See CdCreateIterationContext. */
     uint8_t a_small_mode[16];
     uint8_t b_small_mode[16];
     struct region_iteration_context a_ctxt;
@@ -899,8 +897,8 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         goto fail;
     }
 
-    a_ctxt = CreateIterationContext(&a, a_small_mode);
-    b_ctxt = CreateIterationContext(&b, b_small_mode);
+    a_ctxt = CdCreateIterationContext(&a, a_small_mode);
+    b_ctxt = CdCreateIterationContext(&b, b_small_mode);
 
     int16_t a_edges_buffer[2];
     int16_t b_edges_buffer[2];
@@ -922,7 +920,7 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
 
         if (num_a_edges_buffer == 0 && !a_ctxt.done) {
             int16_t probe[2];
-            int a_consumed = IterateRegionCoroutine(a, 0, probe, &a_ctxt, RegionCombinationEdgeCallback, NULL, NULL);
+            int a_consumed = CdIterateRegionCoroutine(a, 0, probe, &a_ctxt, CdRegionCombinationEdgeCallback, NULL, NULL);
             if (a_consumed == 2) {
                 num_a_edges_buffer = 2;
                 memcpy(a_edges_buffer, probe, sizeof(a_edges_buffer));
@@ -931,14 +929,14 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         if (num_b_edges_buffer == 0 && !b_ctxt.done) {
             // here's the plan. (?)
             // if we detect that Y axis is negated, we'll basically swap 
-            // out `RegionCombinationEdgeCallback` for another thunk callback
+            // out `CdRegionCombinationEdgeCallback` for another thunk callback
             // and we'll, before this loop even starts, go through all of `b`
             // using the 'normal' routine to copy it into an allocated buffer.
             // we'll then invert that buffer, and then the thunk routine can
             // just the buffer data instead of the data from the actual coroutine 
             
             int16_t probe[2];
-            int b_consumed = IterateRegionCoroutine(b, 0, probe, &b_ctxt, RegionCombinationEdgeCallback, NULL, scale_dc);
+            int b_consumed = CdIterateRegionCoroutine(b, 0, probe, &b_ctxt, CdRegionCombinationEdgeCallback, NULL, scale_dc);
             if (b_consumed == 2) {
                 num_b_edges_buffer = 2;
                 memcpy(b_edges_buffer, probe, sizeof(b_edges_buffer));
@@ -973,8 +971,8 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         }
     }
 
-    a_ctxt = CreateIterationContext(&a, a_small_mode);
-    b_ctxt = CreateIterationContext(&b, b_small_mode);
+    a_ctxt = CdCreateIterationContext(&a, a_small_mode);
+    b_ctxt = CdCreateIterationContext(&b, b_small_mode);
 
     /* 
      * For each adjacent pair of Y edges, find the corresponding band in both
@@ -982,7 +980,7 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
      * them to the output region.
      */
 
-    if (BuildNewRegion(&out_rgn, y_edges[0], &build_context) != 0) {
+    if (CdBuildNewRegion(&out_rgn, y_edges[0], &build_context) != 0) {
         goto fail;
     }
 
@@ -990,8 +988,8 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
      * Clear off the initial band callbacks, we don't need them. The y0, y1
      * values from this are used though in the initial loading of x values.
      */
-    IterateRegionCoroutine(a, 0, NULL, &a_ctxt, NopCallback, NULL, NULL);
-    IterateRegionCoroutine(b, 0, NULL, &b_ctxt, NopCallback, NULL, scale_dc);
+    CdIterateRegionCoroutine(a, 0, NULL, &a_ctxt, CdNopCallback, NULL, NULL);
+    CdIterateRegionCoroutine(b, 0, NULL, &b_ctxt, CdNopCallback, NULL, scale_dc);
 
     /*
      * These represent the ranges in which the stored (x0, x1) data corresponds.
@@ -1030,11 +1028,11 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
                 /* 
                  * Read the rectangles for the current band into an array.
                  * Stop when we see the next band. The YieldCallback doesn't 
-                 * modify the return value, but the RectCallback does.
+                 * modify the return value, but the CdRectCallback does.
                  */
                 int16_t x[2];
-                int retv = IterateRegionCoroutine(
-                    a, 0, (void*) x, &a_ctxt, NopCallback, RectCallback, NULL
+                int retv = CdIterateRegionCoroutine(
+                    a, 0, (void*) x, &a_ctxt, CdNopCallback, CdRectCallback, NULL
                 );
                 if (retv == 0) {
                     /* This was a new band being seen. */
@@ -1061,8 +1059,8 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
 
             while (true) {
                 int16_t x[2];
-                int retv = IterateRegionCoroutine(
-                    b, 0, (void*) x, &b_ctxt, NopCallback, RectCallback, scale_dc
+                int retv = CdIterateRegionCoroutine(
+                    b, 0, (void*) x, &b_ctxt, CdNopCallback, CdRectCallback, scale_dc
                 );
                 if (retv == 0) {
                     break;
@@ -1135,7 +1133,7 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
                 active_b = !active_b;
             }
 
-            bool should_be_active = CheckRegionCondition(mode, active_a, active_b);
+            bool should_be_active = CdCheckRegionCondition(mode, active_a, active_b);
 
             if (should_be_active && !in_span) {
                 out_spans[out_count++] = cur_x;
@@ -1152,7 +1150,7 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         }
 
         for (int i = 0; i < (y1 - y0); ++i) {
-            if (AddScanline(&out_rgn, &build_context, out_count / 2, out_spans, i != 0) != 0) {
+            if (CdAddScanline(&out_rgn, &build_context, out_count / 2, out_spans, i != 0) != 0) {
                 goto fail;
             }
         }
@@ -1173,7 +1171,7 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
         b_x_points = NULL;
     }
 
-    if (FinishRegion(&out_rgn, &build_context) != 0) {
+    if (CdFinishRegion(&out_rgn, &build_context) != 0) {
         goto fail;
     }
 
@@ -1184,7 +1182,7 @@ fail:
     if (a_x_points != NULL) FreeHeap(a_x_points);
     if (b_x_points != NULL) FreeHeap(b_x_points);
     if (out_spans != NULL)  FreeHeap(out_spans);
-    AbortNewRegion(&out_rgn, &build_context);
+    CdAbortNewRegion(&out_rgn, &build_context);
     return CdBadRegion();
 }
 
@@ -1192,14 +1190,14 @@ export struct region CdGetRegionCombination(int mode, struct region a, struct re
     return CdGetRegionCombinationEx(mode, a, b, NULL);
 }
 
-int IterateRegion(
+int CdIterateRegion(
     struct region rgn, 
     int (*rect_callback)(struct rect r, void* context, int rv, bool* cancel), 
     void* context,
     int init_rv
 );
 
-static int GetRegionBoundsCallback(struct rect r, void* ctxt, int rv, bool* cancel) {
+static int CdGetRegionBoundsCallback(struct rect r, void* ctxt, int rv, bool* cancel) {
     // We treat `w` as x2 and `h` as y2.
     struct rect* bound_rect = ctxt;
     if (r.y < bound_rect->y) {
@@ -1231,7 +1229,7 @@ export struct rect CdGetRegionBounds(struct region rgn) {
     r.y = INT16_MAX;
     r.w = INT16_MIN;
     r.h = INT16_MIN;
-    IterateRegion(rgn, GetRegionBoundsCallback, &r, 0);
+    CdIterateRegion(rgn, CdGetRegionBoundsCallback, &r, 0);
 
     // Correct the w/h from x2/y2
     r.w -= r.x;
@@ -1271,7 +1269,7 @@ export int CdTranslateRegion(struct region* rgn, int offx, int offy) {
 
 export struct region CdCreateRectRegion(int x, int y, int width, int height) {
     /* 
-     * This function will bypass AddScanline, just because this one needs to be 
+     * This function will bypass CdAddScanline, just because this one needs to be 
      * fast! (And it's easy to write!).
      * 
      * Luckily, all regions must start with their first band in regular mode.

@@ -25,7 +25,7 @@ struct vnode_data {
     struct fat_file file;
 };
 
-static int CheckOpen(struct vnode* node, int flags) {
+static int FatVnodeCheckOpen(struct vnode* node, int flags) {
     struct vnode_data* data = node->data;
 
     if (data->directory && ((flags & O_ACCMODE) == O_WRONLY || (flags & O_ACCMODE) == O_RDWR)) {
@@ -35,11 +35,11 @@ static int CheckOpen(struct vnode* node, int flags) {
     return 0;
 }
 
-static int Ioctl(struct vnode*, int, void*) {
+static int FatVnodeIoctl(struct vnode*, int, void*) {
     return EINVAL;
 }
 
-static int Read(struct aio* aio) { 
+static int FatVnodeRead(struct aio* aio) { 
     assert(aio->operation == AIO_OP_READ);
 
     struct vnode* node = aio->node;   
@@ -51,7 +51,7 @@ static int Read(struct aio* aio) {
     }
 }
 
-static int Write(struct aio* aio) {
+static int FatVnodeWrite(struct aio* aio) {
     assert(aio->operation == AIO_OP_WRITE);
 
     struct vnode* node = aio->node;
@@ -63,7 +63,7 @@ static int Write(struct aio* aio) {
     return FatWriteFile(data->fs, node, &data->file, aio);
 }
 
-static int Truncate(struct aio* aio) {
+static int FatVnodeTruncate(struct aio* aio) {
     assert(aio->operation == AIO_OP_TRUNCATE);
 
     struct vnode* node = aio->node;
@@ -75,12 +75,12 @@ static int Truncate(struct aio* aio) {
     return FatTruncateFile(data->fs, node, &data->file, aio);
 }
 
-static struct vnode* CreateFatVnode(uint32_t ino, bool directory, uint32_t size, dev_t dev);
+static struct vnode* FatCreateVnode(uint32_t ino, bool directory, uint32_t size, dev_t dev);
 
 /*
 * Makes the vnode for something that was found in (or added to) a directory.
 */
-static int CreateChildVnode(struct vnode* parent, const struct fat_node_info* info, struct vnode** out) {
+static int FatCreateChildVnode(struct vnode* parent, const struct fat_node_info* info, struct vnode** out) {
     struct vnode_data* parent_data = parent->data;
 
     struct vnode_data* child_data = AllocHeap(sizeof(struct vnode_data));
@@ -94,7 +94,7 @@ static int CreateChildVnode(struct vnode* parent, const struct fat_node_info* in
     child_data->file.size = info->size;
     child_data->file.entry_byte = info->entry_byte;
 
-    struct vnode* child_node = CreateFatVnode(info->ino, info->directory, info->size, parent->stat.st_dev);
+    struct vnode* child_node = FatCreateVnode(info->ino, info->directory, info->size, parent->stat.st_dev);
     if (child_node == NULL) {
         FreeHeap(child_data);
         return ENOMEM;
@@ -110,7 +110,7 @@ static int CreateChildVnode(struct vnode* parent, const struct fat_node_info* in
 * Creates an empty file. Only names that fit in "8.3" can be used (EINVAL
 * otherwise).
 */
-static int Create(struct vnode* node, struct vnode** out, const char* name, int, mode_t) {
+static int FatVnodeCreate(struct vnode* node, struct vnode** out, const char* name, int, mode_t) {
     struct vnode_data* data = node->data;
     if (!data->directory) {
         return ENOTDIR;
@@ -122,10 +122,10 @@ static int Create(struct vnode* node, struct vnode** out, const char* name, int,
         return status;
     }
 
-    return CreateChildVnode(node, &info, out);
+    return FatCreateChildVnode(node, &info, out);
 }
 
-static int Follow(struct vnode* node, struct vnode** out, const char* name) {
+static int FatVnodeFollow(struct vnode* node, struct vnode** out, const char* name) {
     struct vnode_data* data = node->data;
     if (!data->directory) {
         return ENOTDIR;
@@ -147,20 +147,20 @@ static int Follow(struct vnode* node, struct vnode** out, const char* name) {
         return 0;
     }
 
-    return CreateChildVnode(node, &info, out);
+    return FatCreateChildVnode(node, &info, out);
 }
 
 static const struct vnode_operations dev_ops = {
-    .check_open     = CheckOpen,
-    .ioctl          = Ioctl,
-    .read           = Read,
-    .write          = Write,
-    .truncate       = Truncate,
-    .create         = Create,
-    .follow         = Follow,
+    .check_open     = FatVnodeCheckOpen,
+    .ioctl          = FatVnodeIoctl,
+    .read           = FatVnodeRead,
+    .write          = FatVnodeWrite,
+    .truncate       = FatVnodeTruncate,
+    .create         = FatVnodeCreate,
+    .follow         = FatVnodeFollow,
 };
 
-static struct vnode* CreateFatVnode(uint32_t ino, bool directory, uint32_t size, dev_t dev) {
+static struct vnode* FatCreateVnode(uint32_t ino, bool directory, uint32_t size, dev_t dev) {
     /*
     * FAT has no permissions, so everything is accessible to everyone.
     */
@@ -203,13 +203,13 @@ int FatMountCreator(struct file* raw_device, struct file** out) {
         return status;
     }
 
-    struct vnode* node = CreateFatVnode(FAT_ROOT_INO, true, 0, raw_device->node->stat.st_dev);
+    struct vnode* node = FatCreateVnode(FAT_ROOT_INO, true, 0, raw_device->node->stat.st_dev);
     node->data = data;
 
     *out = KeCreateFile(node, 0, 0, true, false);
     return 0;
 }
 
-void InitFat(void) {
+void FatInit(void) {
     KeRegisterFilesystem("fat", FatMountCreator);
 }

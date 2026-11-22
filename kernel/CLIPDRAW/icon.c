@@ -68,12 +68,12 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     return ico;
 
 fail_after_open:
-    /* CleanupIcon closes the Omf and frees tf. */
+    /* CdCleanupIcon closes the Omf and frees tf. */
     KeDerefObject(ico);
     return NULL;
 }
 
-static void CleanupIcon(void* _ico) {
+static void CdCleanupIcon(void* _ico) {
     struct icon* ico = _ico;
     if (ico == NULL) {
         return;
@@ -86,5 +86,5 @@ static void CleanupIcon(void* _ico) {
 }
 
 void CdInitIconSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_ICON, CleanupIcon);
+    KeRegisterUserObjectType(UOBJ_ICON, CdCleanupIcon);
 }

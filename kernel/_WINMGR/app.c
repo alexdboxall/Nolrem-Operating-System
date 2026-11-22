@@ -168,7 +168,7 @@ struct app* WmCreateApp(void) {
     return app;
 }
 
-static void CleanupApp(void* _app) {
+static void WmCleanupApp(void* _app) {
     struct app* app = _app;
     if (app == NULL) {
         return;
@@ -178,5 +178,5 @@ static void CleanupApp(void* _app) {
 }
 
 void WmInitAppSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_APP, CleanupApp);
+    KeRegisterUserObjectType(UOBJ_APP, WmCleanupApp);
 }

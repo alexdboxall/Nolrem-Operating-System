@@ -5,15 +5,13 @@
 #include <heap.h>
 #include <string.h>
 
-static void CleanupPen(void* _pn) { 
+static void CdCleanupPen(void* _pn) { 
     struct pen* pn = _pn;
     if (pn == NULL) {
         return;
     }
     FreeHeap(pn);
 }
-
-// TODO: LOCKS!
 
 export struct pen* CdCreateCustomPen(colour_t colour, int width, int height, uint8_t* rows_bitmap) {
     if (height < 1 || height > 8 || width < 1 || width > 8) {
@@ -206,7 +204,7 @@ export bool CdIsStockPen(struct pen* pen) {
 void CdInitPenSubsystem(void) {
     uint8_t double_pattern[3] = {0xFF, 0x00, 0xFF};
 
-    KeRegisterUserObjectType(UOBJ_PEN, CleanupPen);
+    KeRegisterUserObjectType(UOBJ_PEN, CdCleanupPen);
     stock_pens[STOCK_PEN_BLACK_1] = CdCreateSolidPen(BlackColour(), 1);
     stock_pens[STOCK_PEN_BLACK_2] = CdCreateSolidPen(BlackColour(), 2);
     stock_pens[STOCK_PEN_BLACK_3] = CdCreateSolidPen(BlackColour(), 3);
@@ -221,5 +219,10 @@ void CdInitPenSubsystem(void) {
     stock_pens[STOCK_PEN_DOUBLE] = CdCreateCustomPen(
         BlackColour(), 8, 3, double_pattern
     );
+    for (int i = 0; i < _NUM_STOCK_PENS; ++i) {
+        if (stock_pens[i] != NULL) {
+            KeMarkUserObjectPermanent(stock_pens[i]);
+        }
+    }
 }
 

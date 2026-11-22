@@ -1,6 +1,6 @@
 #include <common.h>
 
-export pageable int IntegerSqrt(int x) {
+export pageable int CdIntegerSqrt(int x) {
     if (x <= 0) {
         return 0;
     }

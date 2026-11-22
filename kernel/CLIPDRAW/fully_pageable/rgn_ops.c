@@ -84,7 +84,7 @@ export pageable bool CdIsRegionEqual(struct region a, struct region b) {
     return equal;
 }
 
-static pageable int PointInRectCallback(struct rect r, void* context, int rv, bool* cancel) {
+static pageable int CdPointInRectCallback(struct rect r, void* context, int rv, bool* cancel) {
     (void) rv;
     struct point* target = (struct point*) context;
 
@@ -102,5 +102,5 @@ static pageable int PointInRectCallback(struct rect r, void* context, int rv, bo
 
 export pageable bool CdIsPointInRegion(struct region rgn, int x, int y) {
     struct point target = { x, y };
-    return IterateRegion(rgn, PointInRectCallback, &target, false);
+    return CdIterateRegion(rgn, CdPointInRectCallback, &target, false);
 }

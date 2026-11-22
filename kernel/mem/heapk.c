@@ -31,7 +31,7 @@ export void* KeAllocHeap(size_t bytes) {
     return retv;
 }
 
-void* KeAllocPermanentHeap(size_t bytes) {
+export void* KeAllocPermanentHeap(size_t bytes) {
     static size_t sum = 0;
     sum += bytes;
     KeLogPrintf("Alloc 0x%X bytes permanently... sum = 0x%X\n", bytes, sum);

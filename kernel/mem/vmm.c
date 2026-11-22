@@ -9,6 +9,7 @@
 #include <phys.h>
 #include <allocvirt.h>
 #include <panic.h>
+#include <harderror.h>
 #include <assert.h>
 #include <log.h>
 #include <heapex.h>
@@ -24,7 +25,7 @@
  */
 #define VMM_MAX_FAULT_RETRIES   16
 
-static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
+static struct page_origin* KeCreatePageOrigin(struct file* file, size_t file_offset,
                                             const struct virt_loader* loader,
                                             size_t phys, bool fixed);
 
@@ -86,7 +87,7 @@ void KeFreeVmmHeap(void* ptr) {
  *
  * Caller must hold vas->lock.
  */
-static struct virt_page** GetVirtualPageSlot(struct vas* vas, size_t virt, bool create) {
+static struct virt_page** KeGetVirtualPageSlot(struct vas* vas, size_t virt, bool create) {
     size_t index = virt / PAGE_SIZE;
 
     size_t level_3 = index % MAPPINGS_PER_LEVEL;
@@ -134,7 +135,7 @@ static struct virt_page** GetVirtualPageSlot(struct vas* vas, size_t virt, bool 
 }
 
 struct virt_page* KeGetVirtualPageFromVirt(struct vas* vas, size_t virt) {
-    struct virt_page** slot = GetVirtualPageSlot(vas, virt, false);
+    struct virt_page** slot = KeGetVirtualPageSlot(vas, virt, false);
     return slot == NULL ? NULL : *slot;
 }
 
@@ -202,7 +203,7 @@ void KeCreateInitialVas(void) {
  * 'loader' is copied into the origin (file pages only) and may be NULL, which
  * gives a zeroed loader, i.e. the default read and no unmap hook.
  */
-static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offset,
+static struct page_origin* KeCreatePageOrigin(struct file* file, size_t file_offset,
                                             const struct virt_loader* loader,
                                             size_t phys, bool fixed) {
 
@@ -230,7 +231,7 @@ static struct page_origin* CreatePageOrigin(struct file* file, size_t file_offse
     return po;
 }
 
-static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys, bool allow_user, struct file* file, size_t file_offset) {
+static void KeMarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys, bool allow_user, struct file* file, size_t file_offset) {
     struct virt_page* vp = KeAllocVmmHeap(sizeof(struct virt_page));
     struct vas* vas = KeGetKernelVas();
     KeInitObject(vp, OBJTYPE_PAGE_VIRT);
@@ -254,10 +255,10 @@ static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys
     KeLogPrintf("Page VIRT=0x%X, PHYS=0x%X is now discardable.\n", existing_virt, existing_phys);
     KeRefObject(vp);
     KeRefObject(vas);
-    pp->origin = CreatePageOrigin(file, file_offset, NULL, existing_phys, false);
+    pp->origin = KeCreatePageOrigin(file, file_offset, NULL, existing_phys, false);
     KeLogPrintf("Origin set!\n");
     KeLockVas(vp->vas);
-    struct virt_page** slot = GetVirtualPageSlot(vas, existing_virt, true);
+    struct virt_page** slot = KeGetVirtualPageSlot(vas, existing_virt, true);
     if (slot == NULL || *slot != NULL) {
         KePanic(PANIC_FUCK_ME);
     }
@@ -267,7 +268,7 @@ static void MarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys
 }
 
 void KeMarkPageableSegmentsDiscardable(void) {
-    (void) MarkKernelPageDiscardable;
+    (void) KeMarkKernelPageDiscardable;
 
     extern char __start_pageable[];
     extern char __end_pageable[];
@@ -284,11 +285,11 @@ void KeMarkPageableSegmentsDiscardable(void) {
     KeInitObject(dummy_file, OBJTYPE_FILE);
     for (size_t i = k_start_page; i < k_end_page; ++i) {
         // TODO: need a real file! And offset! To know where to reload them from!
-        MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, false, (void*) dummy_file, 0xCAFEBABE);
+        KeMarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, false, (void*) dummy_file, 0xCAFEBABE);
     }
     for (size_t i = u_start_page; i < u_end_page; ++i) {
         // TODO: need a real file! And offset! To know where to reload them from!
-        MarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, true, (void*) dummy_file, 0xCAFEBABE);
+        KeMarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, true, (void*) dummy_file, 0xCAFEBABE);
     }
 }
 
@@ -298,7 +299,7 @@ void KeMarkPageableSegmentsDiscardable(void) {
  * dedup machinery. Previously KeAllocFixedMemory() produced an origin that the
  * fault handler could never satisfy, and it spun on 'goto retry' forever.
  */
-static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
+static struct virt_page* KeCreateVirtPage(struct vas* vas, size_t virt, int flags,
                                         struct file* file, size_t file_offset,
                                         const struct virt_loader* loader,
                                         size_t phys, bool fixed) {
@@ -311,7 +312,7 @@ static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
         return NULL;
     }
 
-    struct page_origin* po = CreatePageOrigin(file, file_offset, loader, phys, fixed);
+    struct page_origin* po = KeCreatePageOrigin(file, file_offset, loader, phys, fixed);
     if (po == NULL) {
         KeFreeVmmHeap(vp);
         return NULL;
@@ -335,12 +336,12 @@ static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
 
     KeLockVas(vas);
 
-    struct virt_page** slot = GetVirtualPageSlot(vas, virt, true);
+    struct virt_page** slot = KeGetVirtualPageSlot(vas, virt, true);
 
     if (slot == NULL || *slot != NULL) {
         /* Unmappable address, out of heap, or something is already here. */
         KeUnlockVas(vas);
-        KeDerefObject(vp);        /* CleanupVirtPage drops the origin for us */
+        KeDerefObject(vp);        /* KeCleanupVirtPage drops the origin for us */
         return NULL;
     }
     *slot = vp;
@@ -353,10 +354,10 @@ static struct virt_page* CreateVirtPage(struct vas* vas, size_t virt, int flags,
  * safe on pages that have never been mapped in - i.e. the partial-failure
  * unwind below. A real unmap path has to evict from the phys_page first.
  */
-static void UnwindVirtPages(struct vas* vas, size_t base, size_t count) {
+static void KeUnwindVirtPages(struct vas* vas, size_t base, size_t count) {
     KeLockVas(vas);
     for (size_t i = 0; i < count; ++i) {
-        struct virt_page** slot = GetVirtualPageSlot(vas, base + i * PAGE_SIZE, false);
+        struct virt_page** slot = KeGetVirtualPageSlot(vas, base + i * PAGE_SIZE, false);
         if (slot == NULL || *slot == NULL) {
             continue;
         }
@@ -373,7 +374,7 @@ static void UnwindVirtPages(struct vas* vas, size_t base, size_t count) {
  * ever create a single virt_page. Everything past the first page faulted into
  * a NULL lookup.
  */
-static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys,
+static void* KeAllocMemoryRange(struct file* file, size_t file_offset, size_t phys,
                               size_t bytes, int flags,
                               const struct virt_loader* loader, bool fixed) {
     if (bytes == 0) {
@@ -389,7 +390,7 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
     }
 
     for (size_t i = 0; i < pages; ++i) {
-        struct virt_page* vp = CreateVirtPage(
+        struct virt_page* vp = KeCreateVirtPage(
             vas,
             base + i * PAGE_SIZE,
             flags,
@@ -400,7 +401,7 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
             fixed
         );
         if (vp == NULL) {
-            UnwindVirtPages(vas, base, i);
+            KeUnwindVirtPages(vas, base, i);
             KeFreeVirt(base, pages * PAGE_SIZE);
             return NULL;
         }
@@ -410,23 +411,23 @@ static void* AllocMemoryRange(struct file* file, size_t file_offset, size_t phys
 }
 
 export void* KeAllocFixedMemory(size_t phys, size_t bytes, int flags) {
-    return AllocMemoryRange(NULL, 0, phys, bytes, flags, NULL, true);
+    return KeAllocMemoryRange(NULL, 0, phys, bytes, flags, NULL, true);
 }
 
 export void* KeAllocAnonMemory(size_t bytes, int flags) {
-    return AllocMemoryRange(NULL, 0, 0, bytes, flags, NULL, false);
+    return KeAllocMemoryRange(NULL, 0, 0, bytes, flags, NULL, false);
 }
 
 export void* KeAllocFileMemory(struct file* file, size_t file_offset, size_t bytes,
                              int flags, const struct virt_loader* loader) {
-    return AllocMemoryRange(file, file_offset, 0, bytes, flags, loader, false);
+    return KeAllocMemoryRange(file, file_offset, 0, bytes, flags, loader, false);
 }
 
-static void SynchroniseVirt(struct virt_page* vp) {
+static void KeSynchroniseVirt(struct virt_page* vp) {
     ArchSyncVirt(vp->vas, vp);
 }
 
-static void CleanupPageOrigin(void* _po) {
+static void KeCleanupPageOrigin(void* _po) {
     struct page_origin* po = _po;
     if (po->is_file) {
         KeDerefObject(po->file);
@@ -435,7 +436,7 @@ static void CleanupPageOrigin(void* _po) {
     KeFreeVmmHeap(po);
 }
 
-static void CleanupVas(void* _vas) {
+static void KeCleanupVas(void* _vas) {
     struct vas* vas = _vas;
 
     /*
@@ -445,7 +446,7 @@ static void CleanupVas(void* _vas) {
      * reference (deliberately - see vmm.h), so this cannot simply free the
      * tables. Every page has to be evicted from its phys_page (dropping the
      * phys_page's references to both the vas and the vp) BEFORE the mapping
-     * tables go away, or SynchroniseVirt() will follow vp->vas into freed
+     * tables go away, or KeSynchroniseVirt() will follow vp->vas into freed
      * memory. Also needs to free: both intermediate table levels, ->mappings,
      * ->lock, ->va, and the arch_data ArchInitVas() set up.
      */
@@ -453,7 +454,7 @@ static void CleanupVas(void* _vas) {
     FreeHeap(vas);
 }
 
-static void CleanupVirtPage(void* _vp) {
+static void KeCleanupVirtPage(void* _vp) {
     struct virt_page* vp = _vp;
 
     /*
@@ -470,9 +471,9 @@ static void CleanupVirtPage(void* _vp) {
 }
 
 void KeInitVmm(void) {
-    KeRegisterObjectType(OBJTYPE_PAGE_ORIGIN, CleanupPageOrigin);
-    KeRegisterObjectType(OBJTYPE_VAS, CleanupVas);
-    KeRegisterObjectType(OBJTYPE_PAGE_VIRT, CleanupVirtPage);
+    KeRegisterObjectType(OBJTYPE_PAGE_ORIGIN, KeCleanupPageOrigin);
+    KeRegisterObjectType(OBJTYPE_VAS, KeCleanupVas);
+    KeRegisterObjectType(OBJTYPE_PAGE_VIRT, KeCleanupVirtPage);
     KeInitSpinlock(&vmm_heap_lock);
     InitHeapEx(&vmm_special_heap, VmmSpecialHeapGetMemory, NULL);
 }
@@ -495,11 +496,11 @@ void KeCallOnVirtualUsers(struct phys_page* pp, void(*func)(struct phys_page*, s
 
 /*
  * The accessed/dirty bits have to be harvested HERE, while the PTE still
- * exists. SynchroniseVirt() below is what tears the mapping down, so anything
+ * exists. KeSynchroniseVirt() below is what tears the mapping down, so anything
  * reading them afterwards (as the old UpdateLRUAndDirtyOnVirt did) was
  * sampling bits that had already been destroyed - the LRU was reading noise.
  */
-static void EnterCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
+static void KeEnterCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
     if (vp->busy++ == 0) {
         ArchReadVirtDirtyAndAccessed(vp);
         pp->dirty |= vp->dirty;
@@ -507,37 +508,37 @@ static void EnterCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
             pp->lru |= 0x8000;
         }
         vp->accessed = 0;
-        SynchroniseVirt(vp);
+        KeSynchroniseVirt(vp);
     }
     assert(vp->busy != 0);      /* overflow */
 }
 
-static void LeaveCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
+static void KeLeaveCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
     (void) pp;
     assert(vp->busy > 0);       /* underflow - used to wrap silently at 2 bits */
     if (--vp->busy == 0) {
-        SynchroniseVirt(vp);
+        KeSynchroniseVirt(vp);
     }
 }
 
 /* Don't go calling these willy-nilly! */
 /* These prevent anyone else accessing the physical page while held. */
-static void EnterPhysPageCriticalSection(struct phys_page* pp) {
+static void KeEnterPhysPageCriticalSection(struct phys_page* pp) {
     KeAcquireSpinlock(&pp->lock);
-    KeCallOnVirtualUsers(pp, EnterCriticalVirt);
+    KeCallOnVirtualUsers(pp, KeEnterCriticalVirt);
 }
 
-static void LeavePhysPageCriticalSection(struct phys_page* pp) {
-    KeCallOnVirtualUsers(pp, LeaveCriticalVirt);
+static void KeLeavePhysPageCriticalSection(struct phys_page* pp) {
+    KeCallOnVirtualUsers(pp, KeLeaveCriticalVirt);
     KeReleaseSpinlock(&pp->lock);
 }
 
-static void DiscardVirt(struct phys_page* pp, struct virt_page* vp) {
+static void KeDiscardVirt(struct phys_page* pp, struct virt_page* vp) {
     /* Clear 'present' first: it is what says which arm of the union is live. */
     vp->present = 0;
     vp->origin = pp->origin;
     KeRefObject(vp->origin);
-    SynchroniseVirt(vp);
+    KeSynchroniseVirt(vp);
 }
 
 /*
@@ -553,12 +554,12 @@ static struct phys_page* clock_hand = NULL;
  * Discards a physical page if possible. If so, it will return the phys_page
  * object, with the critical section already held. If not, it will return NULL.
  *
- * Second-chance clock: the accessed bit harvested by EnterCriticalVirt()
+ * Second-chance clock: the accessed bit harvested by KeEnterCriticalVirt()
  * lands in LRU_REFERENCED. A referenced page has the bit cleared and is
  * skipped; an unreferenced one is the victim. Two full sweeps are enough to
  * either find a victim or conclude there isn't one.
  */
-static struct phys_page* FindDiscardPage(void) {
+static struct phys_page* KeFindDiscardPage(void) {
     struct phys_page* curr = clock_hand != NULL ? clock_hand : KeGetFirstPhysPage();
     int wraps = 0;
 
@@ -583,7 +584,7 @@ static struct phys_page* FindDiscardPage(void) {
             continue;
         }
 
-        EnterPhysPageCriticalSection(pp);   /* harvests accessed/dirty */
+        KeEnterPhysPageCriticalSection(pp);   /* harvests accessed/dirty */
         bool usable = pp->wired == 0
                    && !pp->dirty
                    && pp->origin != NULL && pp->origin->is_file
@@ -597,7 +598,7 @@ static struct phys_page* FindDiscardPage(void) {
         if (usable) {
             pp->lru &= ~LRU_REFERENCED;     /* second chance */
         }
-        LeavePhysPageCriticalSection(pp);
+        KeLeavePhysPageCriticalSection(pp);
     }
 
     clock_hand = curr;
@@ -607,13 +608,13 @@ static struct phys_page* FindDiscardPage(void) {
 /*
  * Caller must hold pp->lock and vas->lock.
  *
- * NOTE: the chain arm is currently unreachable. CreateVirtPage() always mints a
+ * NOTE: the chain arm is currently unreachable. KeCreateVirtPage() always mints a
  * private page_origin, so origin -> phys is 1:1 and a frame never has more than
  * one virtual user. It only comes alive once there's an origin cache keyed on
  * (file, file_offset) - until then the vas_chain allocated per fault is pure
  * waste, but the code is kept live so it's correct the day sharing lands.
  */
-static void RegisterVasAsPhysUser(struct phys_page* pp, struct vas* vas,
+static void KeRegisterVasAsPhysUser(struct phys_page* pp, struct vas* vas,
                                   struct virt_page* vp, struct vas_chain** link) {
     KeRefObject(vas);
     KeRefObject(vp);
@@ -644,7 +645,7 @@ static void RegisterVasAsPhysUser(struct phys_page* pp, struct vas* vas,
  * allowed to hit refcount zero - nothing will ever need to re-derive the
  * physical address, because a fixed page is never taken away.
  */
-static bool HandleFixedFault(struct vas* vas, size_t virt, struct page_origin* origin) {
+static bool KeHandleFixedFault(struct vas* vas, size_t virt, struct page_origin* origin) {
     size_t fixed_phys = origin->phys;
 
     KeLockVas(vas);
@@ -657,7 +658,7 @@ static bool HandleFixedFault(struct vas* vas, size_t virt, struct page_origin* o
     KeDerefObject(vp->origin);    /* the vp's reference; ours still holds it up */
     vp->phys = fixed_phys;
     vp->present = 1;
-    SynchroniseVirt(vp);
+    KeSynchroniseVirt(vp);
     KeUnlockVas(vas);
     return true;
 }
@@ -667,7 +668,7 @@ static bool HandleFixedFault(struct vas* vas, size_t virt, struct page_origin* o
  * ArchGetTemporaryPage() this doesn't pin us to a CPU, so it is safe to block
  * (e.g. on file IO) while the mapping is held.
  */
-void* VmmMapFrame(size_t frame) {
+export void* VmmMapFrame(size_t frame) {
     size_t virt = KeAllocVirt(PAGE_SIZE);
     if (virt == 0) {
         return NULL;
@@ -676,7 +677,7 @@ void* VmmMapFrame(size_t frame) {
     return (void*) virt;
 }
 
-void VmmUnmapFrame(void* virt) {
+export void VmmUnmapFrame(void* virt) {
     ArchReleaseTemporaryPage((size_t) virt);
     KeFreeVirt((size_t) virt, PAGE_SIZE);
 }
@@ -710,7 +711,7 @@ int VmmDefaultReload(size_t frame, struct virt_loader* vr, struct page_origin* p
 }
 
 /* Only call on file origins. May block; called under origin->mtx. */
-static int LoadOriginIntoFrame(struct page_origin* origin, size_t frame) {
+static int KeLoadOriginIntoFrame(struct page_origin* origin, size_t frame) {
     if (origin->loader.reload_func != NULL) {
         return origin->loader.reload_func(frame, &origin->loader, origin);
     }
@@ -723,7 +724,7 @@ static int LoadOriginIntoFrame(struct page_origin* origin, size_t frame) {
  * are allocated without the trailing file fields, so touching ->loader on one
  * would read off the end of the allocation.
  */
-static void UnloadOriginFromFrame(struct page_origin* origin, size_t frame) {
+static void KeUnloadOriginFromFrame(struct page_origin* origin, size_t frame) {
     if (origin->is_file && origin->loader.unmap_func != NULL) {
         origin->loader.unmap_func(frame, &origin->loader, origin);
     }
@@ -790,7 +791,7 @@ retry:
     KeUnlockVas(vas);
 
     if (origin->fixed) {
-        bool ok = HandleFixedFault(vas, virt, origin);
+        bool ok = KeHandleFixedFault(vas, virt, origin);
         KeDerefObject(origin);
         if (!ok) {
             goto retry;
@@ -812,7 +813,7 @@ retry:
             }
             if (frame == 0) {
                 KeLogPrintf("THE FRAME IS ZERO!\n");
-                int res = WmHardError(ENOMEM);
+                int res = KeHardError(ENOMEM);
                 if (res == 0) {
                     goto retry_enomem2;
                 }
@@ -832,10 +833,10 @@ retry:
              */
             if (origin->is_file) {
             retry_enomem1:
-                int res = LoadOriginIntoFrame(origin, frame);
+                int res = KeLoadOriginIntoFrame(origin, frame);
                 if (res != 0) {
-                    KeLogPrintf("LoadOriginIntoFrame didn't have enough memory to complete...\n");
-                    res = WmHardError(ENOMEM);
+                    KeLogPrintf("KeLoadOriginIntoFrame didn't have enough memory to complete...\n");
+                    res = KeHardError(ENOMEM);
                     if (res == 0) {
                         goto retry_enomem1;
                     }
@@ -871,9 +872,9 @@ retry:
     }
 
     struct phys_page* pp = KeGetPhysPage(phys);
-    EnterPhysPageCriticalSection(pp);       /* phys outer - matches discard's order */
+    KeEnterPhysPageCriticalSection(pp);       /* phys outer - matches discard's order */
     if (pp->origin != origin) {
-        LeavePhysPageCriticalSection(pp);
+        KeLeavePhysPageCriticalSection(pp);
         KeFreeVmmHeap(link);
         KeDerefObject(origin);
         goto retry;
@@ -883,7 +884,7 @@ retry:
     vp = KeGetVirtualPageFromVirt(vas, virt); /* revalidate - vas was unlocked */
     if (vp == NULL || vp->present || vp->origin != origin) {
         KeUnlockVas(vas);
-        LeavePhysPageCriticalSection(pp);
+        KeLeavePhysPageCriticalSection(pp);
         KeFreeVmmHeap(link);
         KeDerefObject(origin);
         goto retry;
@@ -894,7 +895,7 @@ retry:
 
     vp->phys = phys;
     vp->present = 1;
-    RegisterVasAsPhysUser(pp, vas, vp, &link);  /* under both locks - discard can't miss it */
+    KeRegisterVasAsPhysUser(pp, vas, vp, &link);  /* under both locks - discard can't miss it */
     KeUnlockVas(vas);
 
     /*
@@ -903,7 +904,7 @@ retry:
      * the handler could memcpy through vp->virt; the frame is already populated
      * by the time we get here now.
      */
-    LeavePhysPageCriticalSection(pp);
+    KeLeavePhysPageCriticalSection(pp);
 
     KeDerefObject(origin);
     if (link != NULL) {
@@ -912,7 +913,7 @@ retry:
 }
 
 struct phys_page* KeDiscardPage(void) {
-    struct phys_page* pp = FindDiscardPage();
+    struct phys_page* pp = KeFindDiscardPage();
     if (pp == NULL) {
         return NULL;
     }
@@ -926,12 +927,12 @@ struct phys_page* KeDiscardPage(void) {
      * window where a faulter could allocate a replacement frame while the old
      * one was still mapped.
      */
-    KeCallOnVirtualUsers(pp, DiscardVirt);
+    KeCallOnVirtualUsers(pp, KeDiscardVirt);
 
     assert(pp->origin->phys == KeGetPhysAddr(pp));
     pp->origin->phys = 0;
 
-    KeCallOnVirtualUsers(pp, LeaveCriticalVirt);  /* busy--/re-sync, list intact */
+    KeCallOnVirtualUsers(pp, KeLeaveCriticalVirt);  /* busy--/re-sync, list intact */
 
     if (pp->vas != NULL) {
         KeDerefObject(pp->vas);
@@ -950,7 +951,7 @@ struct phys_page* KeDiscardPage(void) {
     }
 
     /* pp->lock (a spinlock) is held here, so an unmap_func must not block. */
-    UnloadOriginFromFrame(pp->origin, KeGetPhysAddr(pp));
+    KeUnloadOriginFromFrame(pp->origin, KeGetPhysAddr(pp));
 
     KeDerefObject(pp->origin);
     KeFreeDiscardedPhys(pp);
@@ -966,7 +967,7 @@ void KeZeroPhysPage(size_t phys) {
     ArchUnlockFromCpu(r);
 }
 
-static struct vas_chain* UnregisterVasAsPhysUser(struct phys_page* pp, struct virt_page* vp) {
+static struct vas_chain* KeUnregisterVasAsPhysUser(struct phys_page* pp, struct virt_page* vp) {
     if (pp->vp == vp) {
         struct vas_chain* node = pp->chain;
         if (node != NULL) {
@@ -990,7 +991,7 @@ static struct vas_chain* UnregisterVasAsPhysUser(struct phys_page* pp, struct vi
     return node;
 }
 
-static void ReleaseVirtPage(struct vas* vas, size_t virt) {
+static void KeReleaseVirtPage(struct vas* vas, size_t virt) {
     int retries = 0;
 
     for (;;) {
@@ -999,7 +1000,7 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
         }
 
         KeLockVas(vas);
-        struct virt_page** slot = GetVirtualPageSlot(vas, virt, false);
+        struct virt_page** slot = KeGetVirtualPageSlot(vas, virt, false);
         struct virt_page* vp = (slot == NULL) ? NULL : *slot;
 
         /* Double free, or a ptr/size that doesn't match the allocation. */
@@ -1011,7 +1012,7 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
 
         if (!vp->present) {
             /*
-             * vp->origin is the live union arm; CleanupVirtPage drops it.
+             * vp->origin is the live union arm; KeCleanupVirtPage drops it.
              * busy may be nonzero if a KeDiscardPage() is mid-flight on this vp;
              * that's fine, the discarder's registration still holds its own
              * reference to the vp and only drops it after busy returns to 0.
@@ -1026,14 +1027,14 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
             /*
              * Fixed pages never touch a phys_page, so nobody else ever bumps
              * busy. Use it as a "treat as unmapped" marker to make the sync
-             * tear the PTE down, then put it back to 0 for CleanupVirtPage's
+             * tear the PTE down, then put it back to 0 for KeCleanupVirtPage's
              * assert. 'present' stays 1 on purpose: the fault handler already
-             * dropped the origin reference, and CleanupVirtPage only derefs
+             * dropped the origin reference, and KeCleanupVirtPage only derefs
              * vp->origin when !present (vp->origin aliases vp->phys here!).
              */
             assert(vp->busy == 0);
             vp->busy++;
-            SynchroniseVirt(vp);
+            KeSynchroniseVirt(vp);
             vp->busy--;
             *slot = NULL;
             KeUnlockVas(vas);
@@ -1051,14 +1052,14 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
         KeUnlockVas(vas);
 
         struct phys_page* pp = KeGetPhysPage(phys);
-        EnterPhysPageCriticalSection(pp);
+        KeEnterPhysPageCriticalSection(pp);
         KeLockVas(vas);
 
-        slot = GetVirtualPageSlot(vas, virt, false);
+        slot = KeGetVirtualPageSlot(vas, virt, false);
         if (slot == NULL || *slot != vp || !vp->present || vp->phys != phys) {
             /* Discarded (or discarded and refaulted) while we were waiting. */
             KeUnlockVas(vas);
-            LeavePhysPageCriticalSection(pp);
+            KeLeavePhysPageCriticalSection(pp);
             KeDerefObject(vp);
             continue;
         }
@@ -1074,7 +1075,7 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
          */
         *slot = NULL;
         vp->busy--;
-        struct vas_chain* node = UnregisterVasAsPhysUser(pp, vp);
+        struct vas_chain* node = KeUnregisterVasAsPhysUser(pp, vp);
         KeUnlockVas(vas);
 
         struct page_origin* dead_origin = NULL;
@@ -1095,7 +1096,7 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
             dead_origin->phys = 0;
             pp->origin = NULL;
         }
-        LeavePhysPageCriticalSection(pp);   /* re-syncs any remaining sharers */
+        KeLeavePhysPageCriticalSection(pp);   /* re-syncs any remaining sharers */
 
         /* Everything below runs with no phys_page / vas lock held. */
         if (dead_origin != NULL) {
@@ -1104,7 +1105,7 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
              * still valid for the loader. A new fault on this origin may
              * already be loading a different frame concurrently.
              */
-            UnloadOriginFromFrame(dead_origin, phys);
+            KeUnloadOriginFromFrame(dead_origin, phys);
             KeFreeDiscardedPhys(KeGetPhysPage(phys));
             KeDerefObject(dead_origin);       /* the phys_page's reference */
         }
@@ -1121,12 +1122,12 @@ static void ReleaseVirtPage(struct vas* vas, size_t virt) {
 
 /*
  * Wires one page: faults it in if needed, then bumps the wire count on its
- * frame under pp->lock. FindDiscardPage() rechecks 'wired' under that same
+ * frame under pp->lock. KeFindDiscardPage() rechecks 'wired' under that same
  * lock, so once the increment lands the frame can't be discarded.
  *
  * Fixed pages (MMIO etc.) are never discarded, so they only need faulting in.
  */
-static int WireVirtPage(struct vas* vas, size_t virt) {
+static int KeWireVirtPage(struct vas* vas, size_t virt) {
     int retries = 0;
 
     for (;;) {
@@ -1153,7 +1154,7 @@ static int WireVirtPage(struct vas* vas, size_t virt) {
         }
 
         /* Present: phys outer / vas inner, so drop the vas lock, take the
-         * frame, and revalidate - same dance as ReleaseVirtPage(). */
+         * frame, and revalidate - same dance as KeReleaseVirtPage(). */
         size_t phys = vp->phys;
         KeRefObject(vp);
         KeUnlockVas(vas);
@@ -1180,7 +1181,7 @@ static int WireVirtPage(struct vas* vas, size_t virt) {
 }
 
 /* The page must currently be wired by the caller, so it can't have moved. */
-static void UnwireVirtPage(struct vas* vas, size_t virt) {
+static void KeUnwireVirtPage(struct vas* vas, size_t virt) {
     KeLockVas(vas);
     struct virt_page* vp = KeGetVirtualPageFromVirt(vas, virt);
     assert(vp != NULL && vp->present);      /* unwire without a matching wire */
@@ -1210,10 +1211,10 @@ export int KeWireVirt(void* ptr, size_t bytes) {
     size_t last  = (((size_t) ptr) + bytes - 1) / PAGE_SIZE;
 
     for (size_t pg = first; pg <= last; ++pg) {
-        int res = WireVirtPage(vas, pg * PAGE_SIZE);
+        int res = KeWireVirtPage(vas, pg * PAGE_SIZE);
         if (res != 0) {
             for (size_t done = first; done < pg; ++done) {
-                UnwireVirtPage(vas, done * PAGE_SIZE);
+                KeUnwireVirtPage(vas, done * PAGE_SIZE);
             }
             return res;
         }
@@ -1231,7 +1232,7 @@ export void KeUnwireVirt(void* ptr, size_t bytes) {
     size_t last  = (((size_t) ptr) + bytes - 1) / PAGE_SIZE;
 
     for (size_t pg = first; pg <= last; ++pg) {
-        UnwireVirtPage(vas, pg * PAGE_SIZE);
+        KeUnwireVirtPage(vas, pg * PAGE_SIZE);
     }
 }
 
@@ -1255,7 +1256,7 @@ export void KeFreeMemory(void* ptr, size_t bytes) {
     size_t pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
 
     for (size_t i = 0; i < pages; ++i) {
-        ReleaseVirtPage(vas, base + i * PAGE_SIZE);
+        KeReleaseVirtPage(vas, base + i * PAGE_SIZE);
     }
 
     KeFreeVirt(base, pages * PAGE_SIZE);

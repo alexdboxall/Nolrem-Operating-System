@@ -1,3 +1,3 @@
 #pragma once
 
-void InitPs2Mouse(void);
+void Ps2InitMouse(void);

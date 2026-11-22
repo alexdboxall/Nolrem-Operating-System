@@ -19,7 +19,7 @@ export struct window* WmGetDesktop(void) {
 
 struct compat_bitmap* desktop_bitmap = NULL;
 static int oom = 0;
-int DesktopWinProc(struct window* win, struct msg msg) {
+int WmDesktopWinProc(struct window* win, struct msg msg) {
     if (win != desktop_window) { 
         return -1;
     }
@@ -63,6 +63,6 @@ int DesktopWinProc(struct window* win, struct msg msg) {
 void WmInitDesktopWindowSubsystem() {
     desktop_app = WmCreateApp();
     desktop_brush = CdCreateSolidBrush(DESKTOP_COLOUR);
-    WmCreateWindowClass(".DESKTOP", DesktopWinProc, CS_ALLCLIENT);
+    WmCreateWindowClass(".DESKTOP", WmDesktopWinProc, CS_ALLCLIENT);
     desktop_window = WmCreateWindow(desktop_app, NULL, ".DESKTOP", (struct rect) {.x = 0, .y = 0, .w = 640, .h = 480}, false);
 }

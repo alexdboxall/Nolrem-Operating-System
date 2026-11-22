@@ -43,6 +43,13 @@ struct user_obj_header {
     uint32_t user_gone       : 1;
     uint32_t user_type       : 7;
     struct spinlock lock;
+
+    /*
+     * Set (once, by whoever created the object, before usermode can see it) on
+     * objects that are shared and live forever, such as the stock brushes.
+     * Usermode Ref()/Deref() on these does nothing, so it can never free them.
+     */
+    uint8_t user_permanent;
 };
 
 void KeRegisterObjectType(uint8_t type, void(*cleanup_func)(void*));
@@ -55,6 +62,7 @@ void KeInitUserObjectType(void);
 void KeInitUserObject(void* obj, uint8_t user_type);
 void KeLockUserObject(void* obj);
 void KeUnlockUserObject(void* obj);
+void KeMarkUserObjectPermanent(void* obj);
 
 int KeUserRef(void* obj);
 int KeUserDeref(void* obj);

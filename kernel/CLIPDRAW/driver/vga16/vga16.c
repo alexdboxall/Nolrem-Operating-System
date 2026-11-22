@@ -38,7 +38,7 @@ colour_t VGAReadPixel(struct graphics_driver*, int x, int y) {
     outb(VGA_GC_INDEX, 0x04);
     outb(VGA_GC_DATA, 0x00);
 
-    return ConvertVgaColourToARGB(vgacol);
+    return VgaConvertColourToARGB(vgacol);
 }
 
 void VGADrawRawCharBounded(int x, int y, uint8_t color, uint8_t* bitmap, int height, bool italic, struct rect clip) {
@@ -148,10 +148,10 @@ void VGADrawChar(int x, int y, uint8_t color, char c) {
     if (c < 32 || c >= 127) {
         return;
     }
-    VGADrawRawChar(x, y + 1, color, GetVgaGlyph(c), 14, false);
+    VGADrawRawChar(x, y + 1, color, VgaGetGlyph(c), 14, false);
 }
 
-static void GetGlyphMetrics(char c, int pt, int* pre, int* post) {
+static void VgaGetGlyphMetrics(char c, int pt, int* pre, int* post) {
     *pre = 0;
     *post = 9;
     switch (c) {
@@ -210,11 +210,11 @@ void VGADrawScaled(int x, int y, int pt, uint8_t color, char c, bool italic) {
 
     // 1:1 scale fast path
     if (pt == 8) {
-        VGADrawRawChar(x, y + 1, color, GetVgaGlyph(c), 14, italic);
+        VGADrawRawChar(x, y + 1, color, VgaGetGlyph(c), 14, italic);
         return;
     }
 
-    uint8_t* src_glyph = GetVgaGlyph(c);
+    uint8_t* src_glyph = VgaGetGlyph(c);
 
     // Calculate proportional height relative to original 14px height
     int target_height = (pt * 14) / 8;
@@ -263,11 +263,11 @@ void VGADrawScaled(int x, int y, int pt, uint8_t color, char c, bool italic) {
     }
 }
 
-void VGADrawString(int x, int y, int pt, uint8_t col, const char* s, bool bold, bool italic) {
+export void VGADrawString(int x, int y, int pt, uint8_t col, const char* s, bool bold, bool italic) {
     int bold_offset = 1 + pt / 32 + pt / 16;
     for (int i = 0; s[i]; ++i) {
         int pre, post;
-        GetGlyphMetrics(s[i], pt, &pre, &post);
+        VgaGetGlyphMetrics(s[i], pt, &pre, &post);
         x += pre;
         VGADrawScaled(x, y, pt, col, s[i], italic);        
         if (bold) {
@@ -290,7 +290,7 @@ void VGAPanic(const char* s) {
 
 void VGALog(char c) {
     int pre, post;
-    GetGlyphMetrics(c, 8, &pre, &post);
+    VgaGetGlyphMetrics(c, 8, &pre, &post);
     curx += pre;
     VGADrawChar(curx, cury, 0x7, c);
     curx += post;
@@ -332,7 +332,7 @@ uint32_t VGAGetPixel(struct graphics_driver*, int x, int y) {
     outb(0x3CE, 0x04);
     outb(0x3CF, 0x00);
 
-    return ConvertVgaColourToARGB(color_index);
+    return VgaConvertColourToARGB(color_index);
 }
 
 struct graphics_capabilities VGAGetCapabilities(struct graphics_driver*) {
@@ -348,10 +348,10 @@ struct graphics_capabilities VGAGetCapabilities(struct graphics_driver*) {
     return caps;
 }
 
-void InitVga() {
-    ReadVgaGlyphs();
-    SwitchToMode12h();
-    InitVgaPalette();
+void VgaInit() {
+    VgaReadGlyphs();
+    VgaSwitchToMode12h();
+    VgaInitPalette();
 
     struct graphics_driver drv;
     drv.mouse_restore_buffer = NULL;

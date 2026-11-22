@@ -7,11 +7,11 @@
 static struct spinlock lock;
 static struct vnode* root;
 
-static bool ShouldRemoveVnode(struct vnode* node) {
+static bool KeShouldRemoveVnode(struct vnode* node) {
     return KeGetRefCount(node) == 1;
 }
 
-static inline int CompareKey(dev_t dev, ino_t id, const struct vnode* n) {
+static inline int KeCompareKey(dev_t dev, ino_t id, const struct vnode* n) {
     if (dev != n->stat.st_dev) {
         return dev < n->stat.st_dev ? -1 : 1;
     }
@@ -21,100 +21,100 @@ static inline int CompareKey(dev_t dev, ino_t id, const struct vnode* n) {
     return 0;
 }
 
-static inline int CompareNodes(const struct vnode* a, const struct vnode* b) {
-    return CompareKey(a->stat.st_dev, a->stat.st_ino, b);
+static inline int KeCompareNodes(const struct vnode* a, const struct vnode* b) {
+    return KeCompareKey(a->stat.st_dev, a->stat.st_ino, b);
 }
 
-static inline int Height(const struct vnode* n) {
+static inline int KeHeight(const struct vnode* n) {
     return n != NULL ? n->tree.height : 0;
 }
 
-static inline void UpdateHeight(struct vnode* n) {
-    int l = Height(n->tree.left);
-    int r = Height(n->tree.right);
+static inline void KeUpdateHeight(struct vnode* n) {
+    int l = KeHeight(n->tree.left);
+    int r = KeHeight(n->tree.right);
     n->tree.height = (int8_t) ((l > r ? l : r) + 1);
 }
 
-static inline int BalanceFactor(const struct vnode* n) {
-    return Height(n->tree.left) - Height(n->tree.right);
+static inline int KeBalanceFactor(const struct vnode* n) {
+    return KeHeight(n->tree.left) - KeHeight(n->tree.right);
 }
 
-static struct vnode* RotateRight(struct vnode* y) {
+static struct vnode* KeRotateRight(struct vnode* y) {
     struct vnode* x = y->tree.left;
     y->tree.left = x->tree.right;
     x->tree.right = y;
-    UpdateHeight(y);
-    UpdateHeight(x);
+    KeUpdateHeight(y);
+    KeUpdateHeight(x);
     return x;
 }
 
-static struct vnode* RotateLeft(struct vnode* x) {
+static struct vnode* KeRotateLeft(struct vnode* x) {
     struct vnode* y = x->tree.right;
     x->tree.right = y->tree.left;
     y->tree.left = x;
-    UpdateHeight(x);
-    UpdateHeight(y);
+    KeUpdateHeight(x);
+    KeUpdateHeight(y);
     return y;
 }
 
-static struct vnode* Rebalance(struct vnode* n) {
-    UpdateHeight(n);
-    int b = BalanceFactor(n);
+static struct vnode* KeRebalance(struct vnode* n) {
+    KeUpdateHeight(n);
+    int b = KeBalanceFactor(n);
     if (b > 1) {
-        if (BalanceFactor(n->tree.left) < 0) {
-            n->tree.left = RotateLeft(n->tree.left);
+        if (KeBalanceFactor(n->tree.left) < 0) {
+            n->tree.left = KeRotateLeft(n->tree.left);
         }
-        return RotateRight(n);
+        return KeRotateRight(n);
     }
     if (b < -1) {
-        if (BalanceFactor(n->tree.right) > 0) {
-            n->tree.right = RotateRight(n->tree.right);
+        if (KeBalanceFactor(n->tree.right) > 0) {
+            n->tree.right = KeRotateRight(n->tree.right);
         }
-        return RotateLeft(n);
+        return KeRotateLeft(n);
     }
     return n;
 }
 
-static struct vnode* InsertNode(struct vnode* sub, struct vnode* node,
+static struct vnode* KeInsertNode(struct vnode* sub, struct vnode* node,
                                 bool* duplicate) {
     if (sub == NULL) {
         return node;
     }
-    int c = CompareNodes(node, sub);
+    int c = KeCompareNodes(node, sub);
     if (c == 0) {
         *duplicate = true;
         return sub;
     }
     if (c < 0) {
-        sub->tree.left = InsertNode(sub->tree.left, node, duplicate);
+        sub->tree.left = KeInsertNode(sub->tree.left, node, duplicate);
     } else {
-        sub->tree.right = InsertNode(sub->tree.right, node, duplicate);
+        sub->tree.right = KeInsertNode(sub->tree.right, node, duplicate);
     }
-    return *duplicate ? sub : Rebalance(sub);
+    return *duplicate ? sub : KeRebalance(sub);
 }
 
-static struct vnode* DetachMin(struct vnode* sub, struct vnode** min_out) {
+static struct vnode* KeDetachMin(struct vnode* sub, struct vnode** min_out) {
     if (sub->tree.left == NULL) {
         *min_out = sub;
         return sub->tree.right;
     }
-    sub->tree.left = DetachMin(sub->tree.left, min_out);
-    return Rebalance(sub);
+    sub->tree.left = KeDetachMin(sub->tree.left, min_out);
+    return KeRebalance(sub);
 }
 
-static struct vnode* RemoveNode(struct vnode* sub, struct vnode* node,
+static struct vnode* KeRemoveNode(struct vnode* sub, struct vnode* node,
                                 bool* found) {
     if (sub == NULL) {
         return NULL;
     }
-    int c = CompareNodes(node, sub);
+    int c = KeCompareNodes(node, sub);
     if (c < 0) {
-        sub->tree.left = RemoveNode(sub->tree.left, node, found);
-        return Rebalance(sub);
+        sub->tree.left = KeRemoveNode(sub->tree.left, node, found);
+        return KeRebalance(sub);
     }
     if (c > 0) {
-        sub->tree.right = RemoveNode(sub->tree.right, node, found);
-        return Rebalance(sub);
+        sub->tree.right = KeRemoveNode(sub->tree.right, node, found);
+        return KeRebalance(sub);
     }
     if (sub != node) {
         /* Same key but a different vnode: `node` isn't in the table. */
@@ -129,10 +129,10 @@ static struct vnode* RemoveNode(struct vnode* sub, struct vnode* node,
         replacement = sub->tree.left;
     } else {
         struct vnode* successor;
-        struct vnode* new_right = DetachMin(sub->tree.right, &successor);
+        struct vnode* new_right = KeDetachMin(sub->tree.right, &successor);
         successor->tree.left = sub->tree.left;
         successor->tree.right = new_right;
-        replacement = Rebalance(successor);
+        replacement = KeRebalance(successor);
     }
     sub->tree.left = NULL;
     sub->tree.right = NULL;
@@ -140,10 +140,10 @@ static struct vnode* RemoveNode(struct vnode* sub, struct vnode* node,
     return replacement;
 }
 
-static struct vnode* FindNode(dev_t dev, ino_t id) {
+static struct vnode* KeFindNode(dev_t dev, ino_t id) {
     struct vnode* n = root;
     while (n != NULL) {
-        int c = CompareKey(dev, id, n);
+        int c = KeCompareKey(dev, id, n);
         if (c == 0) {
             return n;
         }
@@ -154,7 +154,7 @@ static struct vnode* FindNode(dev_t dev, ino_t id) {
 
 export struct vnode* KeTryFindAndReferenceExistingVnode(ino_t id, dev_t dev) {
     KeAcquireSpinlock(&lock);
-    struct vnode* node = FindNode(dev, id);
+    struct vnode* node = KeFindNode(dev, id);
     if (node != NULL) {
         KeRefObject(node);
     }
@@ -172,7 +172,7 @@ export int KeRegisterNewVnode(struct vnode* node) {
 
     bool duplicate = false;
     KeAcquireSpinlock(&lock);
-    root = InsertNode(root, node, &duplicate);
+    root = KeInsertNode(root, node, &duplicate);
     if (!duplicate) {
         KeRefObject(node);
     }
@@ -191,7 +191,7 @@ export void KeUnregisterVnode(struct vnode* node) {
     }
     bool found = false;
     KeAcquireSpinlock(&lock);
-    root = RemoveNode(root, node, &found);
+    root = KeRemoveNode(root, node, &found);
     KeReleaseSpinlock(&lock);
     if (found) {
         /* Outside the lock: this may run the destructor. */
@@ -209,24 +209,24 @@ struct purge_scan {
     struct vnode* found[PURGE_BATCH];
 };
 
-static void CollectPurgeVictims(struct vnode* sub, struct purge_scan* scan) {
+static void KeCollectPurgeVictims(struct vnode* sub, struct purge_scan* scan) {
     if (sub == NULL || scan->count >= PURGE_BATCH) {
         return;
     }
     bool sub_after_resume = !scan->have_after ||
-        CompareKey(scan->after_dev, scan->after_id, sub) < 0;
+        KeCompareKey(scan->after_dev, scan->after_id, sub) < 0;
     if (sub_after_resume) {
         /* Left subtree may still hold keys beyond the resume point. */
-        CollectPurgeVictims(sub->tree.left, scan);
+        KeCollectPurgeVictims(sub->tree.left, scan);
         if (scan->count >= PURGE_BATCH) {
             return;
         }
-        if (ShouldRemoveVnode(sub)) {
+        if (KeShouldRemoveVnode(sub)) {
             scan->found[scan->count++] = sub;
         }
     }
     /* If sub's key <= resume point, so is everything to its left: skip. */
-    CollectPurgeVictims(sub->tree.right, scan);
+    KeCollectPurgeVictims(sub->tree.right, scan);
 }
 
 export void KePurgeOldVnodes(void) {
@@ -239,7 +239,7 @@ export void KePurgeOldVnodes(void) {
         scan.count = 0;
  
         KeAcquireSpinlock(&lock);
-        CollectPurgeVictims(root, &scan);
+        KeCollectPurgeVictims(root, &scan);
         bool more = scan.count == PURGE_BATCH;
         if (more) {
             /* Remember where to resume while the last victim is still ours
@@ -251,7 +251,7 @@ export void KePurgeOldVnodes(void) {
         }
         for (size_t i = 0; i < scan.count; i++) {
             bool found = false;
-            root = RemoveNode(root, scan.found[i], &found);
+            root = KeRemoveNode(root, scan.found[i], &found);
             if (!found) {
                 scan.found[i] = NULL;   /* never deref what we didn't unlink */
             }

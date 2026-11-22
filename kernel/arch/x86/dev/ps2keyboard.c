@@ -37,11 +37,11 @@ static void Ps2KeyboardSetLEDs(void) {
     Ps2DeviceWrite(data, false);
 }
 
-static uint8_t TranslateCharacter(uint8_t scancode) {
+static uint8_t x86TranslateCharacter(uint8_t scancode) {
     return set1_map_lower_norm[scancode];
 }
 
-static void SendKeystrokeConsole(char c) {
+static void x86SendKeystrokeConsole(char c) {
     KeLogPrintf("%c", c);
 }
 
@@ -104,7 +104,7 @@ static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
             break;
         default:
             if (scancode < strlen(set1_map_lower_norm)) {
-                c = TranslateCharacter(scancode);
+                c = x86TranslateCharacter(scancode);
             }
         }
     }
@@ -114,26 +114,26 @@ static void Ps2KeyboardTranslateSet1(uint8_t scancode) {
     if (send_it) {
         if (control_held) {
             if (islower(c) || (c >= '@' && c <= '_' && !isupper(c))) {
-                SendKeystrokeConsole(c - (islower(c) ? (32 + '@') : '@'));
+                x86SendKeystrokeConsole(c - (islower(c) ? (32 + '@') : '@'));
             }
         } else if (c == KEYCODE_UP_ARROW) {
-            SendKeystrokeConsole('\x1B');
-            SendKeystrokeConsole('[');
-            SendKeystrokeConsole('A');
+            x86SendKeystrokeConsole('\x1B');
+            x86SendKeystrokeConsole('[');
+            x86SendKeystrokeConsole('A');
         } else if (c == KEYCODE_DOWN_ARROW) {
-            SendKeystrokeConsole('\x1B');
-            SendKeystrokeConsole('[');
-            SendKeystrokeConsole('B');
+            x86SendKeystrokeConsole('\x1B');
+            x86SendKeystrokeConsole('[');
+            x86SendKeystrokeConsole('B');
         } else if (c == KEYCODE_RIGHT_ARROW) {
-            SendKeystrokeConsole('\x1B');
-            SendKeystrokeConsole('[');
-            SendKeystrokeConsole('C');
+            x86SendKeystrokeConsole('\x1B');
+            x86SendKeystrokeConsole('[');
+            x86SendKeystrokeConsole('C');
         } else if (c == KEYCODE_LEFT_ARROW) {
-            SendKeystrokeConsole('\x1B');
-            SendKeystrokeConsole('[');
-            SendKeystrokeConsole('D');
+            x86SendKeystrokeConsole('\x1B');
+            x86SendKeystrokeConsole('[');
+            x86SendKeystrokeConsole('D');
         } else {
-            SendKeystrokeConsole(c);
+            x86SendKeystrokeConsole(c);
         }
     }
     extended = false;
@@ -174,7 +174,7 @@ static int Ps2KeyboardSetScancodeSet(int num) {
     return (result == num) ? 0 : -1;
 }
 
-void InitPs2Keyboard(void) {    
+void Ps2InitKeyboard(void) {    
     /* Read controller config to check translation bit. */
     uint8_t config = Ps2ControllerGetConfiguration();
     bool translation_on = (config & (1 << 6)) != 0;

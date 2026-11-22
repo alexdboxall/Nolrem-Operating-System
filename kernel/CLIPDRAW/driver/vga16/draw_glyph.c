@@ -1,6 +1,6 @@
 #include "vga16.h"
 
-void VGADrawGlyph(struct graphics_driver*, int x, int y, struct rect bound, uint32_t col,
+export void VGADrawGlyph(struct graphics_driver*, int x, int y, struct rect bound, uint32_t col,
     int glyph_w_px, int glyph_h, uint8_t* glyph_col_maj_order) {
     volatile uint8_t* vram = VRAM_BASE;
     volatile uint8_t dummy;

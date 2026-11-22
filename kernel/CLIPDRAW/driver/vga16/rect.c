@@ -1,7 +1,7 @@
 #include "vga16.h"
 
 // Sentinel stored in a merged dither tile to mean "don't touch this
-// pixel". Never returned by GetDither itself (which only ever emits
+// pixel". Never returned by VgaGetDither itself (which only ever emits
 // palette indices 0-15) - it's introduced by VgaPutBrushRect when one of
 // its two colours is fully transparent.
 #define DITHER_NONE 0xFFu
@@ -124,7 +124,7 @@ static int VgaDitherIsUniform(const uint8_t tile[64], uint8_t* out_colour) {
     return 1;
 }
 
-// General path: paints an 8x8 chunky dither tile (see GetDither) across
+// General path: paints an 8x8 chunky dither tile (see VgaGetDither) across
 // a rectangle. The tile repeats every 8 pixels in both x and y, and -
 // since every VRAM byte covers exactly 8 consecutive x pixels starting on
 // a multiple of 8 - a single row's column mask lines up bit-for-bit with
@@ -288,7 +288,7 @@ void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int y2, ui
     }
 
     uint8_t tile[64];
-    GetDither(colour, tile);
+    VgaGetDither(colour, tile);
 
     VgaDrawDitherTile(x1, y1, x2, y2, tile);
 }
@@ -319,8 +319,8 @@ void VgaPutBrushRect(struct graphics_driver* drv, int x1, int y1, int x2, int y2
 
     uint8_t primary_tile[64];
     uint8_t secondary_tile[64];
-    if (primary_opaque)   GetDither(primary,   primary_tile);
-    if (secondary_opaque) GetDither(secondary, secondary_tile);
+    if (primary_opaque)   VgaGetDither(primary,   primary_tile);
+    if (secondary_opaque) VgaGetDither(secondary, secondary_tile);
 
     // Merge the two dithers into one tile using `pattern` as the per-pixel
     // brush selector (pattern[row], bit7 = leftmost column - same bit

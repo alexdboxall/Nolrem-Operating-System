@@ -51,7 +51,7 @@ void KeInitDiskUtil(void) {
  * 
  * Returns 0 on success, else EINVAL.
  */
-static pageable int AppendNumberToString(char* str, int num) {
+static pageable int KeAppendNumberToString(char* str, int num) {
     if (str == NULL || num >= 1000) {
         return EINVAL;
     }
@@ -88,7 +88,7 @@ export pageable char* KeGenerateNewMountedDiskName() {
     int disk_num = next_mounted_disk_num++;
     KeReleaseSpinlock(&lock);
 
-    AppendNumberToString(name, disk_num);
+    KeAppendNumberToString(name, disk_num);
 
     KeLogPrintf("MNT : %s\n", name);
     return KeStrdup(name);
@@ -112,7 +112,7 @@ export pageable char* KeGenerateNewRawDiskName(int type) {
     int disk_num = type_table[type]++;
     KeReleaseSpinlock(&lock);
 
-    AppendNumberToString(name, disk_num);
+    KeAppendNumberToString(name, disk_num);
     KeLogPrintf("RAW : %s\n", name);
     return KeStrdup(name);
 }
@@ -121,9 +121,9 @@ export pageable char* KeGenerateNewRawDiskName(int type) {
  * Generates and returns the name of a partition from its partition index within
  * a drive (e.g. part0, part1). The caller must free the returned string.
  */
-static pageable char* GetPartitionNameString(int index) {
+static pageable char* KeGetPartitionNameString(int index) {
     char name[16] = "part";
-    AppendNumberToString(name, index);
+    KeAppendNumberToString(name, index);
     KeLogPrintf("PART: %s\n", name);
     return KeStrdup(name);
 }
@@ -141,13 +141,13 @@ export pageable void KeCreateDiskPartitions(struct file* disk) {
         struct stat st = disk->node->stat;
         struct vnode* whole_disk = KeCreatePartition(
             disk, 0, st.st_size, 0, st.st_blksize, 0, false)->node;
-        VnodeCreate(disk->node, &whole_disk, GetPartitionNameString(0), 0, 0);
+        VnodeCreate(disk->node, &whole_disk, KeGetPartitionNameString(0), 0, 0);
         return;
     }
     
     for (int i = 0; partitions[i]; ++i) {
         struct vnode* partition = partitions[i]->node;
-        char* str = GetPartitionNameString(i);
+        char* str = KeGetPartitionNameString(i);
         VnodeCreate(disk->node, &partition, str, 0, 0);
     }
 }

@@ -15,7 +15,7 @@ pageable size_t SysCreateEllipseRegion(size_t a, size_t b, size_t c, size_t d) {
     int w = c;
     int h = d;
     struct region rgn = CdCreateEllipseRegion(x, y, w, h);
-    return (size_t) RegionToUserRegion(rgn);
+    return (size_t) CdRegionToUserRegion(rgn);
 }
 
 export pageableuserexec region_t CreateEllipseRegion(int x, int y, int width, int height) {

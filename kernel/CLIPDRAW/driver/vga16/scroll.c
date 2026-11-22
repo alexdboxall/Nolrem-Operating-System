@@ -1,6 +1,6 @@
 #include "vga16.h"
 
-static void CopyMaskedRow(volatile uint8_t* dest_row, volatile uint8_t* src_row, 
+static void VgaCopyMaskedRow(volatile uint8_t* dest_row, volatile uint8_t* src_row, 
                             int start_byte, int end_byte, uint8_t start_mask, uint8_t end_mask) {
     uint8_t dummy;
 
@@ -33,7 +33,7 @@ static void CopyMaskedRow(volatile uint8_t* dest_row, volatile uint8_t* src_row,
     dest_row[end_byte] = dummy;
 }
 
-static void ClearMaskedRow(volatile uint8_t* dest_row, int start_byte, int end_byte, 
+static void VgaClearMaskedRow(volatile uint8_t* dest_row, int start_byte, int end_byte, 
                              uint8_t start_mask, uint8_t end_mask) {
     if (start_byte == end_byte) {
         outb(VGA_GC_INDEX, 8);
@@ -86,7 +86,7 @@ void VgaScrollRect(struct graphics_driver*, int x_start, int y_start, int x_end,
         outb(VGA_GC_INDEX, 5);   
         outb(VGA_GC_DATA, orig_mode & ~3);
         for (int y = y_start; y <= y_end; y++) {
-            ClearMaskedRow(vram + (y * BYTES_PER_ROW), start_byte, end_byte, start_mask, end_mask);
+            VgaClearMaskedRow(vram + (y * BYTES_PER_ROW), start_byte, end_byte, start_mask, end_mask);
         }
         outb(VGA_GC_INDEX, 8);   
         outb(VGA_GC_DATA, 0xFF);
@@ -104,14 +104,14 @@ void VgaScrollRect(struct graphics_driver*, int x_start, int y_start, int x_end,
         for (int y = y_start; y <= (y_end - delta_y); y++) {
             volatile uint8_t* dest_row = vram + (y * BYTES_PER_ROW);
             volatile uint8_t* src_row  = vram + ((y + delta_y) * BYTES_PER_ROW);
-            CopyMaskedRow(dest_row, src_row, start_byte, end_byte, start_mask, end_mask);
+            VgaCopyMaskedRow(dest_row, src_row, start_byte, end_byte, start_mask, end_mask);
         }
 
         outb(VGA_GC_INDEX, 5);
         outb(VGA_GC_DATA, orig_mode & ~3);
 
         for (int y = (y_end - delta_y) + 1; y <= y_end; y++) {
-            ClearMaskedRow(vram + (y * BYTES_PER_ROW), start_byte, end_byte, start_mask, end_mask);
+            VgaClearMaskedRow(vram + (y * BYTES_PER_ROW), start_byte, end_byte, start_mask, end_mask);
         }
     } 
     else {
@@ -124,14 +124,14 @@ void VgaScrollRect(struct graphics_driver*, int x_start, int y_start, int x_end,
         for (int y = y_end; y >= (y_start + abs_delta); y--) {
             volatile uint8_t* dest_row = vram + (y * BYTES_PER_ROW);
             volatile uint8_t* src_row  = vram + ((y - abs_delta) * BYTES_PER_ROW);
-            CopyMaskedRow(dest_row, src_row, start_byte, end_byte, start_mask, end_mask);
+            VgaCopyMaskedRow(dest_row, src_row, start_byte, end_byte, start_mask, end_mask);
         }
 
         outb(VGA_GC_INDEX, 5);
         outb(VGA_GC_DATA, orig_mode & ~3);
 
         for (int y = y_start; y < (y_start + abs_delta); y++) {
-            ClearMaskedRow(vram + (y * BYTES_PER_ROW), start_byte, end_byte, start_mask, end_mask);
+            VgaClearMaskedRow(vram + (y * BYTES_PER_ROW), start_byte, end_byte, start_mask, end_mask);
         }
     }
 

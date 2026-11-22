@@ -3,6 +3,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/*
+ * x86-internal declarations. Functions called x86...() belong to the x86
+ * architecture only, and must not be called from outside arch/x86.
+ *
+ * The generic architecture interface that the rest of the kernel uses (all of
+ * the Arch...() functions) is declared in <arch.h>.
+ */
+
 struct tss;
 
 void x86InitGdt(void);
@@ -11,18 +19,18 @@ void x86InitPic(void);
 void x86InitPit(int hertz);
 void x86InitTss(void);
 uint16_t x86AddTssToGdt(struct tss* tss);
-void InitFloppy(void);
+void FloppyInit(void);
 
 void x86InitCmos(void);
-uint8_t ReadCmos(uint8_t reg);
-void WriteCmos(uint8_t reg, uint8_t data);
+uint8_t x86ReadCmos(uint8_t reg);
+void x86WriteCmos(uint8_t reg, uint8_t data);
 
-void InitPs2(void);
+void Ps2Init(void);
 
-void SendPicEoi(int num);
+void x86SendPicEoi(int num);
 
 struct Elf32_Ehdr;
-bool IsElfValid(struct Elf32_Ehdr* header);
+bool x86IsElfValid(struct Elf32_Ehdr* header);
 
 #define PIC_IRQ_BASE 32
 

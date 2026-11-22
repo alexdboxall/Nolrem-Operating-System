@@ -9,8 +9,6 @@
 #include <dc.h>
 #include "clipdraw_internal.h"
 
-// TODO: LOCKS!
-
 struct dc {
     struct user_obj_header hdr;
     struct graphics_driver* drv;
@@ -23,7 +21,7 @@ struct dc {
     int16_t trans_y;
 };
 
-struct graphics_driver* GetOutputDriver(struct dc* dc) {
+export struct graphics_driver* CdGetOutputDriver(struct dc* dc) {
     return dc->drv;
 }
 
@@ -44,7 +42,7 @@ void CdLogicalToDevice(struct dc* dc, int* x, int* y) {
 }
 
 
-void CdSetTranslation(struct dc* dc, int x, int y) {
+export void CdSetTranslation(struct dc* dc, int x, int y) {
     KeLockUserObject(dc);
     dc->trans_x = x;
     dc->trans_y = y;
@@ -129,7 +127,7 @@ export void* CdGetGraphicsObject(struct dc* dc, int type) {
     return retv;
 }
 
-void CleanupDc(void* _dc) {
+void CdCleanupDc(void* _dc) {
     struct dc* dc = _dc;
     if (dc == NULL) {
         return;
@@ -141,7 +139,7 @@ void CleanupDc(void* _dc) {
 }
 
 void CdInitDcSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_DC, CleanupDc);
+    KeRegisterUserObjectType(UOBJ_DC, CdCleanupDc);
 }
 
 export struct dc* CdCreateDc(void) {
@@ -164,7 +162,7 @@ export struct dc* CdCreateDc(void) {
     return dc;
 }
 
-void CdResetDC(struct dc* dc) {
+export void CdResetDC(struct dc* dc) {
     KeLockUserObject(dc);
     
     CdFreeRegion(dc->cliprgn);

@@ -2,53 +2,46 @@
 #include <syscall.h>
 #include <errno.h>
 
-static size_t (* const syscall_table[])(size_t, size_t, size_t, size_t) = {
-    [SYS_CreateRectRegion] = SysCreateRectRegion,
-    [SYS_Ref] = SysRef,
-    [SYS_GetRegionCombination] = SysGetRegionCombination,
-    [SYS_CreateEllipseRegion] = SysCreateEllipseRegion,
-    [SYS_EmptyOrEveryRegion] = SysEmptyOrEveryRegion,
-    [SYS_CreateRoundedRectRegion] = SysCreateRoundedRectRegion,
-    [SYS_CreatePolyPolygonRegion] = SysCreatePolyPolygonRegion,
-    [SYS_GetObjectType] = SysGetObjectType,
-    [SYS_IsRegionEqual] = SysIsRegionEqual,
-    [SYS_IsRegionEmpty] = SysIsRegionEmpty,
-    [SYS_IsPointInRegion] = SysIsPointInRegion,
-    [SYS_TranslateRegion] = SysTranslateRegion,
-    [SYS_CopyRegion] = SysCopyRegion,
-    [SYS_GetRegionBounds] = SysGetRegionBounds,
-    [SYS_CreatePatternedBrush] = SysCreatePatternedBrush,
-    [SYS_CreateCustomBrush] = SysCreateCustomBrush,
-    [SYS_CopyBrush] = SysCopyBrush,
-    [SYS_GetStockBrush] = SysGetStockBrush,
-    [SYS_BrushPattern] = SysBrushPattern,
-    [SYS_BrushColour] = SysBrushColour,
-    [SYS_BrushOrigin] = SysBrushOrigin,
-    [SYS_CreatePatternedPen] = SysCreatePatternedPen,
-    [SYS_CreateCustomPen] = SysCreateCustomPen,
-    [SYS_CopyPen] = SysCopyPen,
-    [SYS_GetStockPen] = SysGetStockPen,
-    [SYS_PenColour] = SysPenColour,
-    [SYS_PenPattern] = SysPenPattern,
-    [SYS_PenThickness] = SysPenThickness,
-    [SYS_PenOrigin] = SysPenOrigin,
-    [SYS_SetGraphicsObject] = SysSetGraphicsObject,
-    [SYS_GetGraphicsObject] = SysGetGraphicsObject,
-    [SYS_PaintRect] = SysPaintRect,
-    [SYS_PaintRoundedRect] = SysPaintRoundedRect,
-    [SYS_PaintEllipse] = SysPaintEllipse,
-    [SYS_PaintPolygon] = SysPaintPolygon,
-    [SYS_PaintRegion] = SysPaintRegion,
-    [SYS_InvertRect] = SysInvertRect,
-    [SYS_InvertRegion] = SysInvertRegion,
+struct syscall_range {
+    const ke_syscall_handler_t* table;
+    size_t count;
 };
 
+static struct syscall_range syscall_ranges[SYSCALL_NUM_RANGES];
+
+export int KeRegisterSyscallRange(int range, const ke_syscall_handler_t* table, size_t count) {
+    if (range < 0 || range >= SYSCALL_NUM_RANGES || table == NULL || count > SYSCALL_RANGE_SIZE) {
+        return EINVAL;
+    }
+    if (syscall_ranges[range].table != NULL) {
+        return EEXIST;
+    }
+    syscall_ranges[range].count = count;
+    syscall_ranges[range].table = table;
+    return 0;
+}
+
+#define KE_SYSCALL_ENTRY(name)  [SYS_##name - SYSCALL_BASE(SYSCALL_RANGE_KE)] = Sys##name,
+
+static const ke_syscall_handler_t ke_syscall_table[] = {
+    KE_SYSCALLS(KE_SYSCALL_ENTRY)
+};
+
+void KeInitSyscalls(void) {
+    KeRegisterSyscallRange(SYSCALL_RANGE_KE, ke_syscall_table,
+                           sizeof(ke_syscall_table) / sizeof(ke_syscall_table[0]));
+}
+
 size_t KePerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d) {
-    if (call >= sizeof(syscall_table) / sizeof(syscall_table[0])) {
+    size_t range = call >> SYSCALL_RANGE_BITS;
+    size_t index = call & (SYSCALL_RANGE_SIZE - 1);
+    if (range >= SYSCALL_NUM_RANGES) {
         return ENOSYS;
     }
-    if (syscall_table[call] == NULL) {
+
+    const struct syscall_range* r = &syscall_ranges[range];
+    if (r->table == NULL || index >= r->count || r->table[index] == NULL) {
         return ENOSYS;
     }
-    return syscall_table[call](a, b, c, d);
+    return r->table[index](a, b, c, d);
 }

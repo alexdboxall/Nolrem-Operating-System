@@ -6,7 +6,7 @@
 #include "dynamic_array.h"
 
 /* TODO: AllocHeap failure safety */
-struct dynamic_array CreateDynamicArray(int data_size, int initial_allocation) {
+struct dynamic_array CdCreateDynamicArray(int data_size, int initial_allocation) {
     struct dynamic_array da;
     if (initial_allocation < 1) {
         initial_allocation = 1;
@@ -18,18 +18,18 @@ struct dynamic_array CreateDynamicArray(int data_size, int initial_allocation) {
     return da;
 }
 
-struct dynamic_array CopyDynamicArray(struct dynamic_array old) {
+struct dynamic_array CdCopyDynamicArray(struct dynamic_array old) {
     struct dynamic_array da = old;
     da.array = (size_t) AllocHeap(old.allocated * old.data_size);
     memcpy(DA_GET_ARRAY(da), DA_GET_ARRAY(old), old.allocated * DA_GET_DATA_SIZE(old));
     return da;
 }
 
-void FreeDynamicArray(struct dynamic_array da) {
+void CdFreeDynamicArray(struct dynamic_array da) {
     FreeHeap(DA_GET_ARRAY(da));
 }
 
-void InsertDynamicArray(struct dynamic_array* da, void* data) {
+void CdInsertDynamicArray(struct dynamic_array* da, void* data) {
     while (da->used >= da->allocated) {
         da->allocated = da->allocated * 2;
         da->array = (size_t) ReallocHeap(DA_P_GET_ARRAY(da), da->allocated * da->data_size);
@@ -38,7 +38,7 @@ void InsertDynamicArray(struct dynamic_array* da, void* data) {
     da->used++;
 }
 
-void SortDynamicArray(struct dynamic_array* da, int (*comparator)(void* d1, void* d2, int n)) {
+void CdSortDynamicArray(struct dynamic_array* da, int (*comparator)(void* d1, void* d2, int n)) {
     if (!da || da->used <= 1) {
         return;
     }
@@ -62,7 +62,7 @@ void SortDynamicArray(struct dynamic_array* da, int (*comparator)(void* d1, void
     FreeHeap(temp);
 }
 
-void* FindInDynamicArray(struct dynamic_array* da, void* data, int (*comparator)(void* d1, void* d2, int n)) {
+void* CdFindInDynamicArray(struct dynamic_array* da, void* data, int (*comparator)(void* d1, void* d2, int n)) {
     for (int i = 0; i < da->used; ++i) {
         if (!comparator(data, AddVoidPtr(da->array, da->data_size * i), da->data_size)) {
             return AddVoidPtr(da->array, da->data_size * i);

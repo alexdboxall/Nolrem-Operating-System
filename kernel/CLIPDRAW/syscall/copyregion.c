@@ -18,7 +18,7 @@ pageable size_t SysCopyRegion(size_t a, size_t, size_t, size_t) {
     }
 
     struct region rgn2 = CdCopyRegion(ua->rgn);
-    size_t retv = (size_t) RegionToUserRegion(rgn2);
+    size_t retv = (size_t) CdRegionToUserRegion(rgn2);
     KeDerefObject(ua);
     return retv;
 }

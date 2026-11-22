@@ -16,6 +16,7 @@
 #include <file.h>
 #include <filesystem.h>
 #include <module.h>
+#include <syscall.h>
 #include <fcntl.h>
 #include <vmm.h>
 #include <sem.h>
@@ -84,12 +85,14 @@ export _Noreturn pageable void KeInitKernel(struct kernel_boot_info* boot_info) 
     ArchEnableInterrupts();
     KeInitCpzImages();
     KeInitMessageBox();
+    KeInitSystemMessageBox();
     KeInitModule();
     KeInitVnode();
     KeInitDiskUtil();
     KeInitFile();
     KeInitFilesystemTable();
     KeInitUserObjectType();
+    KeInitSyscalls();
     KeInitVfs();
     KeInitNullDevice();
     ArchInit2();

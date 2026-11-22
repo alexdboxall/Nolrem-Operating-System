@@ -2,7 +2,7 @@
 
 #include <common.h>
 
-void InitPs2(void);
+void Ps2Init(void);
 
 /* High-level config API: never fail, always return/accept a value. */
 uint8_t Ps2ControllerGetConfiguration(void);

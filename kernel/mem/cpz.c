@@ -34,7 +34,7 @@
 #define CPZ_PAGE_RLE        4
 #define CPZ_ENTRY_END       6
 
-/* Dictionary mode ops (see CpzDecodeDict). */
+/* Dictionary mode ops (see KeCpzDecodeDict). */
 #define CPZ_DICT_MAX        128         /* entries 0..127 are the ops 0x80..0xFF */
 
 /*
@@ -61,12 +61,12 @@ _Static_assert(CPZ_ENTRY_END < (1 << 3), "types are 3 bits");
 #define ENTRY_TYPE(e)       ((unsigned) ((e) >> 29))
 #define ENTRY_OFFSET(e)     ((size_t) ((e) & 0x1FFFFFFFu))
 
-static uint32_t LoadLE32(const uint8_t* p) {
+static uint32_t KeLoadLE32(const uint8_t* p) {
     return (uint32_t) p[0] | ((uint32_t) p[1] << 8) | ((uint32_t) p[2] << 16) | ((uint32_t) p[3] << 24);
 }
 
 /* On success: 'pages' pages in the table and the original is 'size' bytes long (<= pages * 4096). */
-static int CpzParseHeader(const uint8_t header[CPZ_HEADER_SIZE], size_t* pages, size_t* size) {
+static int KeCpzParseHeader(const uint8_t header[CPZ_HEADER_SIZE], size_t* pages, size_t* size) {
     if (header[0] != 'C' || header[1] != 'P' || header[2] != 'Z' || header[3] != 0) {
         return EINVAL;
     }
@@ -80,18 +80,18 @@ static int CpzParseHeader(const uint8_t header[CPZ_HEADER_SIZE], size_t* pages, 
     return 0;
 }
 
-static size_t CpzTableBytes(size_t pages) {
+static size_t KeCpzTableBytes(size_t pages) {
     return (pages + 1) * sizeof(uint32_t);
 }
 
 /* The table is little-endian on disk; this converts what was just read, in place. */
-static void CpzLoadTable(uint32_t* table, size_t pages) {
+static void KeCpzLoadTable(uint32_t* table, size_t pages) {
     for (size_t i = 0; i <= pages; ++i) {
-        table[i] = LoadLE32((const uint8_t*) &table[i]);
+        table[i] = KeLoadLE32((const uint8_t*) &table[i]);
     }
 }
 
-static int CpzValidateTable(const uint32_t* table, size_t pages) {
+static int KeCpzValidateTable(const uint32_t* table, size_t pages) {
     if (pages == 0) {
         return EINVAL;
     }
@@ -99,7 +99,7 @@ static int CpzValidateTable(const uint32_t* table, size_t pages) {
         return EINVAL;
     }
 
-    size_t data_start = CPZ_HEADER_SIZE + CpzTableBytes(pages);
+    size_t data_start = CPZ_HEADER_SIZE + KeCpzTableBytes(pages);
 
     for (size_t i = 0; i < pages; ++i) {
         unsigned type = ENTRY_TYPE(table[i]);
@@ -129,7 +129,7 @@ static int CpzValidateTable(const uint32_t* table, size_t pages) {
     return 0;
 }
 
-static int CpzGetPage(const uint32_t* table, size_t pages, size_t index, struct cpz_page* out) {
+static int KeCpzGetPage(const uint32_t* table, size_t pages, size_t index, struct cpz_page* out) {
     if (index >= pages) {
         return EINVAL;
     }
@@ -153,14 +153,14 @@ struct cpz_image {
     uint32_t table[];           /* pages + 1 entries, host byte order, already validated */
 };
 
-static void CleanupCpzImage(void* _img) {
+static void KeCleanupCpzImage(void* _img) {
     struct cpz_image* img = _img;
     KeDerefObject(img->file);
     FreeHeap(img);
 }
 
 void KeInitCpzImages(void) {
-    KeRegisterObjectType(OBJTYPE_CPZ_INST, CleanupCpzImage);
+    KeRegisterObjectType(OBJTYPE_CPZ_INST, KeCleanupCpzImage);
 }
 
 /*
@@ -168,7 +168,7 @@ void KeInitCpzImages(void) {
  * of the file is not an error, it just leaves the rest of 'buf' as it was, so callers zero it first and treat
  * what comes back as untrusted.
  */
-static int CpzReadFile(struct file* file, size_t offset, void* buf, size_t len) {
+static int KeCpzReadFile(struct file* file, size_t offset, void* buf, size_t len) {
     struct aio aio;
     struct transfer tr = KeCreateKernelTransfer(buf, len, offset, TRANSFER_READ);
     KeCreateIO(&aio, file, tr, NULL, NULL);
@@ -192,20 +192,20 @@ struct cpz_in {
     uint8_t win[CPZ_WINDOW];
 };
 
-static void InInit(struct cpz_in* in, struct file* file, size_t offset, size_t length) {
+static void KeInInit(struct cpz_in* in, struct file* file, size_t offset, size_t length) {
     in->file = file;
     in->next = offset;
     in->left = length;
     in->pos = in->end = 0;
 }
 
-static int InRefill(struct cpz_in* in) {
+static int KeInRefill(struct cpz_in* in) {
     size_t n = in->left < CPZ_WINDOW ? in->left : CPZ_WINDOW;
     if (n == 0) {
         return EIO;             /* the stream ended before the page was complete */
     }
     memset(in->win, 0, n);      /* a short read must not leave stack garbage to be decoded */
-    int res = CpzReadFile(in->file, in->next, in->win, n);
+    int res = KeCpzReadFile(in->file, in->next, in->win, n);
     if (res != 0) {
         return res;
     }
@@ -216,9 +216,9 @@ static int InRefill(struct cpz_in* in) {
     return 0;
 }
 
-static int InByte(struct cpz_in* in, uint8_t* byte) {
+static int KeInByte(struct cpz_in* in, uint8_t* byte) {
     if (in->pos == in->end) {
-        int res = InRefill(in);
+        int res = KeInRefill(in);
         if (res != 0) return res;
     }
     *byte = in->win[in->pos++];
@@ -226,17 +226,17 @@ static int InByte(struct cpz_in* in, uint8_t* byte) {
 }
 
 /* Copies the next 'n' stream bytes to 'dst', which must already be zeroed (a short read leaves it as it was). */
-static int InCopy(struct cpz_in* in, uint8_t* dst, size_t n) {
+static int KeInCopy(struct cpz_in* in, uint8_t* dst, size_t n) {
     while (n > 0) {
         if (in->pos == in->end) {
             if (n >= CPZ_WINDOW && in->left >= n) {
-                int res = CpzReadFile(in->file, in->next, dst, n);      /* a long run: straight into the frame */
+                int res = KeCpzReadFile(in->file, in->next, dst, n);      /* a long run: straight into the frame */
                 if (res != 0) return res;
                 in->next += n;
                 in->left -= n;
                 return 0;
             }
-            int res = InRefill(in);
+            int res = KeInRefill(in);
             if (res != 0) return res;
         }
         size_t k = in->end - in->pos;
@@ -250,7 +250,7 @@ static int InCopy(struct cpz_in* in, uint8_t* dst, size_t n) {
 }
 
 /* The stream must have been used up exactly: trailing bytes mean the table or the stream is wrong. */
-static int InFinished(const struct cpz_in* in) {
+static int KeInFinished(const struct cpz_in* in) {
     return in->pos == in->end && in->left == 0;
 }
 
@@ -262,13 +262,13 @@ static int InFinished(const struct cpz_in* in) {
  *   11vvvvvv  prefix: v becomes the high bits of the NEXT non-prefix op's count (6 bits per prefix, stackable)
  * 'out' must be zeroed.
  */
-static int CpzDecodeRle(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
+static int KeCpzDecodeRle(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
     size_t op = 0;
     size_t value = 0;
 
     while (op < CPZ_PAGE_SIZE) {
         uint8_t byte;
-        int res = InByte(in, &byte);
+        int res = KeInByte(in, &byte);
         if (res != 0) return res;
 
         /*
@@ -293,19 +293,19 @@ static int CpzDecodeRle(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
         }
 
         if (kind == 0) {
-            res = InCopy(in, out + op, count);
+            res = KeInCopy(in, out + op, count);
         } else if (kind == 1) {
             res = 0;                    /* the frame is already zero */
         } else {
             uint8_t fill;
-            res = InByte(in, &fill);
+            res = KeInByte(in, &fill);
             if (res == 0) memset(out + op, fill, count);
         }
         if (res != 0) return res;
         op += count;
     }
 
-    return InFinished(in) ? 0 : EIO;
+    return KeInFinished(in) ? 0 : EIO;
 }
 
 /*
@@ -323,7 +323,7 @@ static int CpzDecodeRle(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
  * The dictionary needs no copy of the data: an entry is just where its bytes already ARE in the page being
  * decoded. dict[k] = (length - 2) << 12 | offset in the page. 'out' must be zeroed.
  */
-static int CpzDecodeDict(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
+static int KeCpzDecodeDict(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
     uint16_t dict[CPZ_DICT_MAX];
     unsigned entries = 0;
     size_t op = 0;
@@ -332,7 +332,7 @@ static int CpzDecodeDict(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
 
     while (op < CPZ_PAGE_SIZE) {
         uint8_t byte;
-        int res = InByte(in, &byte);
+        int res = KeInByte(in, &byte);
         if (res != 0) return res;
 
         if (byte >= 0x80) {             /* an entry */
@@ -373,10 +373,10 @@ static int CpzDecodeDict(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
             res = 0;
         } else if (kind == 4) {         /* repeat */
             uint8_t fill;
-            res = InByte(in, &fill);
+            res = KeInByte(in, &fill);
             if (res == 0) memset(out + op, fill, count);
         } else {                        /* literal, or add */
-            res = InCopy(in, out + op, count);
+            res = KeInCopy(in, out + op, count);
             if (res == 0 && kind == 0) {
                 dict[entries++] = (uint16_t) (((count - 2) << 12) | op);
             }
@@ -385,14 +385,14 @@ static int CpzDecodeDict(struct cpz_in* in, uint8_t out[CPZ_PAGE_SIZE]) {
         op += count;
     }
 
-    return InFinished(in) ? 0 : EIO;
+    return KeInFinished(in) ? 0 : EIO;
 }
 
 /* Expands one RLE or dictionary page of 'file' into 'out' (which must be zeroed). */
-static int CpzDecodePage(struct file* file, const struct cpz_page* page, uint8_t out[CPZ_PAGE_SIZE]) {
+static int KeCpzDecodePage(struct file* file, const struct cpz_page* page, uint8_t out[CPZ_PAGE_SIZE]) {
     struct cpz_in in;
-    InInit(&in, file, page->offset, page->length);
-    return page->type == CPZ_PAGE_DICT ? CpzDecodeDict(&in, out) : CpzDecodeRle(&in, out);
+    KeInInit(&in, file, page->offset, page->length);
+    return page->type == CPZ_PAGE_DICT ? KeCpzDecodeDict(&in, out) : KeCpzDecodeRle(&in, out);
 }
 
 /* ========================================================================
@@ -410,7 +410,7 @@ export int KeCheckCpzSignature(struct file* file, bool* is_cpz) {
     if (file == NULL) {
         return EINVAL;
     }
-    int res = CpzReadFile(file, 0, sig, sizeof(sig));
+    int res = KeCpzReadFile(file, 0, sig, sizeof(sig));
     if (res != 0) {
         return res;
     }
@@ -425,16 +425,16 @@ export struct cpz_image* KeOpenCpzImage(struct file* file) {
 
     uint8_t header[CPZ_HEADER_SIZE];
     memset(header, 0, sizeof(header));
-    if (CpzReadFile(file, 0, header, sizeof(header)) != 0) {
+    if (KeCpzReadFile(file, 0, header, sizeof(header)) != 0) {
         return NULL;
     }
 
     size_t pages, size;
-    if (CpzParseHeader(header, &pages, &size) != 0) {
+    if (KeCpzParseHeader(header, &pages, &size) != 0) {
         return NULL;
     }
 
-    size_t table_bytes = CpzTableBytes(pages);
+    size_t table_bytes = KeCpzTableBytes(pages);
     struct cpz_image* img = AllocHeap(sizeof(*img) + table_bytes);
     if (img == NULL) {
         return NULL;
@@ -446,14 +446,14 @@ export struct cpz_image* KeOpenCpzImage(struct file* file) {
     img->size = size;
     memset(img->table, 0, table_bytes);
 
-    if (CpzReadFile(file, CPZ_HEADER_SIZE, img->table, table_bytes) != 0) {
+    if (KeCpzReadFile(file, CPZ_HEADER_SIZE, img->table, table_bytes) != 0) {
         KeDerefObject(img);
         return NULL;
     }
-    CpzLoadTable(img->table, pages);
+    KeCpzLoadTable(img->table, pages);
 
     /* A truncated file reads back as zeros, which fails this (no end marker). */
-    if (CpzValidateTable(img->table, pages) != 0) {
+    if (KeCpzValidateTable(img->table, pages) != 0) {
         KeDerefObject(img);
         return NULL;
     }
@@ -474,14 +474,14 @@ export size_t KeGetCpzImageSize(struct cpz_image* image) {
  * Runs under po->mtx, may block, and may be running for several pages of one mapping at once: it only reads
  * the (immutable) image, and everything it writes is on its own frame or its own stack. It allocates nothing.
  */
-static int CpzReload(size_t frame, struct virt_loader* vr, struct page_origin* po) {
+static int KeCpzReload(size_t frame, struct virt_loader* vr, struct page_origin* po) {
     struct cpz_image* img = vr->context_p;
     if (img == NULL || !po->is_file) {
         return EINVAL;
     }
 
     struct cpz_page page;
-    int res = CpzGetPage(img->table, img->pages, po->file_offset / PAGE_SIZE, &page);
+    int res = KeCpzGetPage(img->table, img->pages, po->file_offset / PAGE_SIZE, &page);
     if (res != 0) {
         return res;
     }
@@ -500,12 +500,12 @@ static int CpzReload(size_t frame, struct virt_loader* vr, struct page_origin* p
         break;
 
     case CPZ_PAGE_RAW:
-        res = CpzReadFile(po->file, page.offset, out, PAGE_SIZE);
+        res = KeCpzReadFile(po->file, page.offset, out, PAGE_SIZE);
         break;
 
     case CPZ_PAGE_RLE:
     case CPZ_PAGE_DICT:
-        res = CpzDecodePage(po->file, &page, out);
+        res = KeCpzDecodePage(po->file, &page, out);
         break;
 
     default:
@@ -532,8 +532,8 @@ export void* KeAllocCompressedFileMemory(struct cpz_image* image, size_t offset,
 
     struct virt_loader loader;
     memset(&loader, 0, sizeof(loader));
-    loader.reload_func = CpzReload;
-    loader.context_s = sizeof(*image) + CpzTableBytes(image->pages);
+    loader.reload_func = KeCpzReload;
+    loader.context_s = sizeof(*image) + KeCpzTableBytes(image->pages);
     loader.context_p = image;
 
     return KeAllocFileMemory(image->file, offset, bytes, flags, &loader);

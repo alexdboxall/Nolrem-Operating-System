@@ -23,7 +23,7 @@ struct msgbox {
     int count;
 };
 
-static void CleanupMsgbox(void* _mbox) {
+static void KeCleanupMsgbox(void* _mbox) {
     struct msgbox* mbox = _mbox;
     FreeHeap(mbox->data);
     KeDerefObject(mbox->empty_sem);
@@ -33,7 +33,22 @@ static void CleanupMsgbox(void* _mbox) {
 }
 
 void KeInitMessageBox(void) {
-    KeRegisterObjectType(OBJTYPE_MSGBOX, CleanupMsgbox);
+    KeRegisterObjectType(OBJTYPE_MSGBOX, KeCleanupMsgbox);
+}
+
+#define SYSTEM_MSGBOX_SIZE      8
+
+static struct msgbox* system_mbox = NULL;
+
+export void KeInitSystemMessageBox(void) {
+    system_mbox = KeCreateMessageBox(sizeof(struct msg), SYSTEM_MSGBOX_SIZE);
+    if (system_mbox == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);
+    }
+}
+
+export struct msgbox* KeGetSystemMessageBox(void) {
+    return system_mbox;
 }
 
 export struct msgbox* KeCreateMessageBox(size_t message_size, size_t max_count) {
@@ -65,7 +80,7 @@ export struct msgbox* KeCreateMessageBox(size_t message_size, size_t max_count) 
         return NULL;
     }
     mbox->filled_sem = KeCreateSem(max_count, max_count);
-    if (mbox->empty_sem == NULL) {
+    if (mbox->filled_sem == NULL) {
         KeDerefObject(mbox->empty_sem);
         KeDerefObject(mbox->lock);
         FreeHeap(mbox->data);
@@ -120,8 +135,7 @@ export int KePostMessage(struct msgbox* mbox, const void* msg, int64_t timeout) 
 
     int res;
 
-    extern struct msgbox* WmGetSystemMessageBox(void);
-    if (mbox == WmGetSystemMessageBox() && timeout != TIMEOUT_INSTANT) {
+    if (mbox == system_mbox && timeout != TIMEOUT_INSTANT) {
         res = KeAcquireSem(mbox->empty_sem, TIMEOUT_INSTANT);
         if (res != 0) {
             KePanic(PANIC_SYSTEM_MESSAGES_FULL);

@@ -19,7 +19,7 @@ static _Atomic uint32_t num_cached = 0;
 static struct glyph_cache_entry* scaled_font_cache = NULL;
 static struct spinlock lock;
 
-export pageable uint8_t* GetCacheScaledGlyph(struct font* font, font_style_id style, uint32_t c, int* index_out) {
+export pageable uint8_t* CdGetCacheScaledGlyph(struct font* font, font_style_id style, uint32_t c, int* index_out) {
     if (c < 0x20 || c > 0x7F || index_out == NULL) {
         return NULL;
     }
@@ -41,7 +41,7 @@ export pageable uint8_t* GetCacheScaledGlyph(struct font* font, font_style_id st
     return NULL;
 }
 
-export pageable void ReleaseCachedScaledGlyph(int index) {
+export pageable void CdReleaseCachedScaledGlyph(int index) {
     KeAcquireSpinlock(&lock);
     if (index >= NUM_CACHED_GLYPHS || index < 0) {
         uint8_t remaining = --scaled_font_cache[index].in_use;
@@ -59,7 +59,7 @@ export pageable void ReleaseCachedScaledGlyph(int index) {
 }
 
 /* Not pageable, as we need to be able to purge while we're paging! */
-void PurgeScaledGlyphCacheIfNeeded(void) {
+void CdPurgeScaledGlyphCacheIfNeeded(void) {
     if (!KeIsMemoryRunningLow() || num_cached == 0) {
         return;
     }
@@ -81,7 +81,7 @@ void PurgeScaledGlyphCacheIfNeeded(void) {
     KeReleaseSpinlock(&lock);
 }
 
-export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_id style, uint32_t c, uint8_t* bitmap, size_t size) {
+export pageable void CdSuggestAddScaledGlyphToCache(struct font* font, font_style_id style, uint32_t c, uint8_t* bitmap, size_t size) {
     if (c < 0x20 || c > 0x7F || KeIsMemoryRunningLow()) {
         return;
     }
@@ -140,6 +140,6 @@ export pageable void SuggestAddScaledGlyphToCache(struct font* font, font_style_
     KeReleaseSpinlock(&lock);
 }
 
-void InitScaledGlyphCache(void) {
+void CdInitScaledGlyphCache(void) {
     KeInitSpinlock(&lock);
 }

@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <common.h>
 
 /* We use EDX before EBX, as EBX needs to be preserved, which makes the syscalls
    longer. EDX can be trashed, so the compiler doesn't need to push/pop it.
@@ -7,7 +8,7 @@
     r->eax = KePerformSystemCall(r->eax, r->edx, r->ecx, r->ebx, r->esi);
  */
 
-size_t SystemCall(size_t arg1, size_t arg2, size_t arg3, size_t arg4, size_t arg5) {
+export size_t SystemCall(size_t arg1, size_t arg2, size_t arg3, size_t arg4, size_t arg5) {
     size_t result;
 
     __asm__ __volatile__ (
@@ -24,7 +25,7 @@ size_t SystemCall(size_t arg1, size_t arg2, size_t arg3, size_t arg4, size_t arg
     return result;
 }
 
-size_t SystemCall1(size_t arg1) {
+export size_t SystemCall1(size_t arg1) {
     size_t result;
 
     __asm__ __volatile__ (
@@ -37,7 +38,7 @@ size_t SystemCall1(size_t arg1) {
     return result;
 }
 
-size_t SystemCall2(size_t arg1, size_t arg2) {
+export size_t SystemCall2(size_t arg1, size_t arg2) {
     size_t result;
 
     __asm__ __volatile__ (
@@ -51,7 +52,7 @@ size_t SystemCall2(size_t arg1, size_t arg2) {
     return result;
 }
 
-size_t SystemCall3(size_t arg1, size_t arg2, size_t arg3) {
+export size_t SystemCall3(size_t arg1, size_t arg2, size_t arg3) {
     size_t result;
 
     __asm__ __volatile__ (
@@ -66,7 +67,7 @@ size_t SystemCall3(size_t arg1, size_t arg2, size_t arg3) {
     return result;
 }
 
-size_t SystemCall4(size_t arg1, size_t arg2, size_t arg3, size_t arg4) {
+export size_t SystemCall4(size_t arg1, size_t arg2, size_t arg3, size_t arg4) {
     size_t result;
 
     __asm__ __volatile__ (

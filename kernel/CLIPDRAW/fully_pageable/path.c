@@ -24,8 +24,8 @@ export pageable struct path CdCreatePath(int start_x, int start_y) {
             .data = NULL,
         };
     };
-    *data = CreateDynamicArray(sizeof(struct path_entry), 8);
-    *count_data = CreateDynamicArray(sizeof(int), 4);
+    *data = CdCreateDynamicArray(sizeof(struct path_entry), 8);
+    *count_data = CdCreateDynamicArray(sizeof(int), 4);
 
     struct path p = (struct path) {
         .x = start_x,
@@ -70,12 +70,12 @@ export pageable void CdLiftPath(struct path* p, int start_x, int start_y) {
     
     int count = p->num_points_total - p->count_total_so_far;
     CdDrawPath(p, start_x, start_y);
-    InsertDynamicArray((struct dynamic_array*) p->count_data, &count);
+    CdInsertDynamicArray((struct dynamic_array*) p->count_data, &count);
     p->count_total_so_far = p->num_points_total;
     p->polygons++;
 }
 
-static pageable int Transform(int64_t pos, int scale_16_16, int trans) {
+static pageable int CdTransform(int64_t pos, int scale_16_16, int trans) {
     pos *= scale_16_16;
     pos /= 256;
     pos += trans;
@@ -121,12 +121,12 @@ export pageable struct region CdClosePath(struct path p, int mode) {
 
         struct path_entry* arr = DA_GET_ARRAY(*((struct dynamic_array*) p.data));
         for (i = 0; i < p.num_points_total - 1; ++i) {
-            xs[i] = Transform(arr[i].x, p.scale_x_16_16, p.trans_x);
-            ys[i] = Transform(arr[i].y, p.scale_y_16_16, p.trans_y);
+            xs[i] = CdTransform(arr[i].x, p.scale_x_16_16, p.trans_x);
+            ys[i] = CdTransform(arr[i].y, p.scale_y_16_16, p.trans_y);
         }
 
-        xs[i] = Transform(p.x, p.scale_x_16_16, p.trans_x);
-        ys[i] = Transform(p.y, p.scale_y_16_16, p.trans_y);
+        xs[i] = CdTransform(p.x, p.scale_x_16_16, p.trans_x);
+        ys[i] = CdTransform(p.y, p.scale_y_16_16, p.trans_y);
 
         rgn = CdCreatePolyPolygonRegion(xs, ys, counts, p.polygons, mode);
 
@@ -137,7 +137,7 @@ export pageable struct region CdClosePath(struct path p, int mode) {
 
 nomem:
     /* Clear the actual array data. */
-    FreeDynamicArray(*((struct dynamic_array*) p.data));
+    CdFreeDynamicArray(*((struct dynamic_array*) p.data));
 
     /* The pointer to the data was allocated dynamically, so clear that. */
     FreeHeap(p.data);
@@ -145,13 +145,13 @@ nomem:
     return rgn;
 }
 
-export pageable struct path CopyPath(struct path old) {
+export pageable struct path CdCopyPath(struct path old) {
     if (old.data == NULL) {
         return old;
     }
 
     struct dynamic_array* data = AllocHeap(sizeof(struct dynamic_array));
-    *data = CopyDynamicArray(*((struct dynamic_array*) old.data));
+    *data = CdCopyDynamicArray(*((struct dynamic_array*) old.data));
 
     struct path p = old;
     p.data = (void*) data;
@@ -172,7 +172,7 @@ export pageable void CdDrawPath(struct path* p, int x, int y) {
         .x = p->x,
         .y = p->y
     };
-    InsertDynamicArray((struct dynamic_array*) p->data, &data);
+    CdInsertDynamicArray((struct dynamic_array*) p->data, &data);
 
     /* 
      * Now we can set the current point. 
@@ -182,11 +182,11 @@ export pageable void CdDrawPath(struct path* p, int x, int y) {
     p->num_points_total++;
 }
 
-static pageable int32_t Midpoint(int32_t a, int32_t b) {
+static pageable int32_t CdMidpoint(int32_t a, int32_t b) {
     return (a + b) >> 1;
 }
 
-static pageable int IsFlatEnough(
+static pageable int CdIsFlatEnough(
     int32_t x1, int32_t y1,
     int32_t x2, int32_t y2,
     int32_t cx, int32_t cy)
@@ -203,7 +203,7 @@ static pageable int IsFlatEnough(
     return cross < FLATNESS_THRESHOLD;
 }
 
-static pageable void DrawCubicBeizerPathRecursive(
+static pageable void CdDrawCubicBeizerPathRecursive(
     struct path* p,
     int32_t x1, int32_t y1,
     int32_t x2, int32_t y2,
@@ -216,30 +216,30 @@ static pageable void DrawCubicBeizerPathRecursive(
         return;
     }
 
-    if (IsFlatEnough(x1,y1,x2,y2,c1x,c1y) && IsFlatEnough(x1,y1,x2,y2,c2x,c2y)) {
+    if (CdIsFlatEnough(x1,y1,x2,y2,c1x,c1y) && CdIsFlatEnough(x1,y1,x2,y2,c2x,c2y)) {
         CdDrawPath(p, FROM_FP(x2), FROM_FP(y2));
         return;
     }
 
-    int32_t x12  = Midpoint(x1, c1x);
-    int32_t y12  = Midpoint(y1, c1y);
+    int32_t x12  = CdMidpoint(x1, c1x);
+    int32_t y12  = CdMidpoint(y1, c1y);
 
-    int32_t x23  = Midpoint(c1x, c2x);
-    int32_t y23  = Midpoint(c1y, c2y);
+    int32_t x23  = CdMidpoint(c1x, c2x);
+    int32_t y23  = CdMidpoint(c1y, c2y);
 
-    int32_t x34  = Midpoint(c2x, x2);
-    int32_t y34  = Midpoint(c2y, y2);
+    int32_t x34  = CdMidpoint(c2x, x2);
+    int32_t y34  = CdMidpoint(c2y, y2);
 
-    int32_t x123 = Midpoint(x12, x23);
-    int32_t y123 = Midpoint(y12, y23);
+    int32_t x123 = CdMidpoint(x12, x23);
+    int32_t y123 = CdMidpoint(y12, y23);
 
-    int32_t x234 = Midpoint(x23, x34);
-    int32_t y234 = Midpoint(y23, y34);
+    int32_t x234 = CdMidpoint(x23, x34);
+    int32_t y234 = CdMidpoint(y23, y34);
 
-    int32_t x1234 = Midpoint(x123, x234);
-    int32_t y1234 = Midpoint(y123, y234);
+    int32_t x1234 = CdMidpoint(x123, x234);
+    int32_t y1234 = CdMidpoint(y123, y234);
 
-    DrawCubicBeizerPathRecursive(
+    CdDrawCubicBeizerPathRecursive(
         p,
         x1, y1,
         x1234, y1234,
@@ -247,7 +247,7 @@ static pageable void DrawCubicBeizerPathRecursive(
         x123, y123,
         depth + 1
     );
-    DrawCubicBeizerPathRecursive(
+    CdDrawCubicBeizerPathRecursive(
         p,
         x1234, y1234,
         x2, y2,
@@ -257,7 +257,7 @@ static pageable void DrawCubicBeizerPathRecursive(
     );
 }
 
-export pageable void DrawCubicBeizerPath(struct path* p, int x, int y, int c1x, int c1y, int c2x, int c2y) {
+export pageable void CdDrawCubicBeizerPath(struct path* p, int x, int y, int c1x, int c1y, int c2x, int c2y) {
     if (p == NULL || p->data == NULL) {
         return;
     }
@@ -265,7 +265,7 @@ export pageable void DrawCubicBeizerPath(struct path* p, int x, int y, int c1x, 
     int x1 = p->x;
     int y1 = p->y;
     
-    DrawCubicBeizerPathRecursive(
+    CdDrawCubicBeizerPathRecursive(
         p,
         TO_FP(x1), TO_FP(y1),
         TO_FP(x),  TO_FP(y),
@@ -275,7 +275,7 @@ export pageable void DrawCubicBeizerPath(struct path* p, int x, int y, int c1x, 
     );
 }
 
-export pageable void DrawQuadraticBezierPath(
+export pageable void CdDrawQuadraticBezierPath(
     struct path* p,
     int x, int y,
     int cx, int cy)
@@ -299,7 +299,7 @@ export pageable void DrawQuadraticBezierPath(
     int32_t C2x = P2x + (int32_t)(((int64_t)(P1x - P2x) * 2) / 3);
     int32_t C2y = P2y + (int32_t)(((int64_t)(P1y - P2y) * 2) / 3);
 
-    DrawCubicBeizerPathRecursive(
+    CdDrawCubicBeizerPathRecursive(
         p,
         P0x, P0y,
         P2x, P2y,

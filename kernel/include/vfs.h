@@ -27,8 +27,9 @@ struct vnode* KeTryFindAndReferenceExistingVnode(ino_t id, dev_t dev);
 int KeRegisterNewVnode(struct vnode* node);
 void KePurgeOldVnodes(void);
 
-// TODO: how do we remove vnodes from the table? race between removing from table
-// after ref count = 0 and someone looking up a vnode in the table
-// or actually could make the table keep a ref... and have it keep recently closed
-// and then have bg thread cleanup thread could sometimes lock the tree and clear out
-// refcount = 1 (i.e. only the table) nodes
+/*
+ * The table holds its own reference to every registered vnode, so a lookup can
+ * never race with the last user dropping it. Vnodes that nobody else holds
+ * (refcount == 1) are evicted by KePurgeOldVnodes(), which runs from the
+ * low-priority background thread; KeUnregisterVnode() evicts one explicitly.
+ */

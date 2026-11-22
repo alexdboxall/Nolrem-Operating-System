@@ -33,7 +33,7 @@ struct partition_async_context {
     struct aio* subaio;
 };
 
-static void PartitionAccessAsyncCallback(void* _aio) {
+static void KePartitionAccessAsyncCallback(void* _aio) {
     struct aio* aio = _aio;
     struct aio* subaio = aio->sub;
 
@@ -53,7 +53,7 @@ static void PartitionAccessAsyncCallback(void* _aio) {
     FreeHeap(subaio);
 }
 
-static int Access(struct aio* aio, bool write) {
+static int KePartitionAccess(struct aio* aio, bool write) {
     struct vnode* node = aio->node;
     struct transfer* tr = &aio->transfer;
     struct partition_data* partition = node->data;
@@ -69,21 +69,21 @@ static int Access(struct aio* aio, bool write) {
     real_transfer.offset = start_addr;
 
     struct aio* subaio = AllocHeap(sizeof(struct aio));
-    KeCreateIO(subaio, partition->disk, real_transfer, PartitionAccessAsyncCallback, (void*) aio);
+    KeCreateIO(subaio, partition->disk, real_transfer, KePartitionAccessAsyncCallback, (void*) aio);
     aio->sub = subaio;
     subaio->extra_data = length;
     return (write ? KeWriteFile : KeReadFile)(subaio);
 }
 
-static int Read(struct aio* aio) {   
-    return Access(aio, false);
+static int KePartitionRead(struct aio* aio) {   
+    return KePartitionAccess(aio, false);
 }
 
-static int Write(struct aio* aio) {
-    return Access(aio, true);
+static int KePartitionWrite(struct aio* aio) {
+    return KePartitionAccess(aio, true);
 }
 
-static int Create(struct vnode* node, struct vnode** fs, const char*, int flags, mode_t mode) {
+static int KePartitionCreate(struct vnode* node, struct vnode** fs, const char*, int flags, mode_t mode) {
     struct partition_data* partition = node->data;
     if (partition->fs != NULL) {
         return EALREADY;
@@ -93,7 +93,7 @@ static int Create(struct vnode* node, struct vnode** fs, const char*, int flags,
     return 0;
 }
 
-static int Follow(struct vnode* node, struct vnode** out, const char* name) {
+static int KePartitionFollow(struct vnode* node, struct vnode** out, const char* name) {
     struct partition_data* partition = node->data;
 
     if (!strcmp(name, "fs")) {
@@ -109,10 +109,10 @@ static int Follow(struct vnode* node, struct vnode** out, const char* name) {
 }
 
 static const struct vnode_operations dev_ops = {
-    .read           = Read,
-    .write          = Write,
-    .create         = Create,
-    .follow         = Follow,
+    .read           = KePartitionRead,
+    .write          = KePartitionWrite,
+    .create         = KePartitionCreate,
+    .follow         = KePartitionFollow,
 };
 
 pageable struct file* KeCreatePartition(
@@ -145,7 +145,7 @@ pageable struct file* KeCreatePartition(
     return partition;
 }
 
-static pageable struct file* TryCreateMbrPartition(
+static pageable struct file* KeTryCreateMbrPartition(
     struct file* disk, uint8_t* mem, int index, int sector_size
 ) {
     int offset = 0x1BE + index * 16;
@@ -188,7 +188,7 @@ static pageable struct file* TryCreateMbrPartition(
 /*
  * Caller to free return value.
  */
-static pageable struct file** GetMbrPartitions(struct file* disk) {
+static pageable struct file** KeGetMbrPartitions(struct file* disk) {
     size_t block_size = disk->node->stat.st_blksize;
 
     uint8_t* mem = AllocHeap(block_size);
@@ -210,7 +210,7 @@ static pageable struct file** GetMbrPartitions(struct file* disk) {
 
     int partitions_found = 0;
     for (int i = 0; i < 4; ++i) {
-        struct file* partition = TryCreateMbrPartition(disk, mem, i, block_size);
+        struct file* partition = KeTryCreateMbrPartition(disk, mem, i, block_size);
         if (partition != NULL) {
             partitions[partitions_found++] = partition;
         }
@@ -224,7 +224,7 @@ static pageable struct file** GetMbrPartitions(struct file* disk) {
  * Returns a null terminated array of partitions.
  */
 export pageable struct file** KeGetPartitionsForDisk(struct file* disk) {
-    struct file** partitions = GetMbrPartitions(disk);
+    struct file** partitions = KeGetMbrPartitions(disk);
     
     if (partitions == NULL) {
         // check for GPT

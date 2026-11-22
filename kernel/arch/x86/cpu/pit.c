@@ -15,7 +15,7 @@ void ArchDebugInhibitTimerAdvance(bool inhibit) {
 #endif
 }
 
-static void HandlePit(struct x86_regs*) {
+static void x86HandlePit(struct x86_regs*) {
 	if (!pit_inhibit) {
 		KeAdvanceTimer(pit_nanos);
 	}
@@ -27,5 +27,5 @@ void x86InitPit(int hertz) {
 	outb(0x40, divisor & 0xFF);
 	outb(0x40, divisor >> 8);
     pit_nanos = (1000000 / hertz) * 1000;
-    KeRegisterInterruptHandler(0, HandlePit);
+    KeRegisterInterruptHandler(0, x86HandlePit);
 }

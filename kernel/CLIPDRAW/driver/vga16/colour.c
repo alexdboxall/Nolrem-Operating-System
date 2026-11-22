@@ -66,23 +66,23 @@ uint8_t VgaNearestColour(uint32_t col) {
     return best;
 }
 
-colour_t ConvertVgaColourToARGB(int vgacol) {
+colour_t VgaConvertColourToARGB(int vgacol) {
     RGB16 color = vga_palette[vgacol];
     return 0xFF000000 | (color.r << 16) | (color.g << 8) | color.b;
 }
 
-static inline void WaitVRetraceReset(void) {
+static inline void VgaWaitVRetraceReset(void) {
     inb(VGA_INSTAT_READ);
 }
 
-void InitVgaPalette(void) {
-    WaitVRetraceReset();
+void VgaInitPalette(void) {
+    VgaWaitVRetraceReset();
     for (uint8_t i = 0; i < 16; i++) {
         outb(VGA_ATTR_INDEX, i);
         outb(VGA_ATTR_DATA,  i);
     }
 
-    WaitVRetraceReset();
+    VgaWaitVRetraceReset();
     outb(VGA_ATTR_INDEX, 0x20);
 
     outb(VGA_DAC_WRITE_INDEX, 0);

@@ -5,4 +5,4 @@
 #include <filesystem.h>
 
 int FatMountCreator(struct file* raw_device, struct file** out);
-void InitFat(void);
+void FatInit(void);

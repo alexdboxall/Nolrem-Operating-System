@@ -48,7 +48,7 @@ void KeInitVfs(void) {
 	mounted_file_list = NULL;
 }
 
-static bool IsRelative(const char* path) {
+static bool KeIsRelative(const char* path) {
 	for (int i = 0; path[i]; ++i) {
 		if (path[i] == ':') {
 			return false;
@@ -57,7 +57,7 @@ static bool IsRelative(const char* path) {
 	return true;
 }
 
-static int CheckValidComponentName(const char* name) {	
+static int KeCheckValidComponentName(const char* name) {	
 	if (name[0] == 0) {
 		return EINVAL;
 	}
@@ -87,7 +87,7 @@ struct mounted_file* KeGetMountPointFromName(const char* name) {
 	return NULL;
 }
 
-static int DoesMountPointExist(const char* name) {
+static int KeDoesMountPointExist(const char* name) {
     if (KeGetMountPointFromName(name) != NULL) {
         return EEXIST;
     }
@@ -103,7 +103,7 @@ export int KeMount(struct vnode* node, const char* name) {
 		return ENAMETOOLONG;
 	}
 
-    int status = CheckValidComponentName(name);
+    int status = KeCheckValidComponentName(name);
 	if (status != 0) {
 		return status;
 	}
@@ -113,7 +113,7 @@ export int KeMount(struct vnode* node, const char* name) {
 		return status;
 	}
 
-    if (DoesMountPointExist(name) == EEXIST) {
+    if (KeDoesMountPointExist(name) == EEXIST) {
         KeReleaseMutex(mount_list_lock);
         return EEXIST;
     }
@@ -137,7 +137,7 @@ export int KeUnmount(const char* name) {
 		return EINVAL;
 	}
 
-	if (CheckValidComponentName(name) != 0) {
+	if (KeCheckValidComponentName(name) != 0) {
 		return EINVAL;
 	}
 
@@ -185,7 +185,7 @@ export int KeUnmount(const char* name) {
 *
 * This also handles duplicated and trailing forward slashes.
 */
-static int GetPathComponent(const char* path, int* ptr, char* out, int max_len, char delimiter) {
+static int KeGetPathComponent(const char* path, int* ptr, char* out, int max_len, char delimiter) {
 	int i = 0;
 	out[0] = 0;
 
@@ -213,23 +213,23 @@ static int GetPathComponent(const char* path, int* ptr, char* out, int max_len, 
 	/*
 	* Ensure that there are no colons or backslashes in the filename itself.
 	*/
-	return CheckValidComponentName(out);
+	return KeCheckValidComponentName(out);
 }
 
-static int GetFinalPathComponent(const char* path, char* out, int max_len) {
+static int KeGetFinalPathComponent(const char* path, char* out, int max_len) {
 	int path_ptr = 0;
 	int status;
 
 	// @@@ TODO: 
-	if (!IsRelative(path)) {
-		status = GetPathComponent(path, &path_ptr, out, max_len, ':');
+	if (!KeIsRelative(path)) {
+		status = KeGetPathComponent(path, &path_ptr, out, max_len, ':');
 		if (status) {
 			return status;
 		}
 	}
 
 	while (path_ptr < (int) strlen(path)) {
-		status = GetPathComponent(path, &path_ptr, out, max_len, '/');
+		status = KeGetPathComponent(path, &path_ptr, out, max_len, '/');
 		if (status) {
 			return status;
 		}
@@ -245,7 +245,7 @@ static int GetFinalPathComponent(const char* path, char* out, int max_len) {
 *
 * Should be used carefully, as the reference count is incremented.
 */
-static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_parent) {
+static int KeGetVnodeFromPath(const char* path, struct vnode** out, bool want_parent) {
 	if (strlen(path) == 0) {
 		return EINVAL;
 	}
@@ -256,7 +256,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	int path_ptr = 0;
 	char component_buffer[MAX_COMPONENT_LENGTH];
 
-	bool relative = IsRelative(path);
+	bool relative = KeIsRelative(path);
 
 	int err;
 	struct vnode* current_vnode = NULL;
@@ -268,7 +268,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 		current_vnode = prcss->cwd;*/
 
 	} else {
-		err = GetPathComponent(path, &path_ptr, component_buffer, MAX_COMPONENT_LENGTH, ':');
+		err = KeGetPathComponent(path, &path_ptr, component_buffer, MAX_COMPONENT_LENGTH, ':');
 		if (err != 0) {
 			return err;
 		}
@@ -303,7 +303,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 	* Iterate over the rest of the path.
 	*/
 	while (path_ptr < (int) strlen(path)) {
-		int status = GetPathComponent(path, &path_ptr, component, MAX_COMPONENT_LENGTH, '/');
+		int status = KeGetPathComponent(path, &path_ptr, component, MAX_COMPONENT_LENGTH, '/');
 		if (status != 0) {
 			KeDerefObject(current_vnode);
 			return status;
@@ -354,7 +354,7 @@ static int GetVnodeFromPath(const char* path, struct vnode** out, bool want_pare
 
 export int KeRemoveFileOrDirectory(const char* path, bool rmdir) {
 	struct vnode* node;
-	int res = GetVnodeFromPath(path, &node, false);
+	int res = KeGetVnodeFromPath(path, &node, false);
 	if (res != 0) {
 		return res;
 	}
@@ -376,20 +376,20 @@ export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** ou
 
     int status;
 	struct vnode* node;
-    status = GetVnodeFromPath(path, &node, false);
+    status = KeGetVnodeFromPath(path, &node, false);
 
     if (flags & O_CREAT) {
 		if (status == ENOENT) {
 			/*
 			* Get the parent folder.
 			*/
-			status = GetVnodeFromPath(path, &node, true);
+			status = KeGetVnodeFromPath(path, &node, true);
 			if (status) {
 				return status;
 			}
 			
 			char name[MAX_COMPONENT_LENGTH + 1];
-			status = GetFinalPathComponent(path, name, MAX_COMPONENT_LENGTH);
+			status = KeGetFinalPathComponent(path, name, MAX_COMPONENT_LENGTH);
 			if (status) {
 				return status;
 			}
@@ -457,7 +457,7 @@ export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** ou
     return 0;
 }
 
-static void FileAccessAsyncCallback(void* _aio) {
+static void KeFileAccessAsyncCallback(void* _aio) {
 	struct aio* aio = _aio;
 	struct aio* subaio = aio->sub;
 
@@ -467,7 +467,7 @@ static void FileAccessAsyncCallback(void* _aio) {
 	FreeHeap(subaio);
 }
 
-static int FileAccess(struct aio* aio, bool write) {
+static int KeFileAccess(struct aio* aio, bool write) {
 	if (aio == NULL) {
 		return EINVAL;
 	}
@@ -486,17 +486,17 @@ static int FileAccess(struct aio* aio, bool write) {
 	if (subaio == NULL) {
 		return ENOMEM;
 	}
-	KeCreateIO(subaio, file->node, *io, FileAccessAsyncCallback, (void*) aio);
+	KeCreateIO(subaio, file->node, *io, KeFileAccessAsyncCallback, (void*) aio);
 	aio->sub = subaio;
 	return (write ? VnodeWrite : VnodeRead)(subaio);
 }
 
 export int KeReadFile(struct aio* aio) {
-	return FileAccess(aio, false);
+	return KeFileAccess(aio, false);
 }
 
 export int KeWriteFile(struct aio* aio) {
-	return FileAccess(aio, true);
+	return KeFileAccess(aio, true);
 }
 
 /*

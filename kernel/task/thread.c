@@ -105,7 +105,7 @@ export void KeSetThreadPriority(struct thread* thr, uint8_t priority) {
     KeReleaseScheduler();
 }
 
-static void CleanupThread(void* _thr) {
+static void KeCleanupThread(void* _thr) {
     struct thread* thr = _thr;
     FreeHeap(thr);
 }
@@ -132,5 +132,5 @@ void KeEndDelayTermination(void) {
 }
 
 void KeInitThread(void) { 
-    KeRegisterObjectType(OBJTYPE_THREAD, CleanupThread);
+    KeRegisterObjectType(OBJTYPE_THREAD, KeCleanupThread);
 }

@@ -3,19 +3,19 @@
 #include <errno.h>  // ENOMEM - adjust if errno codes live somewhere else in this codebase
 #include <string.h>
 
-static inline uint32_t ReadU32LE(const uint8_t* p) {
+static inline uint32_t BmpReadU32LE(const uint8_t* p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
            ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-static inline uint16_t ReadU16LE(const uint8_t* p) {
+static inline uint16_t BmpReadU16LE(const uint8_t* p) {
     return (uint16_t)(p[0] | (p[1] << 8));
 }
 
 // Extracts a colour component via its bitmask and scales it to 8 bits.
 // Works for any mask width up to 32 bits, so it covers both 16bpp
 // (555/565) and 32bpp (BI_BITFIELDS) pixels with one routine.
-static uint8_t ExpandComponent(uint32_t pixel, uint32_t mask) {
+static uint8_t BmpExpandComponent(uint32_t pixel, uint32_t mask) {
     if (mask == 0) return 0;
 
     int shift = 0;
@@ -61,10 +61,10 @@ uint32_t BmpDecodePixel(const uint8_t* row_ptr, int col, uint16_t bpp,
         break;
     }
     case 16: {
-        uint16_t px = ReadU16LE(row_ptr + col * 2);
-        r = ExpandComponent(px, r_mask);
-        g = ExpandComponent(px, g_mask);
-        b = ExpandComponent(px, b_mask);
+        uint16_t px = BmpReadU16LE(row_ptr + col * 2);
+        r = BmpExpandComponent(px, r_mask);
+        g = BmpExpandComponent(px, g_mask);
+        b = BmpExpandComponent(px, b_mask);
         break;
     }
     case 24: {
@@ -74,10 +74,10 @@ uint32_t BmpDecodePixel(const uint8_t* row_ptr, int col, uint16_t bpp,
     }
     case 32:
     default: {
-        uint32_t px = ReadU32LE(row_ptr + col * 4);
-        r = ExpandComponent(px, r_mask);
-        g = ExpandComponent(px, g_mask);
-        b = ExpandComponent(px, b_mask);
+        uint32_t px = BmpReadU32LE(row_ptr + col * 4);
+        r = BmpExpandComponent(px, r_mask);
+        g = BmpExpandComponent(px, g_mask);
+        b = BmpExpandComponent(px, b_mask);
         break;
     }
     }
@@ -101,21 +101,21 @@ int BmpParse(const uint8_t* bmp_file_data, bmp_info_t* out) {
         return EINVAL;
     }
 
-    uint32_t file_size = ReadU32LE(fh + 2);
-    uint32_t pixel_data_offset = ReadU32LE(fh + 10);
+    uint32_t file_size = BmpReadU32LE(fh + 2);
+    uint32_t pixel_data_offset = BmpReadU32LE(fh + 10);
 
     const uint8_t* ih = bmp_file_data + 14;
-    uint32_t header_size = ReadU32LE(ih + 0);
+    uint32_t header_size = BmpReadU32LE(ih + 0);
     if (header_size < 40) {
         return ENOTSUP; // OS/2 BITMAPCOREHEADER etc - not handled
     }
 
-    int32_t width      = (int32_t)ReadU32LE(ih + 4);
-    int32_t height_raw = (int32_t)ReadU32LE(ih + 8);
-    uint16_t bpp         = ReadU16LE(ih + 14);
-    uint32_t compression = ReadU32LE(ih + 16);
-    uint32_t image_size  = ReadU32LE(ih + 20);
-    uint32_t colors_used = ReadU32LE(ih + 32);
+    int32_t width      = (int32_t)BmpReadU32LE(ih + 4);
+    int32_t height_raw = (int32_t)BmpReadU32LE(ih + 8);
+    uint16_t bpp         = BmpReadU16LE(ih + 14);
+    uint32_t compression = BmpReadU32LE(ih + 16);
+    uint32_t image_size  = BmpReadU32LE(ih + 20);
+    uint32_t colors_used = BmpReadU32LE(ih + 32);
 
     if (width <= 0) {
         return EINVAL;
@@ -171,18 +171,18 @@ int BmpParse(const uint8_t* bmp_file_data, bmp_info_t* out) {
     } else if (bpp == 16) {
         if (compression == BMP_COMPRESSION_BITFIELDS) {
             const uint8_t* mask_ptr = (header_size >= 56) ? (ih + 40) : (ih + header_size);
-            out->r_mask = ReadU32LE(mask_ptr + 0);
-            out->g_mask = ReadU32LE(mask_ptr + 4);
-            out->b_mask = ReadU32LE(mask_ptr + 8);
+            out->r_mask = BmpReadU32LE(mask_ptr + 0);
+            out->g_mask = BmpReadU32LE(mask_ptr + 4);
+            out->b_mask = BmpReadU32LE(mask_ptr + 8);
         } else {
             out->r_mask = 0x7C00; out->g_mask = 0x03E0; out->b_mask = 0x001F; // X1R5G5B5
         }
     } else if (bpp == 32) {
         if (compression == BMP_COMPRESSION_BITFIELDS || compression == BMP_COMPRESSION_ALPHABITFIELDS) {
             const uint8_t* mask_ptr = (header_size >= 56) ? (ih + 40) : (ih + header_size);
-            out->r_mask = ReadU32LE(mask_ptr + 0);
-            out->g_mask = ReadU32LE(mask_ptr + 4);
-            out->b_mask = ReadU32LE(mask_ptr + 8);
+            out->r_mask = BmpReadU32LE(mask_ptr + 0);
+            out->g_mask = BmpReadU32LE(mask_ptr + 4);
+            out->b_mask = BmpReadU32LE(mask_ptr + 8);
         } else {
             out->r_mask = 0x00FF0000; out->g_mask = 0x0000FF00; out->b_mask = 0x000000FF; // BGRX
         }

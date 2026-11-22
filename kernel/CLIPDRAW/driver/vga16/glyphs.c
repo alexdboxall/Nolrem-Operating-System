@@ -2,11 +2,11 @@
 
 static uint8_t vga_glyphs[95][14];
 
-uint8_t* GetVgaGlyph(char c) {
+uint8_t* VgaGetGlyph(char c) {
     return vga_glyphs[CLAMP(c - 32, 0, 94)];
 }
 
-void ReadVgaGlyphs(void) {
+void VgaReadGlyphs(void) {
     outb(VGA_SEQ_INDEX, 0x02); uint8_t orig_seq02 = inb(VGA_SEQ_DATA);
     outb(VGA_SEQ_INDEX, 0x04); uint8_t orig_seq04 = inb(VGA_SEQ_DATA);
     outb(VGA_GC_INDEX,  0x04); uint8_t orig_gc04  = inb(VGA_GC_DATA);

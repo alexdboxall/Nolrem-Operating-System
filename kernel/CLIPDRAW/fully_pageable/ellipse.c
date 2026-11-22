@@ -5,10 +5,10 @@ export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
     
-    BuildNewRegion(&rgn, (int16_t) y, &ctxt);
+    CdBuildNewRegion(&rgn, (int16_t) y, &ctxt);
 
     if (width <= 0 || height <= 0) {
-        FinishRegion(&rgn, &ctxt);
+        CdFinishRegion(&rgn, &ctxt);
         return rgn;
     }
 
@@ -26,7 +26,7 @@ export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int
         int remaining = b2 - dy2;
 
         if (remaining < 0) {
-            AddScanline(&rgn, &ctxt, 0, NULL, false);
+            CdAddScanline(&rgn, &ctxt, 0, NULL, false);
             continue;
         }
 
@@ -41,22 +41,22 @@ export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int
         // we know basically that remaining <= b2, so the most it can return
         // is the scale value
         int dx2_scaled = (int)((1073741824LL * remaining) / b2);
-        int dx = a * IntegerSqrt(dx2_scaled) >> 15;
+        int dx = a * CdIntegerSqrt(dx2_scaled) >> 15;
 
         if (dx == 0) {
             /* 
              * Empty line.
              */
-            AddScanline(&rgn, &ctxt, 0, NULL, false);
+            CdAddScanline(&rgn, &ctxt, 0, NULL, false);
 
         } else {
             int16_t spans[2];
             spans[0] = (int16_t)(center_x - dx);
             spans[1] = (int16_t)(center_x + dx);
-            AddScanline(&rgn, &ctxt, 1, spans, false);
+            CdAddScanline(&rgn, &ctxt, 1, spans, false);
         }
     }
 
-    FinishRegion(&rgn, &ctxt);
+    CdFinishRegion(&rgn, &ctxt);
     return rgn;
 }

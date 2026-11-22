@@ -19,21 +19,8 @@
 #include <kgfx.h>
 #include <phys.h>
 #include <stdatomic.h>
+#include <reclaim.h>
 #include "winmgr_internal.h"
-
-extern void PurgeScaledGlyphCacheIfNeeded();
-
-#define SYSTEM_MSGBOX_SIZE      8
-
-static struct msgbox* sys_mbox = NULL;
-
-export struct msgbox* WmGetSystemMessageBox(void) {
-    return sys_mbox;
-}
-
-export void WmInitSystemMessageBox(void) {
-    sys_mbox = KeCreateMessageBox(sizeof(struct msg), SYSTEM_MSGBOX_SIZE);
-}
 
 bool wm_mainloop_started = false;
 
@@ -52,13 +39,13 @@ static struct rect drag_win_og_bounds;
 
 #define MOUSE_BUTTON_LEFT           1
 
-static void DrawInvFrame(struct rect pos) {
+static void WmDrawInvFrame(struct rect pos) {
     const int BORDER = 3;
     struct dc* dc = WmGetDC();
-    ActualInvertRect(dc, pos.x, pos.y, pos.x + pos.w, pos.y + BORDER, true);
-    ActualInvertRect(dc, pos.x, pos.y + pos.h - BORDER, pos.x + pos.w, pos.y + pos.h, true);
-    ActualInvertRect(dc, pos.x, pos.y + BORDER, pos.x + BORDER, pos.y + pos.h - BORDER, true);
-    ActualInvertRect(dc, pos.x + pos.w - BORDER, pos.y + BORDER, pos.x + pos.w, pos.y + pos.h - BORDER, true);
+    CdActualInvertRect(dc, pos.x, pos.y, pos.x + pos.w, pos.y + BORDER, true);
+    CdActualInvertRect(dc, pos.x, pos.y + pos.h - BORDER, pos.x + pos.w, pos.y + pos.h, true);
+    CdActualInvertRect(dc, pos.x, pos.y + BORDER, pos.x + BORDER, pos.y + pos.h - BORDER, true);
+    CdActualInvertRect(dc, pos.x + pos.w - BORDER, pos.y + BORDER, pos.x + pos.w, pos.y + pos.h - BORDER, true);
     WmReturnDC(dc);
 }
 
@@ -148,7 +135,7 @@ static void WmStopDraggingWindow(void) {
     }
 }
 
-static bool HandleMouse(int mx, int my, int click_bits) {
+static bool WmHandleMouse(int mx, int my, int click_bits) {
     mouse_x = mx;
     mouse_y = my;
 
@@ -161,23 +148,23 @@ static bool HandleMouse(int mx, int my, int click_bits) {
             struct rect r = dragging_win->local_win_bound;
             r.x += prev_mouse_pt.x - drag_mouse_start_x;
             r.y += prev_mouse_pt.y - drag_mouse_start_y;
-            DrawInvFrame(r);
+            WmDrawInvFrame(r);
 
             r = dragging_win->local_win_bound;
             r.x += mouse_x - drag_mouse_start_x;
             r.y += mouse_y - drag_mouse_start_y;
-            DrawInvFrame(r);
+            WmDrawInvFrame(r);
         }
         if (resizing_win) {
             struct rect r = WmApplyResizeDelta(resizing_win->local_win_bound,
                 prev_mouse_pt.x - drag_mouse_start_x, prev_mouse_pt.y - drag_mouse_start_y,
                 resize_hit_test_results);
-            DrawInvFrame(r);
+            WmDrawInvFrame(r);
 
             r = WmApplyResizeDelta(resizing_win->local_win_bound,
                 mouse_x - drag_mouse_start_x, mouse_y - drag_mouse_start_y,
                 resize_hit_test_results);
-            DrawInvFrame(r);
+            WmDrawInvFrame(r);
         }
         CdDrawMouse(mouse_x, mouse_y);
     }
@@ -269,23 +256,19 @@ struct window* win;
 struct window* win2;
 struct window* win3;
 
-static void ProcessMessage(struct msg msg) {
+static void WmProcessMessage(struct msg msg) {
     switch (msg.type) {
     case SYSMSG_LOWMEMORY:
-        KeDiscardPage();
-        KeDiscardPage();
-        PurgeScaledGlyphCacheIfNeeded();
-        KePurgeOldVnodes();
-        KePurgeFreeAreasFromHeap();
+        KeReclaimMemory();
         break;
 
     case SYSMSG_MOUSEEVENT:
-        HandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
+        WmHandleMouse(msg.rect_arg.x, msg.rect_arg.y, msg.i_arg);
         break;
     }
 }
 
-static void RepaintIfNeeded(struct window* win) {
+static void WmRepaintIfNeeded(struct window* win) {
     if (WmCheckIfPaintRequired(win)) {
         WmCallWinProc(win, (struct msg) {
             .type = WM_PAINT,
@@ -323,7 +306,7 @@ static void TestDiskRead(void*) {
     }
 }*/
 
-_Noreturn void WmMainloop(void) {
+export _Noreturn void WmMainloop(void) {
     KeSetThreadPriority(KeGetCurrentThread(), PRIORITY_MAX);
 
     struct msg msg;
@@ -361,8 +344,8 @@ _Noreturn void WmMainloop(void) {
     size_t prev_kb_free = 0;
     while (true) {
         extern bool anything_happened;
-        KeGetMessage(sys_mbox, &msg, TIMEOUT_INFINITE);
-        ProcessMessage(msg);
+        KeGetMessage(KeGetSystemMessageBox(), &msg, TIMEOUT_INFINITE);
+        WmProcessMessage(msg);
 
         int r = WmAppGetMessage(WmGetDesktop()->app, &msg, true);
         if (r == 0) {
@@ -371,9 +354,9 @@ _Noreturn void WmMainloop(void) {
 
         if (anything_happened) {
             anything_happened = false;      
-            RepaintIfNeeded(win);
-            RepaintIfNeeded(win2);
-            RepaintIfNeeded(win3);
+            WmRepaintIfNeeded(win);
+            WmRepaintIfNeeded(win2);
+            WmRepaintIfNeeded(win3);
         }
         {
             size_t kb_free = KeGetFreeMemory() / 1024;
@@ -389,13 +372,13 @@ _Noreturn void WmMainloop(void) {
                 struct region rgn = CdCreateRectRegion(0, 0, 200, 20);
                 WmInvalidateRegion(WmGetDesktop(), rgn, true);
                 CdFreeRegion(rgn);
-                RepaintIfNeeded(WmGetDesktop());    
+                WmRepaintIfNeeded(WmGetDesktop());    
             }
             extern void VGADrawString(int x, int y, int pt, uint8_t col, const char* s, bool bold, bool italic);
             VGADrawString(0, 0, 12, 0, str, false, false);
         }
     }
 
-    (void) ProcessMessage;
+    (void) WmProcessMessage;
     (void) msg;
 }

@@ -20,7 +20,7 @@ export struct vnode* KeCreateVnode(struct vnode_operations ops, struct stat st) 
     return node;
 }
 
-static void CleanupVnode(void* _node) {
+static void KeCleanupVnode(void* _node) {
     struct vnode* node = _node;
     if (node == NULL) {
         return;
@@ -35,16 +35,16 @@ static void CleanupVnode(void* _node) {
 }
 
 void KeInitVnode(void) {
-    KeRegisterObjectType(OBJTYPE_VNODE, CleanupVnode);
+    KeRegisterObjectType(OBJTYPE_VNODE, KeCleanupVnode);
 }
 
-static void CheckVnode(struct vnode* node) {
+static void KeCheckVnode(struct vnode* node) {
     (void) node;
     return;
 }
 
 int VnodeCheckOpen(struct vnode* node, int flags) {
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.check_open == NULL) {
         return 0;
     }
@@ -54,7 +54,7 @@ int VnodeCheckOpen(struct vnode* node, int flags) {
 int VnodeRead(struct aio* aio) {
     struct vnode* node = aio->node;
     struct transfer* io = &aio->transfer;
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.read == NULL || io->direction != TRANSFER_READ) {
         return EINVAL;
     }
@@ -64,7 +64,7 @@ int VnodeRead(struct aio* aio) {
 int VnodeWrite(struct aio* aio) {
     struct vnode* node = aio->node;
     struct transfer* io = &aio->transfer;
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.write == NULL || io->direction != TRANSFER_WRITE) {
         return EINVAL;
     }
@@ -73,7 +73,7 @@ int VnodeWrite(struct aio* aio) {
 
 int VnodeTruncate(struct aio* aio) {
     struct vnode* node = aio->node;
-    CheckVnode(node);
+    KeCheckVnode(node);
 
     if (node->ops.truncate == NULL) {
         return EINVAL;
@@ -82,7 +82,7 @@ int VnodeTruncate(struct aio* aio) {
 }
 
 int VnodeIoctl(struct vnode* node, int command, void* buffer) {
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.ioctl == NULL) {
         if (command == TCGETS || command == TCSETS || command == TCSETSW || command == TCSETSF ||
             command == TIOCGPGRP || command == TIOCSPGRP) {
@@ -94,7 +94,7 @@ int VnodeIoctl(struct vnode* node, int command, void* buffer) {
 }
 
 int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode) {
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.create == NULL) {
         return EINVAL;
     }
@@ -102,7 +102,7 @@ int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int fl
 }
 
 int VnodeFollow(struct vnode* node, struct vnode** new_node, const char* name) {
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.follow == NULL) {
         return ENOTDIR;
     }
@@ -114,7 +114,7 @@ uint8_t VnodeDirentType(struct vnode* node) {
 }
 
 int VnodeUnlink(struct vnode* node) {
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.unlink == NULL) {
         return EINVAL;
     }
@@ -122,7 +122,7 @@ int VnodeUnlink(struct vnode* node) {
 }
 
 int VnodeDelete(struct vnode* node) {
-    CheckVnode(node);
+    KeCheckVnode(node);
     if (node->ops.delete == NULL) {
         return EINVAL;
     }

@@ -12,10 +12,10 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
     }
     if (radius < 0) radius = 0;
 
-    BuildNewRegion(&rgn, (int16_t)y, &ctxt);
+    CdBuildNewRegion(&rgn, (int16_t)y, &ctxt);
 
     if (width <= 0 || height <= 0) {
-        FinishRegion(&rgn, &ctxt);
+        CdFinishRegion(&rgn, &ctxt);
         return rgn;
     }
 
@@ -27,17 +27,17 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
         long r2 = (long)radius * radius;
         
         // Calculate the horizontal inset using the circle equation
-        int dx = radius - IntegerSqrt((int)(r2 - dy2));
+        int dx = radius - CdIntegerSqrt((int)(r2 - dy2));
 
         int16_t spans[2];
         spans[0] = (int16_t)(x + dx);
         spans[1] = (int16_t)(x + width - dx);
-        AddScanline(&rgn, &ctxt, 1, spans, false);
+        CdAddScanline(&rgn, &ctxt, 1, spans, false);
     }
 
     // Phase B: The Straight Middle
     // This is the "meat" of the window. 
-    // We call AddScanline once for every row, but your vertical merger 
+    // We call CdAddScanline once for every row, but your vertical merger 
     // will squash this entire block into a single massive Band!
     int16_t mid_spans[2];
     mid_spans[0] = (int16_t)x;
@@ -45,7 +45,7 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
     
     int mid_height = height - (2 * radius);
     for (int i = 0; i < mid_height; i++) {
-        AddScanline(&rgn, &ctxt, 1, mid_spans, i != 0);
+        CdAddScanline(&rgn, &ctxt, 1, mid_spans, i != 0);
     }
 
     // Phase C: Bottom Rounded Corners
@@ -55,14 +55,14 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
         long dy2 = (long)dy * dy;
         long r2 = (long)radius * radius;
         
-        int dx = radius - IntegerSqrt((int)(r2 - dy2));
+        int dx = radius - CdIntegerSqrt((int)(r2 - dy2));
 
         int16_t spans[2];
         spans[0] = (int16_t)(x + dx);
         spans[1] = (int16_t)(x + width - dx);
-        AddScanline(&rgn, &ctxt, 1, spans, false);
+        CdAddScanline(&rgn, &ctxt, 1, spans, false);
     }
 
-    FinishRegion(&rgn, &ctxt);
+    CdFinishRegion(&rgn, &ctxt);
     return rgn;
 }

@@ -17,9 +17,9 @@ struct __attribute__((packed)) dynamic_array {
     uint8_t data_size;
 };
 
-struct dynamic_array CreateDynamicArray(int data_size, int initial_allocation);
-struct dynamic_array CopyDynamicArray(struct dynamic_array old);
-void FreeDynamicArray(struct dynamic_array da);
-void InsertDynamicArray(struct dynamic_array* da, void* data);
-void SortDynamicArray(struct dynamic_array* da, int (*comparator)(void* d1, void* d2, int n));
-void* FindInDynamicArray(struct dynamic_array* da, void* data, int (*comparator)(void* d1, void* d2, int n));
+struct dynamic_array CdCreateDynamicArray(int data_size, int initial_allocation);
+struct dynamic_array CdCopyDynamicArray(struct dynamic_array old);
+void CdFreeDynamicArray(struct dynamic_array da);
+void CdInsertDynamicArray(struct dynamic_array* da, void* data);
+void CdSortDynamicArray(struct dynamic_array* da, int (*comparator)(void* d1, void* d2, int n));
+void* CdFindInDynamicArray(struct dynamic_array* da, void* data, int (*comparator)(void* d1, void* d2, int n));

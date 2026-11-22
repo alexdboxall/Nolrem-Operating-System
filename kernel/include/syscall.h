@@ -4,50 +4,65 @@
 #include <errno.h>
 #include <phys.h>
 
-#define GLUE(a, b) a##b
-#define EVAL(a, b) GLUE(a, b)
-#define MK_SYSCALL(name) \
-    constexpr int SYS_##name = __COUNTER__ ; \
-    size_t Sys##name(size_t, size_t, size_t, size_t);
+/*
+ * System call numbers.
+ *
+ * The number space is split into ranges of SYSCALL_RANGE_SIZE calls, one per
+ * subsystem that provides system calls. The kernel's dispatcher knows nothing
+ * about the subsystems' handlers: each one registers a table for its own range
+ * when it initialises (KeRegisterSyscallRange). That is what lets CLIPDRAW or
+ * the window manager live in a separate module and bring their system calls
+ * with them.
+ *
+ * Call number 0 of every range is never valid.
+ */
+#define SYSCALL_RANGE_BITS      8
+#define SYSCALL_RANGE_SIZE      (1 << SYSCALL_RANGE_BITS)
+#define SYSCALL_NUM_RANGES      16
+#define SYSCALL_BASE(range)     ((range) << SYSCALL_RANGE_BITS)
 
-MK_SYSCALL(Ref)
-MK_SYSCALL(EmptyOrEveryRegion)
-MK_SYSCALL(GetRegionCombination)
-MK_SYSCALL(CreateRectRegion)
-MK_SYSCALL(CreateEllipseRegion)
-MK_SYSCALL(CreateRoundedRectRegion)
-MK_SYSCALL(CreatePolyPolygonRegion)
-MK_SYSCALL(GetObjectType)
-MK_SYSCALL(IsRegionEqual)
-MK_SYSCALL(IsRegionEmpty)
-MK_SYSCALL(IsPointInRegion)
-MK_SYSCALL(TranslateRegion)
-MK_SYSCALL(CopyRegion)
-MK_SYSCALL(GetRegionBounds)
-MK_SYSCALL(CreatePatternedBrush)
-MK_SYSCALL(CreateCustomBrush)
-MK_SYSCALL(CopyBrush)
-MK_SYSCALL(GetStockBrush)
-MK_SYSCALL(BrushPattern)
-MK_SYSCALL(BrushColour)
-MK_SYSCALL(BrushOrigin)
-MK_SYSCALL(CreatePatternedPen)
-MK_SYSCALL(CreateCustomPen)
-MK_SYSCALL(CopyPen)
-MK_SYSCALL(GetStockPen)
-MK_SYSCALL(PenColour)
-MK_SYSCALL(PenPattern)
-MK_SYSCALL(PenThickness)
-MK_SYSCALL(PenOrigin)
-MK_SYSCALL(SetGraphicsObject)
-MK_SYSCALL(GetGraphicsObject)
-MK_SYSCALL(PaintRect)
-MK_SYSCALL(PaintRoundedRect)
-MK_SYSCALL(PaintEllipse)
-MK_SYSCALL(PaintPolygon)
-MK_SYSCALL(PaintRegion)
-MK_SYSCALL(InvertRect)
-MK_SYSCALL(InvertRegion)
+#define SYSCALL_RANGE_KE        0   /* The kernel itself (object handling, ...) */
+#define SYSCALL_RANGE_CD        1   /* CLIPDRAW */
+#define SYSCALL_RANGE_WM        2   /* The window manager (nothing registered yet) */
+
+/*
+ * One list per subsystem, in the order the numbers are handed out. Each entry
+ * defines the number SYS_<name>, declares the handler Sys<name>, and (in the
+ * subsystem's own registration code) fills in that subsystem's table. Add new
+ * calls to the end of the list so the existing numbers don't move.
+ */
+#define KE_SYSCALLS(X) \
+    X(Ref) X(GetObjectType)
+
+#define CD_SYSCALLS(X) \
+    X(EmptyOrEveryRegion) X(GetRegionCombination) X(CreateRectRegion) X(CreateEllipseRegion) \
+    X(CreateRoundedRectRegion) X(CreatePolyPolygonRegion) X(IsRegionEqual) X(IsRegionEmpty) \
+    X(IsPointInRegion) X(TranslateRegion) X(CopyRegion) X(GetRegionBounds) \
+    X(CreatePatternedBrush) X(CreateCustomBrush) X(CopyBrush) X(GetStockBrush) \
+    X(BrushPattern) X(BrushColour) X(BrushOrigin) X(CreatePatternedPen) \
+    X(CreateCustomPen) X(CopyPen) X(GetStockPen) X(PenColour) \
+    X(PenPattern) X(PenThickness) X(PenOrigin) X(SetGraphicsObject) \
+    X(GetGraphicsObject) X(PaintRect) X(PaintRoundedRect) X(PaintEllipse) \
+    X(PaintPolygon) X(PaintRegion) X(InvertRect) X(InvertRegion)
+
+#define SYSCALL_ENUMERATOR(name)    SYS_##name,
+#define SYSCALL_PROTOTYPE(name)     size_t Sys##name(size_t, size_t, size_t, size_t);
+
+enum {
+    SYS_KE_RESERVED = SYSCALL_BASE(SYSCALL_RANGE_KE),
+    KE_SYSCALLS(SYSCALL_ENUMERATOR)
+    SYS_KE_END,
+
+    SYS_CD_RESERVED = SYSCALL_BASE(SYSCALL_RANGE_CD),
+    CD_SYSCALLS(SYSCALL_ENUMERATOR)
+    SYS_CD_END,
+};
+
+static_assert(SYS_KE_END <= SYSCALL_BASE(SYSCALL_RANGE_KE + 1), "too many kernel system calls for one range");
+static_assert(SYS_CD_END <= SYSCALL_BASE(SYSCALL_RANGE_CD + 1), "too many CLIPDRAW system calls for one range");
+
+KE_SYSCALLS(SYSCALL_PROTOTYPE)
+CD_SYSCALLS(SYSCALL_PROTOTYPE)
 
 // User side - requests it
 size_t SystemCall(int call, size_t arg1, size_t arg2, size_t arg3, size_t arg4);
@@ -57,4 +72,17 @@ size_t SystemCall3(size_t arg1, size_t arg2, size_t arg3);
 size_t SystemCall4(size_t arg1, size_t arg2, size_t arg3, size_t arg4);
 
 // Kernel side - handles it
+typedef size_t (*ke_syscall_handler_t)(size_t, size_t, size_t, size_t);
+
+/*
+ * Installs the handlers for one range. `table` is indexed by the call number
+ * minus SYSCALL_BASE(range), and must stay valid forever. Entries may be NULL
+ * (they return ENOSYS). Returns EINVAL for a bad range or table, and EEXIST if
+ * the range is already taken.
+ */
+int KeRegisterSyscallRange(int range, const ke_syscall_handler_t* table, size_t count);
+
+/* Registers the kernel's own range. */
+void KeInitSyscalls(void);
+
 size_t KePerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d);

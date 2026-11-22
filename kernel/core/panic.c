@@ -22,7 +22,7 @@ char* panic_msgs[] = {
     "Not implemented"
 };
 
-static _Noreturn void PanicEx(int panic_reason, const char* msg1, const char* msg2) {
+static _Noreturn void KePanicEx(int panic_reason, const char* msg1, const char* msg2) {
     KeLogPrintf("\x01PANIC - ");
     KeLogPrintf("%d\n", panic_reason);
     KeLogPrintf("%s", msg1);
@@ -41,10 +41,10 @@ export _Noreturn void KePanic(int panic_reason) {
     if (panic_reason < (int) (sizeof(panic_msgs) / sizeof(panic_msgs[0]))) {
         msg = panic_msgs[panic_reason];
     }
-    PanicEx(panic_reason, msg, NULL);
+    KePanicEx(panic_reason, msg, NULL);
 }
 
 export _Noreturn void KeAssertionFail(const char* file, const char* line, const char* condition, const char* msg) {
     KeLogPrintf("Assertion Failure:\n    %s\n    %s\n    %s\n    Line %s\n", msg, condition, file, line);
-    PanicEx(PANIC_ASSERTION_FAILURE, msg, condition);
+    KePanicEx(PANIC_ASSERTION_FAILURE, msg, condition);
 }

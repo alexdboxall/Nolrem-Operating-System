@@ -21,7 +21,7 @@ static const uint8_t g_mode12h_attr[] = {
     0x01, 0x00, 0x0F, 0x00, 0x00 
 };
 
-void SwitchToMode12h(void) {
+void VgaSwitchToMode12h(void) {
     outb(VGA_MISC_WRITE, 0xE3);
     for (uint8_t i = 0; i < 5; i++) {
         outb(VGA_SEQ_INDEX, i);

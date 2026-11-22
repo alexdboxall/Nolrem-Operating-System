@@ -6,7 +6,7 @@
 #define MIN4(a,b,c,d) MIN(MIN(a,b), MIN(c,d))
 #define MAX4(a,b,c,d) MAX(MAX(a,b), MAX(c,d))
 
-static bool GetPatternBitHorizontal(int x, int y, uint8_t* pattern, int pat_width, int pat_height) {
+static bool CdGetPatternBitHorizontal(int x, int y, uint8_t* pattern, int pat_width, int pat_height) {
     // Safety guard against any negative coordinates slipping through
     int x_off = (x % pat_width);
     if (x_off < 0) x_off += pat_width;
@@ -20,12 +20,12 @@ static bool GetPatternBitHorizontal(int x, int y, uint8_t* pattern, int pat_widt
 
 // Fixed standard cross-product implementation: Vector(AB) cross Vector(AM)
 // ax/ay = line segment start, bx/by = line segment end, px/py = scaled pixel center (2*coord + 1)
-static inline int EdgeFunction32(int ax, int ay, int bx, int by, int px, int py) {
+static inline int CdEdgeFunction32(int ax, int ay, int bx, int by, int px, int py) {
     return (bx - ax) * (py - 2 * ay) - (by - ay) * (px - 2 * ax);
 }
 
-static void SetPenPixel(struct graphics_driver* drv, int x, int y, int u, int v, uint32_t colour, uint8_t* pattern, int pat_width, int pat_height, bool inv_instead_of_col) {
-    if (GetPatternBitHorizontal(u, v, pattern, pat_width, pat_height)) {
+static void CdSetPenPixel(struct graphics_driver* drv, int x, int y, int u, int v, uint32_t colour, uint8_t* pattern, int pat_width, int pat_height, bool inv_instead_of_col) {
+    if (CdGetPatternBitHorizontal(u, v, pattern, pat_width, pat_height)) {
         CdStartVideoUpdate(x, y, x + 1, y + 1);
         if (inv_instead_of_col) {
             drv->invert_rect(drv, x, y, x + 1, y + 1, false);
@@ -36,7 +36,7 @@ static void SetPenPixel(struct graphics_driver* drv, int x, int y, int u, int v,
     }
 }
 
-void PenLineFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2, 
+void CdPenLineFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2, 
     uint32_t colour, int thickness, uint8_t* pattern, 
     int pat_width, int pat_height, bool inv_instead_of_col
 ) {
@@ -50,9 +50,9 @@ void PenLineFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2
     if (abs_dx > 32767 || abs_dy > 32767) {
         int dx_s = dx >> 1;
         int dy_s = dy >> 1;
-        len = IntegerSqrt(dx_s * dx_s + dy_s * dy_s) << 1;
+        len = CdIntegerSqrt(dx_s * dx_s + dy_s * dy_s) << 1;
     } else {
-        len = IntegerSqrt(dx * dx + dy * dy);
+        len = CdIntegerSqrt(dx * dx + dy * dy);
     }
 
     if (len == 0) {
@@ -118,10 +118,10 @@ void PenLineFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2
             int px2 = 2 * x + 1;
 
             // Clean, structural edge loop checks using explicit point-pairs
-            int e1 = EdgeFunction32(p1x, p1y, p2x, p2y, px2, py2);
-            int e2 = EdgeFunction32(p2x, p2y, p3x, p3y, px2, py2);
-            int e3 = EdgeFunction32(p3x, p3y, p4x, p4y, px2, py2);
-            int e4 = EdgeFunction32(p4x, p4y, p1x, p1y, px2, py2);
+            int e1 = CdEdgeFunction32(p1x, p1y, p2x, p2y, px2, py2);
+            int e2 = CdEdgeFunction32(p2x, p2y, p3x, p3y, px2, py2);
+            int e3 = CdEdgeFunction32(p3x, p3y, p4x, p4y, px2, py2);
+            int e4 = CdEdgeFunction32(p4x, p4y, p1x, p1y, px2, py2);
 
             // If the pixel center sits consistently inside all bounds, draw it
             if ((e1 >= 0 && e2 >= 0 && e3 >= 0 && e4 >= 0) ||
@@ -144,7 +144,7 @@ void PenLineFallback(struct graphics_driver* drv, int x1, int y1, int x2, int y2
                 // p2/p3 edge, instead of split mirrored indexing.
                 int v = v_raw + half_neg;
 
-                SetPenPixel(drv, x, y, u, v, colour, pattern, pat_width, pat_height, inv_instead_of_col);
+                CdSetPenPixel(drv, x, y, u, v, colour, pattern, pat_width, pat_height, inv_instead_of_col);
             }
         }
     }

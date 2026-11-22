@@ -1,5 +1,5 @@
 /*
- * Tests for GetShortFilename (FAT 8.3 short name generation).
+ * Tests for FatGetShortFilename (FAT 8.3 short name generation).
  *
  * Call RunSfnTests(). It is a pure function, so there is no threading or
  * setup. A failing CHECK() halts (assert). The "suspected bug" group at the
@@ -28,7 +28,7 @@
 #include <errno.h>
 #include <_test.h>
 
-int GetShortFilename(const char* lfn, int clash_num, char* sfn_out);
+int FatGetShortFilename(const char* lfn, int clash_num, char* sfn_out);
 
 #define POISON 0x7F
 #define SFN_LEN 11
@@ -46,7 +46,7 @@ static char g_buf[16];
 
 static int Run(const char* lfn, int clash) {
     memset(g_buf, POISON, sizeof(g_buf));
-    return GetShortFilename(lfn, clash, g_buf);
+    return FatGetShortFilename(lfn, clash, g_buf);
 }
 
 /* Makes the 11-byte expected name from an unpadded name and extension. */

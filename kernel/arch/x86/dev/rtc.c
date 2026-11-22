@@ -14,19 +14,19 @@
 
 #define CURRENT_YEAR 2026
 
-static bool IsUpdateInProgress(void) {
-    return ReadCmos(0x0A) & 0x80;
+static bool x86IsUpdateInProgress(void) {
+    return x86ReadCmos(0x0A) & 0x80;
 }
 
-static uint8_t BcdToBinary(uint8_t val) {
+static uint8_t x86BcdToBinary(uint8_t val) {
     return (val & 0xF) + (val >> 4) * 10;
 }
 
-static uint8_t BinaryToBcd(uint8_t val) {
+static uint8_t x86BinaryToBcd(uint8_t val) {
     return (val % 10) + ((val / 10) << 4);
 }
 
-static int Convert12HourTo24(int hour, bool pm) {
+static int x86Convert12HourTo24(int hour, bool pm) {
     if (hour == 12) {
         hour = 0;
     }
@@ -36,7 +36,7 @@ static int Convert12HourTo24(int hour, bool pm) {
     return hour;
 }
 
-static int Convert24HourTo12(int hour, bool* pm) {
+static int x86Convert24HourTo12(int hour, bool* pm) {
     *pm = hour >= 12;
     hour %= 12;
     if (hour == 0) {
@@ -49,123 +49,123 @@ static int Convert24HourTo12(int hour, bool* pm) {
  * ACPI.SYS will set this with the correct value if one exists.
  */
 export int x86_rtc_century_register = -1;
-static int GetCenturyRegister(void) {
+static int x86GetCenturyRegister(void) {
     return x86_rtc_century_register;
 }
 
-static int GetCenturyGuess(int low_year) {
+static int x86GetCenturyGuess(int low_year) {
     int year = low_year + (CURRENT_YEAR / 100) * 100;
     if (year < CURRENT_YEAR) year += 100;
     return year / 100;
 }
 
-static int GetCentury(int low_year, bool rtc_in_bcd_mode) {
-    int guess = GetCenturyGuess(low_year);
+static int x86GetCentury(int low_year, bool rtc_in_bcd_mode) {
+    int guess = x86GetCenturyGuess(low_year);
 
-    int century_reg = GetCenturyRegister();
+    int century_reg = x86GetCenturyRegister();
     if (century_reg == -1) {
         return guess;        
 
     } else {
-        uint8_t century = ReadCmos(century_reg);
+        uint8_t century = x86ReadCmos(century_reg);
         if (rtc_in_bcd_mode) {
-            century = BcdToBinary(century);
+            century = x86BcdToBinary(century);
         }
         return century;
     }
 }
 
-static void SetCentury(int century, bool rtc_in_bcd_mode) {
-    int century_reg = GetCenturyRegister();
+static void x86SetCentury(int century, bool rtc_in_bcd_mode) {
+    int century_reg = x86GetCenturyRegister();
     if (century_reg != -1) {
         if (rtc_in_bcd_mode) {
-            century = BinaryToBcd(century);
+            century = x86BinaryToBcd(century);
         }
-        WriteCmos(century_reg, century);
+        x86WriteCmos(century_reg, century);
     }
 }
 
-static bool AreTimesEqual(struct ostime a, struct ostime b) {
+static bool x86AreTimesEqual(struct ostime a, struct ostime b) {
     return a.sec == b.sec && a.min == b.min && a.hour == b.hour &&
            a.day == b.day && a.month == b.month && a.year == b.year;
 }
 
-static void ReadTimeState(struct ostime* t)
+static void x86ReadTimeState(struct ostime* t)
 {
     t->microsec = 0;
-    t->sec = ReadCmos(RTC_SECOND);
-    t->min = ReadCmos(RTC_MINUTE);
-    t->hour = ReadCmos(RTC_HOUR);
-    t->day = ReadCmos(RTC_DAY);
-    t->month = ReadCmos(RTC_MONTH);
-    t->year = ReadCmos(RTC_YEAR);
+    t->sec = x86ReadCmos(RTC_SECOND);
+    t->min = x86ReadCmos(RTC_MINUTE);
+    t->hour = x86ReadCmos(RTC_HOUR);
+    t->day = x86ReadCmos(RTC_DAY);
+    t->month = x86ReadCmos(RTC_MONTH);
+    t->year = x86ReadCmos(RTC_YEAR);
 
-    uint8_t reg_b = ReadCmos(0x0B);
+    uint8_t reg_b = x86ReadCmos(0x0B);
     bool bcd = !(reg_b & 0x04);
     bool twelve_hour = !(reg_b & 0x02);
     if (bcd) {
-        t->sec = BcdToBinary(t->sec);
-        t->min = BcdToBinary(t->min);
-        t->hour = BcdToBinary(t->hour & 0x7F);
-        t->day = BcdToBinary(t->day);
-        t->month = BcdToBinary(t->month);
-        t->year = BcdToBinary(t->year);
+        t->sec = x86BcdToBinary(t->sec);
+        t->min = x86BcdToBinary(t->min);
+        t->hour = x86BcdToBinary(t->hour & 0x7F);
+        t->day = x86BcdToBinary(t->day);
+        t->month = x86BcdToBinary(t->month);
+        t->year = x86BcdToBinary(t->year);
     }
     if (twelve_hour) {
-        t->hour = Convert12HourTo24(t->hour, t->hour & 0x80);
+        t->hour = x86Convert12HourTo24(t->hour, t->hour & 0x80);
     }
 
-    t->year += GetCentury(t->year, bcd) * 100;
+    t->year += x86GetCentury(t->year, bcd) * 100;
 }
 
-static void WriteTimeState(struct ostime t)
+static void x86WriteTimeState(struct ostime t)
 {
-    uint8_t reg_b = ReadCmos(0x0B);
+    uint8_t reg_b = x86ReadCmos(0x0B);
     bool bcd = !(reg_b & 0x04);
     bool twelve_hour = !(reg_b & 0x02);
     bool pm = false;
     if (twelve_hour) {
-        t.hour = Convert24HourTo12(t.hour, &pm);
+        t.hour = x86Convert24HourTo12(t.hour, &pm);
     }
-    SetCentury(t.year / 100, bcd);
+    x86SetCentury(t.year / 100, bcd);
     t.year %= 100;
     if (bcd) {
-        t.sec = BinaryToBcd(t.sec);
-        t.min = BinaryToBcd(t.min);
-        t.hour = BinaryToBcd(t.hour);
-        t.day = BinaryToBcd(t.day);
-        t.month = BinaryToBcd(t.month);
-        t.year = BinaryToBcd(t.year);
+        t.sec = x86BinaryToBcd(t.sec);
+        t.min = x86BinaryToBcd(t.min);
+        t.hour = x86BinaryToBcd(t.hour);
+        t.day = x86BinaryToBcd(t.day);
+        t.month = x86BinaryToBcd(t.month);
+        t.year = x86BinaryToBcd(t.year);
     }
     if (pm) {
         t.hour |= 0x80;
     }
     
-    WriteCmos(RTC_SECOND, t.sec);
-    WriteCmos(RTC_MINUTE, t.min);
-    WriteCmos(RTC_HOUR, t.hour);
-    WriteCmos(RTC_DAY, t.day);
-    WriteCmos(RTC_MONTH, t.month);
-    WriteCmos(RTC_YEAR, t.year);
+    x86WriteCmos(RTC_SECOND, t.sec);
+    x86WriteCmos(RTC_MINUTE, t.min);
+    x86WriteCmos(RTC_HOUR, t.hour);
+    x86WriteCmos(RTC_DAY, t.day);
+    x86WriteCmos(RTC_MONTH, t.month);
+    x86WriteCmos(RTC_YEAR, t.year);
 }
 
 export uint64_t ArchGetUtcTime(int64_t timezone_offset) {    
     struct ostime time;
     struct ostime prev;
 
-    while (IsUpdateInProgress()) {
+    while (x86IsUpdateInProgress()) {
         ;
     }
-    ReadTimeState(&time);
+    x86ReadTimeState(&time);
     
     do {
         prev = time;
-        while (IsUpdateInProgress()) {
+        while (x86IsUpdateInProgress()) {
             ;
         }
-        ReadTimeState(&time);
+        x86ReadTimeState(&time);
 
-    } while (!AreTimesEqual(time, prev));
+    } while (!x86AreTimesEqual(time, prev));
 
     return TimeStructToValue(time) - timezone_offset;
 }
@@ -177,11 +177,11 @@ export int ArchSetUtcTime(uint64_t time, int64_t timezone_offset) {
     struct ostime readback;
 
     do {
-        WriteTimeState(rtime);
-        ReadTimeState(&readback);
-    } while (!AreTimesEqual(rtime, readback));
+        x86WriteTimeState(rtime);
+        x86ReadTimeState(&readback);
+    } while (!x86AreTimesEqual(rtime, readback));
 
-    WriteCmos(RTC_WEEKDAY, GetWeekday(time));
+    x86WriteCmos(RTC_WEEKDAY, GetWeekday(time));
 
     return 0;
 }

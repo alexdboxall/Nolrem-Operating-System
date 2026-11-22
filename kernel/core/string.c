@@ -8,8 +8,11 @@
 /*
  * Contains the code for memcpy, memset, strcpy, strcmp and strlen.
  */
-#include <cmn_string.h>
 #include <common.h>
+
+/* Export the shared definitions in cmn_string.h (strcmp, strcpy, strlen). */
+#define CMN_STRING_ATTR export
+#include <cmn_string.h>
 
 export userexec void* memchr(const void* s, int c, size_t n) {
 	const uint8_t* ptr = (const uint8_t*) s;

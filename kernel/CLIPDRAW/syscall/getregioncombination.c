@@ -33,12 +33,12 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
     }
 
     struct region c = CdGetRegionCombination(
-        mode, UserRegionToRegion(ua), UserRegionToRegion(ub)
+        mode, CdUserRegionToRegion(ua), CdUserRegionToRegion(ub)
     );
     
     KeDerefObject(ua);
     KeDerefObject(ub);
-    return (size_t) RegionToUserRegion(c);
+    return (size_t) CdRegionToUserRegion(c);
 }
 
 export pageableuserexec region_t GetRegionCombination(int mode, region_t a, region_t b) {

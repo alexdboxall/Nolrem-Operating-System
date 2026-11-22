@@ -6,11 +6,11 @@
 
 static struct graphics_driver kgfx_driver = {0};
 
-void KeRegisterPrimaryGraphicsDriver(struct graphics_driver drv) {
+export void KeRegisterPrimaryGraphicsDriver(struct graphics_driver drv) {
     kgfx_driver = drv;
 }
 
-struct graphics_driver* KeGetKernelGraphicsDriver(void) {
+export struct graphics_driver* KeGetKernelGraphicsDriver(void) {
     return &kgfx_driver;
 }
 

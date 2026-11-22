@@ -20,7 +20,7 @@ extern void VgaPutSolidRect(struct graphics_driver*, int x1, int y1, int x2, int
  * But set upper bound so that negative input overflows to very big. */
 #define MAX_CURSOR_IDS  32
 
-/* The cursor shape that is currently active (what RealDrawMouse paints). */
+/* The cursor shape that is currently active (what CdRealDrawMouse paints). */
 static uint32_t decoded_current_cursor_black[32] = {0};
 static uint32_t decoded_current_cursor_white[32] = {0};
 static int current_hotspot_x = 0;
@@ -37,7 +37,7 @@ struct cursor {
     size_t len;
 };
 
-static void CleanupCursor(void* _cur) {
+static void CdCleanupCursor(void* _cur) {
     struct cursor* cur = (void*) _cur;
     if (cur == NULL) {
         return;
@@ -91,7 +91,7 @@ static int mouse_screen_y = 0;
 static int mouse_screen_w = 0;
 static int mouse_screen_h = 0;
 
-static struct graphics_driver* GetMouseDriver(void) {
+static struct graphics_driver* CdGetMouseDriver(void) {
     static struct graphics_driver* drv = NULL;
     if (drv == NULL) {
         drv = KeGetKernelGraphicsDriver();
@@ -106,21 +106,21 @@ static struct graphics_driver* GetMouseDriver(void) {
 
 /* All Real* functions must be called with video_lock held. */
 
-static void RealRemoveMouse(void) {
+static void CdRealRemoveMouse(void) {
     if (!mouse_onscreen) {
         return;
     }
-    struct graphics_driver* drv = GetMouseDriver();
+    struct graphics_driver* drv = CdGetMouseDriver();
     drv->remove_mouse(drv, mouse_screen_x, mouse_screen_y, drv->mouse_restore_buffer, mouse_screen_w, mouse_screen_h);
     mouse_onscreen = false;
 }
 
 /* x, y are the pointer (hotspot) position; the hotspot of the *current* shape is applied here. */
-static void RealDrawMouse(int x, int y) {
+static void CdRealDrawMouse(int x, int y) {
     /* Never draw over an already-painted cursor: that would overwrite the restore buffer with cursor pixels. */
-    RealRemoveMouse();
+    CdRealRemoveMouse();
 
-    struct graphics_driver* drv = GetMouseDriver();
+    struct graphics_driver* drv = CdGetMouseDriver();
     int left = x - current_hotspot_x;
     int top  = y - current_hotspot_y;
     drv->draw_mouse(
@@ -138,9 +138,9 @@ static void RealDrawMouse(int x, int y) {
  *   [0]=hotspot_x (int8) [1]=hotspot_y (int8) [2]=lines [3]=flags|width, then black rows, then white rows.
  * Pulls the old cursor off the screen using the geometry it was drawn with, then repaints at the same
  * pointer position using the new hotspot. */
-static void ApplyCursorRecord(const uint8_t* rec, bool flip_vt) {
+static void CdApplyCursorRecord(const uint8_t* rec, bool flip_vt) {
     bool was_onscreen = mouse_onscreen;
-    RealRemoveMouse();
+    CdRealRemoveMouse();
 
     int lines = rec[2];
     bool has_black = !!(rec[3] & 0x80);
@@ -179,7 +179,7 @@ static void ApplyCursorRecord(const uint8_t* rec, bool flip_vt) {
     current_mouse_h = lines;
 
     if (was_onscreen) {
-        RealDrawMouse(pointer_x, pointer_y);
+        CdRealDrawMouse(pointer_x, pointer_y);
     }
     /* If it was hidden for a video update, CdEndVideoUpdate redraws it at pointer_x/y. */
 }
@@ -196,36 +196,36 @@ static const uint8_t* volatile pending_cursor_record = NULL;
 static volatile bool pending_cursor_flip_vt = false;
 
 /* Call with video_lock held. */
-static void ApplyPendingCursor(void) {
+static void CdApplyPendingCursor(void) {
     /* Atomic take, so the pending reference is released exactly once. */
     struct cursor* cur = __atomic_exchange_n(&pending_cursor, NULL, __ATOMIC_ACQ_REL);
     if (cur == NULL) {
         return;
     }
-    ApplyCursorRecord(pending_cursor_record, pending_cursor_flip_vt);
+    CdApplyCursorRecord(pending_cursor_record, pending_cursor_flip_vt);
     /* The shape is decoded into the live arrays now, so the pending reference is no longer needed.
      * This is never the last reference: a pending cursor is always the latest request, which
      * prev_cursor also references, so nothing is freed here (this can run from the mouse IRQ). */
     KeDerefObject(cur);
 }
 
-static void DoBufferedMouse(void) {
-    ApplyPendingCursor();
+static void CdDoBufferedMouse(void) {
+    CdApplyPendingCursor();
     if (need_mouse_remove) {
         need_mouse_remove = false;
-        RealRemoveMouse();
+        CdRealRemoveMouse();
     }
     if (need_mouse_draw) {
         need_mouse_draw = false;
-        RealDrawMouse(pointer_x, pointer_y);
+        CdRealDrawMouse(pointer_x, pointer_y);
     }
 }
 
 /* x, y are accepted for API compatibility; the cursor is removed from wherever it was drawn. */
-void CdRemoveMouse(void) {
+export void CdRemoveMouse(void) {
     if (KeTryAcquireSpinlock(&video_lock)) {
-        DoBufferedMouse();
-        RealRemoveMouse();
+        CdDoBufferedMouse();
+        CdRealRemoveMouse();
         KeReleaseSpinlock(&video_lock);
     } else {
         need_mouse_remove = true;
@@ -233,13 +233,13 @@ void CdRemoveMouse(void) {
 }
 
 /* x, y are the pointer (hotspot) position. */
-void CdDrawMouse(int x, int y) {
+export void CdDrawMouse(int x, int y) {
     pointer_x = x;
     pointer_y = y;
     pointer_valid = true;
     if (KeTryAcquireSpinlock(&video_lock)) {
-        DoBufferedMouse();
-        RealDrawMouse(x, y);
+        CdDoBufferedMouse();
+        CdRealDrawMouse(x, y);
         KeReleaseSpinlock(&video_lock);
     } else {
         need_mouse_draw = true;
@@ -248,34 +248,34 @@ void CdDrawMouse(int x, int y) {
 
 static bool hid_mouse = false;
 
-void CdStartVideoUpdate(int x1, int y1, int x2, int y2) {
+export void CdStartVideoUpdate(int x1, int y1, int x2, int y2) {
     KeAcquireSpinlock(&video_lock);
 
     if (mouse_onscreen &&
         mouse_screen_x < x2 && mouse_screen_x + mouse_screen_w > x1 &&
         mouse_screen_y < y2 && mouse_screen_y + mouse_screen_h > y1) {
-        RealRemoveMouse();
+        CdRealRemoveMouse();
         hid_mouse = true;
     }
 }
 
-void CdEndVideoUpdate(int x1, int y1, int x2, int y2) {
+export void CdEndVideoUpdate(int x1, int y1, int x2, int y2) {
     (void) x1; (void) y1; (void) x2; (void) y2;
 
-    ApplyPendingCursor();
+    CdApplyPendingCursor();
 
     bool remove_requested = need_mouse_remove;
     if (need_mouse_remove) {
         need_mouse_remove = false;
-        RealRemoveMouse();
+        CdRealRemoveMouse();
     }
 
     if (need_mouse_draw) {
         need_mouse_draw = false;
-        RealDrawMouse(pointer_x, pointer_y);
+        CdRealDrawMouse(pointer_x, pointer_y);
     } else if (hid_mouse && !remove_requested) {
         /* No move happened during the paint: put the cursor back where it was hidden from. */
-        RealDrawMouse(pointer_x, pointer_y);
+        CdRealDrawMouse(pointer_x, pointer_y);
     }
 
     hid_mouse = false;
@@ -284,7 +284,7 @@ void CdEndVideoUpdate(int x1, int y1, int x2, int y2) {
 
 
 /* Validate cursor_index against the cursor file and find its record. No state is touched. */
-static int FindCursorRecord(const struct cursor* cur, size_t cursor_index, const uint8_t** rec_out, bool* flip_vt_out) {
+static int CdFindCursorRecord(const struct cursor* cur, size_t cursor_index, const uint8_t** rec_out, bool* flip_vt_out) {
     const uint8_t* cursor_file_data = cur->data;
     size_t file_length = cur->len;
 
@@ -353,7 +353,7 @@ export int CdSetCursor(struct cursor* cur, size_t cursor_index) {
 
     const uint8_t* rec;
     bool flip_vt;
-    int err = FindCursorRecord(cur, cursor_index, &rec, &flip_vt);
+    int err = CdFindCursorRecord(cur, cursor_index, &rec, &flip_vt);
     if (err != 0) {
         KeDerefObject(cur);
         return err;
@@ -364,8 +364,8 @@ export int CdSetCursor(struct cursor* cur, size_t cursor_index) {
     prev_cursor_index = cursor_index;
 
     if (KeTryAcquireSpinlock(&video_lock)) {
-        DoBufferedMouse();
-        ApplyCursorRecord(rec, flip_vt);
+        CdDoBufferedMouse();
+        CdApplyCursorRecord(rec, flip_vt);
         KeReleaseSpinlock(&video_lock);
     } else {
         /* A video update is in progress; applied in CdEndVideoUpdate. The pending change holds its own
@@ -394,7 +394,7 @@ export int CdSetStandardCursor(int index) {
 
 void CdInitMouseSubsystem(void) {
     KeInitSpinlock(&video_lock);
-    KeRegisterUserObjectType(UOBJ_CURSOR, CleanupCursor);
+    KeRegisterUserObjectType(UOBJ_CURSOR, CdCleanupCursor);
     standard_cursor = CdCreateCursor(standard_mouse_file, sizeof(standard_mouse_file));
     CdSetStandardCursor(CURSOR_WAIT);
 }

@@ -13,7 +13,7 @@ static int mouse_y = 240 - 8;
  
 struct graphics_driver;
 
-static void BoundMouse(int* x, int* y, struct rect* mouse_bounds) {
+static void WmBoundMouse(int* x, int* y, struct rect* mouse_bounds) {
     if (*x < mouse_bounds->x) *x = mouse_bounds->x;
     if (*y < mouse_bounds->y) *y = mouse_bounds->y;
     if (*x >= mouse_bounds->x + mouse_bounds->w) *x = mouse_bounds->x + mouse_bounds->w - 1;
@@ -28,7 +28,7 @@ void WmHandleMouseInput(uint8_t click_bits, int16_t delta_x, int16_t delta_y, in
     int new_mx = mouse_x + delta_x;
     int new_my = mouse_y + delta_y;
     bool moved = new_mx != mouse_x || new_my != mouse_y;
-    BoundMouse(&new_mx, &new_my, &mouse_bounds);
+    WmBoundMouse(&new_mx, &new_my, &mouse_bounds);
 
     if (moved) {
         mouse_x = new_mx;

@@ -24,7 +24,7 @@ struct gdt_ptr
 } __attribute__((packed));
 
 
-static struct gdt_entry CreateGdtEntry(size_t base, size_t limit, uint8_t access, uint8_t gran)
+static struct gdt_entry x86CreateGdtEntry(size_t base, size_t limit, uint8_t access, uint8_t gran)
 {
 	return (struct gdt_entry) {
 		.base_low 			  = base & 0xFFFF, 
@@ -72,12 +72,12 @@ void x86InitGdt(void) {
 	cpu_data->gdt = KeAllocPermanentHeap(sizeof(struct gdt));
 	struct gdt* gdt = cpu_data->gdt;
 
-	gdt->entries[0] = CreateGdtEntry(0, 0, 0, 0);			   // null segment
-	gdt->entries[1] = CreateGdtEntry(0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code
-	gdt->entries[2] = CreateGdtEntry(0, 0xFFFFFFFF, 0x92, 0xC); // kernel data
-	gdt->entries[3] = CreateGdtEntry(0, 0xFFFFFFFF, 0xFA, 0xC); // user code
-	gdt->entries[4] = CreateGdtEntry(0, 0xFFFFFFFF, 0xF2, 0xC); // user data
-	gdt->entries[5] = CreateGdtEntry(0, 0, 0, 0);			   // TSS (filled in by x86AddTssToGdt)
+	gdt->entries[0] = x86CreateGdtEntry(0, 0, 0, 0);			   // null segment
+	gdt->entries[1] = x86CreateGdtEntry(0, 0xFFFFFFFF, 0x9A, 0xC); // kernel code
+	gdt->entries[2] = x86CreateGdtEntry(0, 0xFFFFFFFF, 0x92, 0xC); // kernel data
+	gdt->entries[3] = x86CreateGdtEntry(0, 0xFFFFFFFF, 0xFA, 0xC); // user code
+	gdt->entries[4] = x86CreateGdtEntry(0, 0xFFFFFFFF, 0xF2, 0xC); // user data
+	gdt->entries[5] = x86CreateGdtEntry(0, 0, 0, 0);			   // TSS (filled in by x86AddTssToGdt)
 
 	gdt->ptr.size = sizeof(gdt->entries) - 1;
 	gdt->ptr.location = (size_t) &gdt->entries;
@@ -87,6 +87,6 @@ void x86InitGdt(void) {
 
 uint16_t x86AddTssToGdt(struct tss* tss) {
 	struct gdt* gdt = x86GetGdt();
-	gdt->entries[5] = CreateGdtEntry((size_t) tss, sizeof(struct tss) - 1, 0x89, 0x0);
+	gdt->entries[5] = x86CreateGdtEntry((size_t) tss, sizeof(struct tss) - 1, 0x89, 0x0);
 	return 5 * 0x8;
 }

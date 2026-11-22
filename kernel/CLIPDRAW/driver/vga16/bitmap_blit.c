@@ -12,7 +12,7 @@
 // The bytes of plane `p` that a blit of the (already clipped) source rect
 // reads: from the first row's first byte to the last row's last byte. Used
 // for both KeWireVirt and KeUnwireVirt, which must be given the same range.
-static void BlitPlaneRange(const uint8_t* planes, size_t plane_size, int plane_stride, int p,
+static void VgaBlitPlaneRange(const uint8_t* planes, size_t plane_size, int plane_stride, int p,
                            int src_x, int src_y, int w, int h,
                            uint8_t** out_ptr, size_t* out_len) {
     size_t lo = (size_t)p * plane_size + (size_t)src_y * plane_stride + (size_t)(src_x >> 3);
@@ -68,10 +68,10 @@ void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
     for (int p = 0; p < 4; p++) {
         uint8_t* ptr;
         size_t len;
-        BlitPlaneRange(planes, plane_size, plane_stride, p, src_x, src_y, w, h, &ptr, &len);
+        VgaBlitPlaneRange(planes, plane_size, plane_stride, p, src_x, src_y, w, h, &ptr, &len);
         if (KeWireVirt(ptr, len) != 0) {
             for (int u = 0; u < p; u++) {
-                BlitPlaneRange(planes, plane_size, plane_stride, u, src_x, src_y, w, h, &ptr, &len);
+                VgaBlitPlaneRange(planes, plane_size, plane_stride, u, src_x, src_y, w, h, &ptr, &len);
                 KeUnwireVirt(ptr, len);
             }
             return;     // couldn't make the pixels resident; nothing drawn
@@ -138,7 +138,7 @@ void VGABitmapBlit(struct graphics_driver*, struct compat_bitmap* bmp,
     for (int p = 0; p < 4; p++) {
         uint8_t* ptr;
         size_t len;
-        BlitPlaneRange(planes, plane_size, plane_stride, p, src_x, src_y, w, h, &ptr, &len);
+        VgaBlitPlaneRange(planes, plane_size, plane_stride, p, src_x, src_y, w, h, &ptr, &len);
         KeUnwireVirt(ptr, len);
     }
 }

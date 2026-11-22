@@ -15,24 +15,24 @@ struct context {
 };
 
 
-static int PaintRectCallbackPreTransformed(struct rect r, void* _ctxt, int rv, bool* cancel) {
+static int CdPaintRectCallbackPreTransformed(struct rect r, void* _ctxt, int rv, bool* cancel) {
     struct context* ctxt = _ctxt;
     int x1 = r.x;
     int y1 = r.y;
     int x2 = r.x + r.w;
     int y2 = r.y + r.h;
-    ActualPaintRectWithBrush(ctxt->dc, x1, y1, x2, y2, ctxt->brush);
+    CdActualPaintRectWithBrush(ctxt->dc, x1, y1, x2, y2, ctxt->brush);
     *cancel = false;
     return rv;
 }
 
-static int InvertRectCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
+static int CdInvertRectCallback(struct rect r, void* _ctxt, int rv, bool* cancel) {
     struct dc* dc = _ctxt;
     int x1 = r.x;
     int y1 = r.y;
     int x2 = r.x + r.w;
     int y2 = r.y + r.h;
-    ActualInvertRect(dc, x1, y1, x2, y2, false);
+    CdActualInvertRect(dc, x1, y1, x2, y2, false);
     *cancel = false;
     return rv;
 }
@@ -41,9 +41,9 @@ static int CdPaintRegionWithBrushPreTransformed(struct dc* dc, struct region rgn
     struct context ctxt;
     ctxt.dc = dc;
     ctxt.brush = brush;
-    return IterateRegion(
+    return CdIterateRegion(
         rgn, 
-        PaintRectCallbackPreTransformed,
+        CdPaintRectCallbackPreTransformed,
         &ctxt,
         0
     );
@@ -57,9 +57,9 @@ export int CdPaintRegionWithBrush(struct dc* dc, struct region rgn, struct brush
     if (CdIsRegionBad(clipped)) {
         return ENOMEM;
     }
-    int retv = IterateRegion(
+    int retv = CdIterateRegion(
         clipped, 
-        PaintRectCallbackPreTransformed,
+        CdPaintRectCallbackPreTransformed,
         &ctxt,
         0
     );
@@ -69,9 +69,9 @@ export int CdPaintRegionWithBrush(struct dc* dc, struct region rgn, struct brush
 
 /* `rgn` must already be clipped to the DC, and be in device coordinates. */
 static int CdInvertRegionPreTransformed(struct dc* dc, struct region rgn) {
-    return IterateRegion(
+    return CdIterateRegion(
         rgn, 
-        InvertRectCallback,
+        CdInvertRectCallback,
         dc,
         0
     );

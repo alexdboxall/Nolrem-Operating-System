@@ -1,19 +1,20 @@
+#include <common.h>
 #include <obj.h>
-#include "../clipdraw_internal.h"
+#include <uobj.h>
 
-static bool IsValidUserOwnedObject(void* obj) {
+static bool KeIsValidUserOwnedObject(void* obj) {
     // TODO: check if this process has a valid user object with the same
     // address in the list.
     (void) obj;
     return true;
 }
 
-bool KeValidateUserObjectAndAtomicallyRef(void* obj, int type) {
+export bool KeValidateUserObjectAndAtomicallyRef(void* obj, int type) {
     /* Don't dereference NULL below to read the type. */
     if (obj == NULL) {
         return false;
     }
-    bool ok = IsValidUserOwnedObject(obj);
+    bool ok = KeIsValidUserOwnedObject(obj);
     if (type != UOBJ_ANYTYPE) {
         ok = ok && ((struct user_obj_header*) obj)->user_type == type;
     }

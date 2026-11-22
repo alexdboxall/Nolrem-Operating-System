@@ -5,7 +5,7 @@ typedef void initfunc_t(void);
 extern initfunc_t* start_ctors[];
 extern initfunc_t* end_ctors[];
 
-__attribute__ ((constructor)) void DummyGlobalConstructor(void) {
+__attribute__ ((constructor)) void x86DummyGlobalConstructor(void) {
 
 }
  

@@ -35,9 +35,9 @@ pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_
     }
 
     if (brush != NULL) {
-        res = CdPaintRegionWithBrush(dc, UserRegionToRegion(urgn), brush);
+        res = CdPaintRegionWithBrush(dc, CdUserRegionToRegion(urgn), brush);
     } else {
-        res = CdPaintRegion(dc, UserRegionToRegion(urgn));
+        res = CdPaintRegion(dc, CdUserRegionToRegion(urgn));
     }
 
     CdReleasePaintObjects(dc, brush);

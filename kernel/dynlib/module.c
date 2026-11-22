@@ -27,7 +27,7 @@ struct module {
 static struct module* module_list_head;
 static struct spinlock modlock;
 
-static void CleanupModule(void* _mod) {
+static void KeCleanupModule(void* _mod) {
     struct module* mod = _mod;
     FreeHeap(mod->sym_list);
     FreeHeap(mod->name);
@@ -36,11 +36,11 @@ static void CleanupModule(void* _mod) {
 }
 
 void KeInitModule(void) {
-    KeRegisterObjectType(OBJTYPE_MODULE, CleanupModule);  
+    KeRegisterObjectType(OBJTYPE_MODULE, KeCleanupModule);  
     KeInitSpinlock(&modlock); 
 }
 
-static struct symbol_list* CreateSymbolListFromSymFile(struct file* f) {
+static struct symbol_list* KeCreateSymbolListFromSymFile(struct file* f) {
     void* initial = KeAllocFileMemory(f, 0, PAGE_SIZE, 0, 0);
     void* mem = initial;
     int total_symbols = ReadUnaligned16AndAdvance(&mem);
@@ -83,7 +83,7 @@ struct module* KeLoadKernelModule(void) {
     if (res != 0) {
         KePanic(PANIC_BAD_KERNEL);
     }
-    mod->sym_list = CreateSymbolListFromSymFile(file);
+    mod->sym_list = KeCreateSymbolListFromSymFile(file);
     KeDerefObject(file);
 
     KeAcquireSpinlock(&modlock);

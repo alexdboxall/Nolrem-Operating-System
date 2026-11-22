@@ -10,9 +10,9 @@ void ArchInit(void) {
     x86InitPic();
     x86InitPit(25);
     x86InitCmos();
-    InitPs2();
+    Ps2Init();
 }
 
 void ArchInit2(void) {
-    InitFloppy();
+    FloppyInit();
 }

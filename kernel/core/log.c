@@ -17,7 +17,7 @@ static inline unsigned char inb(unsigned short port) {
     return ret;
 }
 
-static void LogCharacter(char c) {
+static void KeLogCharacter(char c) {
     static bool disp_mode = false;
     if (c == 0x01) {
         disp_mode = true;
@@ -34,9 +34,9 @@ static void LogCharacter(char c) {
     }   
 }
 
-static void LogInt(int i) {
+static void KeLogInt(int i) {
     if (i < 0) {
-        LogCharacter('-');
+        KeLogCharacter('-');
         i = -i;
     }
     char buffer[16];
@@ -46,23 +46,23 @@ static void LogInt(int i) {
         i /= 10;
     } while (i);
     while (digits--) {
-        LogCharacter(buffer[digits]);
+        KeLogCharacter(buffer[digits]);
     }
 }
 
-static void LogHex(size_t hx) {
+static void KeLogHex(size_t hx) {
     static char hexdigits[] = "0123456789ABCDEF";
     int nibbles = sizeof(size_t) * 2;
     for (int i = 0; i < nibbles; ++i) {
         int nibble = (hx >> (nibbles * 4 - 4 - i * 4)) & 0xF;
-        if (i == 8) LogCharacter('\'');
-        LogCharacter(hexdigits[nibble]);
+        if (i == 8) KeLogCharacter('\'');
+        KeLogCharacter(hexdigits[nibble]);
     }
 }
 
-static void LogString(char* s) {
+static void KeLogString(char* s) {
     while (*s) {
-        LogCharacter(*s);
+        KeLogCharacter(*s);
         ++s;
     }
 }
@@ -73,46 +73,46 @@ export void KeLogPrintf(const char* format, ...) {
 
     for (const char* p = format; *p != '\0'; p++) {
         if (*p != '%') {
-            LogCharacter(*p);
+            KeLogCharacter(*p);
             continue;
         }
 
         p++; 
 
         if (*p == '\0') {
-            LogCharacter('%');
+            KeLogCharacter('%');
             break;
         }
 
         switch (*p) {
             case 'd': {
                 int i = va_arg(args, int);
-                LogInt(i);
+                KeLogInt(i);
                 break;
             }
             case 's': {
                 char* s = va_arg(args, char*);
-                LogString(s);
+                KeLogString(s);
                 break;
             }
             case 'c': {
                 char c = (char)va_arg(args, int);
-                LogCharacter(c);
+                KeLogCharacter(c);
                 break;
             }
             case 'X': 
             case 'x': {
                 size_t hx = va_arg(args, size_t);
-                LogHex(hx);
+                KeLogHex(hx);
                 break;
             }
             case '%': {
-                LogCharacter('%');
+                KeLogCharacter('%');
                 break;
             }
             default: {
-                LogCharacter('%');
-                LogCharacter(*p);
+                KeLogCharacter('%');
+                KeLogCharacter(*p);
                 break;
             }
         }

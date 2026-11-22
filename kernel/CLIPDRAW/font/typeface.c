@@ -34,7 +34,7 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
     return tf;
 
 fail_after_open:
-    /* CleanupTypeface closes the Omf and frees tf. */
+    /* CdCleanupTypeface closes the Omf and frees tf. */
     KeDerefObject(tf);
     return NULL;
 }
@@ -143,7 +143,7 @@ export pageable font_style_id CdGetTypefaceClosestStyle(struct typeface* tf, fon
         return INVALID_FONT_STYLE;
     }
 
-    const int  want_size   = GetFontStylePointsIn20ths(style);
+    const int  want_size   = CdGetFontStylePointsIn20ths(style);
     const bool want_bold   = IsFontStyleBold(style);
     const bool want_italic = IsFontStyleItalic(style);
 
@@ -160,7 +160,7 @@ export pageable font_style_id CdGetTypefaceClosestStyle(struct typeface* tf, fon
 
         /* Size dominates. Prefer larger over smaller, since shrinking
          * a bitmap loses less than stretching it. */
-        int size = GetFontStylePointsIn20ths(val);
+        int size = CdGetFontStylePointsIn20ths(val);
         uint32_t size_penalty = (size >= want_size)
             ? (uint32_t)(size - want_size)
             : (uint32_t)(want_size - size) * 2;
@@ -191,7 +191,7 @@ export pageable bool CdCheckTypefaceForStyle(struct typeface* tf, font_style_id 
     return closest != INVALID_FONT_STYLE && closest == style;
 }
 
-static uint32_t ReadAndAdvanceCodePointSize(struct font* fn) {
+static uint32_t CdReadAndAdvanceCodePointSize(struct font* fn) {
     if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
         return KeOmfRead8AndAdvance(&fn->tf->omf);
     } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
@@ -201,8 +201,8 @@ static uint32_t ReadAndAdvanceCodePointSize(struct font* fn) {
     }
 }
 
-/* Same width as ReadAndAdvanceCodePointSize, but sign-extended. */
-static int32_t ReadAndAdvanceSignedCodePointSize(struct font* fn) {
+/* Same width as CdReadAndAdvanceCodePointSize, but sign-extended. */
+static int32_t CdReadAndAdvanceSignedCodePointSize(struct font* fn) {
     if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
         return (int8_t)KeOmfRead8AndAdvance(&fn->tf->omf);
     } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
@@ -212,7 +212,7 @@ static int32_t ReadAndAdvanceSignedCodePointSize(struct font* fn) {
     }
 }
 
-static uint32_t GetCodePointSizeInBytes(struct font* fn) {
+static uint32_t CdGetCodePointSizeInBytes(struct font* fn) {
     if (fn->codepoint_size == FNT_CODEPOINT_SIZE_8) {
         return 1;
     } else if (fn->codepoint_size == FNT_CODEPOINT_SIZE_16) {
@@ -224,7 +224,7 @@ static uint32_t GetCodePointSizeInBytes(struct font* fn) {
 
 /* Maps a code point to an index into the glyph table, or BAD_GLYPH_CHAR if the
  * font has no glyph for it. */
-static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
+static uint32_t CdGetGlyphIndex(struct font* fn, uint32_t c) {
     if (c < fn->min_char) {
         return BAD_GLYPH_CHAR;
     }
@@ -236,8 +236,8 @@ static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
             return BAD_GLYPH_CHAR;
         }
         for (uint32_t i = 0; i < num_gaps; ++i) {
-            uint32_t if_this = ReadAndAdvanceCodePointSize(fn);
-            uint32_t then_sub = ReadAndAdvanceCodePointSize(fn);
+            uint32_t if_this = CdReadAndAdvanceCodePointSize(fn);
+            uint32_t then_sub = CdReadAndAdvanceCodePointSize(fn);
             if (fn->tf->omf.error) {
                 return BAD_GLYPH_CHAR;
             }
@@ -265,8 +265,8 @@ static uint32_t GetGlyphIndex(struct font* fn, uint32_t c) {
     return c;
 }
 
-static bool AdvanceToGlyphData(struct font* fn, uint32_t c) {
-    uint32_t index = GetGlyphIndex(fn, c);
+static bool CdAdvanceToGlyphData(struct font* fn, uint32_t c) {
+    uint32_t index = CdGetGlyphIndex(fn, c);
     if (index == BAD_GLYPH_CHAR) {
         return false;
     }
@@ -296,7 +296,7 @@ struct glyph_data {
     bool error;
 };
 
-export pageable uint8_t* ScaleGlyphData(uint8_t* glyph, int old_w, int old_h, int new_w, int new_h) {
+export pageable uint8_t* CdScaleGlyphData(uint8_t* glyph, int old_w, int old_h, int new_w, int new_h) {
     int c, k, dy;
 
     if (new_w <= 0 || new_h <= 0) {
@@ -378,7 +378,7 @@ export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
     }
     data.height_px = fn->height_px;
     
-    bool ok = AdvanceToGlyphData(fn, c);
+    bool ok = CdAdvanceToGlyphData(fn, c);
     if (!ok) {
         data.error = true;
         return data;
@@ -406,10 +406,10 @@ export struct glyph_data CdGetGlyphUnderlyingData(struct font* fn, uint32_t c) {
  * points). The table is: u32 num_pairs, then num_pairs sorted entries of
  * (left, right, amount), each field codepoint_size wide, amount signed.
  * Returns 0 for "no kerning", which is also what any file error gives. */
-static int32_t LookupKernByGlyphIndex(struct font* fn, uint32_t left, uint32_t right) {
+static int32_t CdLookupKernByGlyphIndex(struct font* fn, uint32_t left, uint32_t right) {
     struct open_mapped_file* omf = &fn->tf->omf;
 
-    const uint64_t entry_size = (uint64_t)GetCodePointSizeInBytes(fn) * 3;
+    const uint64_t entry_size = (uint64_t)CdGetCodePointSizeInBytes(fn) * 3;
     const uint64_t table_pos  = (uint64_t)fn->file_offset + fn->kern_table_offset;
     if (table_pos > UINT32_MAX) {
         return 0;
@@ -432,9 +432,9 @@ static int32_t LookupKernByGlyphIndex(struct font* fn, uint32_t left, uint32_t r
             return 0;
         }
         KeOmfJump(omf, (uint32_t)pos);
-        uint32_t entry_left  = ReadAndAdvanceCodePointSize(fn);
-        uint32_t entry_right = ReadAndAdvanceCodePointSize(fn);
-        int32_t  amount      = ReadAndAdvanceSignedCodePointSize(fn);
+        uint32_t entry_left  = CdReadAndAdvanceCodePointSize(fn);
+        uint32_t entry_right = CdReadAndAdvanceCodePointSize(fn);
+        int32_t  amount      = CdReadAndAdvanceSignedCodePointSize(fn);
         if (omf->error) {
             return 0;
         }
@@ -457,16 +457,16 @@ export pageable int CdGetKern(struct font* fn, uint32_t left, uint32_t right) {
     }
 
     /* The table is keyed by glyph index, so go through the gap table first. */
-    uint32_t left_index  = GetGlyphIndex(fn, left);
-    uint32_t right_index = GetGlyphIndex(fn, right);
+    uint32_t left_index  = CdGetGlyphIndex(fn, left);
+    uint32_t right_index = CdGetGlyphIndex(fn, right);
     if (left_index == BAD_GLYPH_CHAR || right_index == BAD_GLYPH_CHAR) {
         return 0;
     }
 
-    return (int)LookupKernByGlyphIndex(fn, left_index, right_index);
+    return (int)CdLookupKernByGlyphIndex(fn, left_index, right_index);
 }
 
-static void CleanupTypeface(void* _tf) {
+static void CdCleanupTypeface(void* _tf) {
     struct typeface* tf = _tf;
     if (tf == NULL) {
         return;
@@ -475,7 +475,7 @@ static void CleanupTypeface(void* _tf) {
     FreeHeap(tf);
 }
 
-static void CleanupFont(void* _fn) {
+static void CdCleanupFont(void* _fn) {
     struct font* fn = _fn;
     if (fn == NULL) {
         return;
@@ -485,9 +485,9 @@ static void CleanupFont(void* _fn) {
 }
 
 void CdInitTypefaceSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_TYPEFACE, CleanupTypeface);
-    KeRegisterUserObjectType(UOBJ_FONT, CleanupFont);
+    KeRegisterUserObjectType(UOBJ_TYPEFACE, CdCleanupTypeface);
+    KeRegisterUserObjectType(UOBJ_FONT, CdCleanupFont);
 
-    extern void InitScaledGlyphCache();
-    InitScaledGlyphCache();
+    extern void CdInitScaledGlyphCache();
+    CdInitScaledGlyphCache();
 }

@@ -3,7 +3,7 @@
 #include "clipdraw_internal.h"
 #include "api.h"
 
-static void CleanupUserRegion(void* _ur) {
+static void CdCleanupUserRegion(void* _ur) {
     struct uregion* ur = _ur;
     if (ur == NULL) {
         return;
@@ -14,7 +14,7 @@ static void CleanupUserRegion(void* _ur) {
 
 // Transfers the 'ownership' of the region to the uregion.
 // ie. we don't call FreeRegion() on the original region after this
-struct uregion* RegionToUserRegion(struct region rgn) {
+struct uregion* CdRegionToUserRegion(struct region rgn) {
     struct uregion* ur = KeAllocHeap(sizeof(struct uregion));
     if (ur == NULL) {
         return NULL;
@@ -25,10 +25,10 @@ struct uregion* RegionToUserRegion(struct region rgn) {
 }
 
 // No transfer of ownership, nor changing of ref count happens
-struct region UserRegionToRegion(struct uregion* urgn) {
+struct region CdUserRegionToRegion(struct uregion* urgn) {
     return urgn->rgn;
 }
     
 void CdInitUserRegionSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_REGION, CleanupUserRegion);
+    KeRegisterUserObjectType(UOBJ_REGION, CdCleanupUserRegion);
 }

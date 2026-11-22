@@ -5,7 +5,7 @@
 #include <arch.h>
 #include <log.h>
 
-static int ValidateCopy(const void* user_addr, size_t size, bool write) {
+static int KeValidateCopy(const void* user_addr, size_t size, bool write) {
     size_t initial_address = (size_t) user_addr;
     size_t final_address = initial_address + size;
 
@@ -29,8 +29,8 @@ static int ValidateCopy(const void* user_addr, size_t size, bool write) {
     return 0;
 }
 
-static int CopyIntoKernel(void* kernel_addr, const void* user_addr, size_t size) {
-    int status = ValidateCopy(user_addr, size, false);
+static int KeCopyIntoKernel(void* kernel_addr, const void* user_addr, size_t size) {
+    int status = KeValidateCopy(user_addr, size, false);
     if (status != 0) {
         return status;
     }
@@ -39,8 +39,8 @@ static int CopyIntoKernel(void* kernel_addr, const void* user_addr, size_t size)
     return 0;
 }
 
-static int CopyOutOfKernel(const void* kernel_addr, void* user_addr, size_t size) {
-    int status = ValidateCopy(user_addr, size, true);
+static int KeCopyOutOfKernel(const void* kernel_addr, void* user_addr, size_t size) {
+    int status = KeValidateCopy(user_addr, size, true);
     if (status != 0) {
         return status;
     }
@@ -92,10 +92,10 @@ export int KePerformTransfer(void* trusted, struct transfer* untrusted, uint64_t
         * This is from the kernel's perspective of the operations.
         */
         if (direction == TRANSFER_READ) {
-            result = CopyOutOfKernel((const void*) trusted, untrusted->address, amount);
+            result = KeCopyOutOfKernel((const void*) trusted, untrusted->address, amount);
             
         } else {
-            result = CopyIntoKernel(trusted, (const void*) untrusted->address, amount);
+            result = KeCopyIntoKernel(trusted, (const void*) untrusted->address, amount);
         }
 
         if (result != 0) {
@@ -167,7 +167,7 @@ export int KeReadWordFromUsermode(size_t* location, size_t* output) {
     return res;
 }
 
-static struct transfer CreateTransfer(
+static struct transfer KeCreateTransfer(
     void* addr, uint64_t length, uint64_t offset, int direction, int type
 ) {
     return (struct transfer) {
@@ -177,7 +177,7 @@ static struct transfer CreateTransfer(
 }
 
 export struct transfer KeCreateKernelTransfer(void* addr, uint64_t length, uint64_t offset, int direction) {
-    return CreateTransfer(addr, length, offset, direction, TRANSFER_INTRA_KERNEL);
+    return KeCreateTransfer(addr, length, offset, direction, TRANSFER_INTRA_KERNEL);
 }
 
 /*
@@ -186,13 +186,13 @@ export struct transfer KeCreateKernelTransfer(void* addr, uint64_t length, uint6
  * kernel data (i.e. a TRANSFER_READ). Likewise with the vice verse once.
  */
 export struct transfer KeCreateTransferWritingToUser(void* addr, uint64_t length, uint64_t offset) {
-    return CreateTransfer(
+    return KeCreateTransfer(
         addr, length, offset, TRANSFER_READ, TRANSFER_USERMODE
     );
 }
 
 export struct transfer KeCreateTransferReadingFromUser(const void* addr, uint64_t length, uint64_t offset) {
-    return CreateTransfer(
+    return KeCreateTransfer(
         (void*) addr, length, offset, TRANSFER_WRITE, TRANSFER_USERMODE
     );
 }

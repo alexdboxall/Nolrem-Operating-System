@@ -1,14 +1,19 @@
 #include "../api.h"
+#include "../clipdraw_internal.h"
 #include "../region_internal.h"
 
 export pageable struct region CdCreateRegionFromBitmask(int x, int y, int width, int height, uint8_t* data) {
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
 
-    CdBuildNewRegion(&rgn, (int16_t)y, &ctxt);
+    if (CdBuildNewRegion(&rgn, (int16_t)y, &ctxt) != 0) {
+        return CdBadRegion();
+    }
 
     if (width <= 0 || height <= 0 || data == NULL) {
-        CdFinishRegion(&rgn, &ctxt);
+        if (CdFinishRegion(&rgn, &ctxt) != 0) {
+            goto fail;
+        }
         return rgn;
     }
 
@@ -40,7 +45,9 @@ export pageable struct region CdCreateRegionFromBitmask(int x, int y, int width,
                     spans[0] = (int16_t)span_start_x;
                     spans[1] = (int16_t)(x + dx);
                     
-                    CdAddScanline(&rgn, &ctxt, 1, spans, false);
+                    if (CdAddScanline(&rgn, &ctxt, 1, spans, false) != 0) {
+                        goto fail;
+                    }
                     inside_span = 0;
                 }
             }
@@ -52,10 +59,19 @@ export pageable struct region CdCreateRegionFromBitmask(int x, int y, int width,
             spans[0] = (int16_t)span_start_x;
             spans[1] = (int16_t)(x + width);
             
-            CdAddScanline(&rgn, &ctxt, 1, spans, false);
+            if (CdAddScanline(&rgn, &ctxt, 1, spans, false) != 0) {
+                goto fail;
+            }
         }
     }
 
-    CdFinishRegion(&rgn, &ctxt);
+    if (CdFinishRegion(&rgn, &ctxt) != 0) {
+        goto fail;
+    }
     return rgn;
+
+fail:
+    /* Out of memory part way: give back what was built so far. */
+    CdAbortNewRegion(&rgn, &ctxt);
+    return CdBadRegion();
 }

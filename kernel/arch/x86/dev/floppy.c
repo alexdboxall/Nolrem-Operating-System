@@ -616,9 +616,10 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
 
     int lba = offset / SECTOR_SIZE;
     int remaining = length / SECTOR_SIZE;
-    int error = 0;
-
-    KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
+    int error = KeAcquireMutex(floppy_lock, TIMEOUT_DISK_ACCESS);
+    if (error != 0) {
+        return error;
+    }
 
     while (remaining > 0) {
         /*
@@ -645,7 +646,9 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
          * read, hand the data over once it has been read successfully.
          */
         if (write) {
-            KePerformTransfer((void*) flp->virt_buffer, io, count * SECTOR_SIZE);
+            /* If the caller's data can't be read, writing the old contents of the buffer to the disk would corrupt it. */
+            error = KePerformTransfer((void*) flp->virt_buffer, io, count * SECTOR_SIZE);
+            if (error != 0) break;
         }
 
         int done = 0;
@@ -653,7 +656,8 @@ static int FloppyIo(struct floppy_data* flp, struct transfer* io) {
         if (error != 0) break;
 
         if (!write) {
-            KePerformTransfer((void*) flp->virt_buffer, io, done * SECTOR_SIZE);
+            error = KePerformTransfer((void*) flp->virt_buffer, io, done * SECTOR_SIZE);
+            if (error != 0) break;
         }
 
         lba += done;
@@ -674,17 +678,24 @@ static int FloppyReadWrite(struct aio* aio) {
 }
 
 static int FloppyCreate(struct vnode* node, struct vnode** partition, const char* name, int, mode_t) {
-    KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
+    /* The lock is held for the length of a whole transfer, hence the longer wait. */
+    int res = KeAcquireMutex(floppy_lock, TIMEOUT_DISK_OPERATION);
+    if (res != 0) {
+        return res;
+    }
     struct floppy_data* flp = node->data;
-    int res = KeDiskCreateHelper(&flp->partitions, partition, name);
+    res = KeDiskCreateHelper(&flp->partitions, partition, name);
     KeReleaseMutex(floppy_lock);
     return res;
 }
 
 static int FloppyFollow(struct vnode* node, struct vnode** output, const char* name) {
-    KeAcquireMutex(floppy_lock, TIMEOUT_INFINITE);
+    int res = KeAcquireMutex(floppy_lock, TIMEOUT_DISK_OPERATION);
+    if (res != 0) {
+        return res;
+    }
     struct floppy_data* flp = node->data;
-    int res = KeDiskFollowHelper(&flp->partitions, output, name);
+    res = KeDiskFollowHelper(&flp->partitions, output, name);
     KeReleaseMutex(floppy_lock);
     return res;
 }
@@ -790,6 +801,13 @@ void FloppyInit(void) {
      */
     if (floppy_irq_mutex == NULL) {
         floppy_irq_mutex = KeCreateMutex();
+        if (floppy_irq_mutex == NULL) {
+            KeLogPrintf("FDC: no memory for the interrupt mutex\n");
+            KeFreeMemory((void*) virt_buffer, PAGE_SIZE);
+            KeFreeDiscardedPhys(KeGetPhysPage(phys_buffer));
+            FreeHeap(flp);
+            return;
+        }
     }
     KeRegisterInterruptHandler(6, FloppyIrqHandler);
 
@@ -808,12 +826,13 @@ void FloppyInit(void) {
         return;
     }
 
-    floppy_lock = KeCreateMutex();
-    
+    /*
+     * Make everything that can fail before anything is published (the lock, the
+     * drive table, the thread), so that running out of memory here can be undone
+     * by simply freeing what was made.
+     */
+    struct mutex* new_lock = KeCreateMutex();
     flp->msgbox = KeCreateMessageBox(sizeof(struct aio*), 16);
-    floppy_drives_installed[0] = flp;
-
-    KeCreateThreadEx(KeGetKernelVas(), FloppyDriverThread, flp, 1200);
 
     struct vnode* node = KeCreateVnode(dev_ops, (struct stat) {
         .st_mode = S_IFBLK | S_IRWXU | S_IRWXG | S_IRWXO,
@@ -823,9 +842,45 @@ void FloppyInit(void) {
         .st_size = FLOPPY_SIZE,
         .st_dev = KeNextDevId()
     });
-    node->data = flp;
+    struct file* disk = (node != NULL) ? KeCreateFile(node, 0, 0, true, true) : NULL;
+    char* raw_name = KeGenerateNewRawDiskName(DISKUTIL_TYPE_FLOPPY);
 
+    if (new_lock == NULL || flp->msgbox == NULL || disk == NULL || raw_name == NULL) {
+        goto no_memory;
+    }
+
+    floppy_lock = new_lock;
+    floppy_drives_installed[0] = flp;
+    if (KeCreateThreadEx(KeGetKernelVas(), FloppyDriverThread, flp, 1200) == NULL) {
+        floppy_drives_installed[0] = NULL;
+        floppy_lock = NULL;
+        goto no_memory;
+    }
+
+    node->data = flp;
     KeInitDiskPartitionHelper(&flp->partitions);
-    KeMount(node, KeGenerateNewRawDiskName(DISKUTIL_TYPE_FLOPPY));
-    KeCreateDiskPartitions(KeCreateFile(node, 0, 0, true, true));
+
+    /* KeMount copies the name, so ours is ours to free. */
+    res = KeMount(node, raw_name);
+    FreeHeap(raw_name);
+    if (res != 0) {
+        /* The thread can't be stopped, so carry on; the drive just won't have a name to open it by. */
+        KeLogPrintf("FDC: couldn't mount the drive (error %d)\n", res);
+    }
+
+    /* 'disk' is deliberately kept: the partitions refer to it for as long as the system runs. */
+    KeCreateDiskPartitions(disk);
+    return;
+
+no_memory:
+    KeLogPrintf("FDC: no memory to set up the drive\n");
+    if (disk != NULL) KeDerefObject(disk);      /* drops its reference to the node ... */
+    if (node != NULL) KeDerefObject(node);      /* ... and then this one frees it */
+    FreeHeap(raw_name);
+    if (flp->msgbox != NULL) KeDerefObject(flp->msgbox);
+    if (new_lock != NULL) KeDerefObject(new_lock);
+    KeFreeMemory((void*) virt_buffer, PAGE_SIZE);
+    KeFreeDiscardedPhys(KeGetPhysPage(phys_buffer));
+    outb(flp->base + FLOPPY_DOR, DOR_MOTOR_OFF);
+    FreeHeap(flp);
 }

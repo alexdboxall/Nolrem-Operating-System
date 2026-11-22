@@ -78,6 +78,17 @@ static int FatVnodeTruncate(struct aio* aio) {
 static struct vnode* FatCreateVnode(uint32_t ino, bool directory, uint32_t size, dev_t dev);
 
 /*
+* Runs when the last reference to a vnode goes. Each vnode owns its own vnode_data
+* (the volume itself is shared and lives on), which would otherwise leak every time
+* a file is closed and its vnode evicted.
+*/
+static int FatVnodeCleanup(struct vnode* node) {
+    FreeHeap(node->data);
+    node->data = NULL;
+    return 0;
+}
+
+/*
 * Makes the vnode for something that was found in (or added to) a directory.
 */
 static int FatCreateChildVnode(struct vnode* parent, const struct fat_node_info* info, struct vnode** out) {
@@ -102,8 +113,28 @@ static int FatCreateChildVnode(struct vnode* parent, const struct fat_node_info*
 
     child_node->data = child_data;
 
+    int status = KeRegisterNewVnode(child_node);
+    if (status == EEXIST) {
+        /*
+        * Someone else opened the same thing between FatFollow() looking and now.
+        * Share theirs (that's where the up to date size lives, see FatVnodeFollow)
+        * and throw ours away, which also frees child_data via FatVnodeCleanup.
+        */
+        KeDerefObject(child_node);
+        struct vnode* existing = KeTryFindAndReferenceExistingVnode(info->ino, parent->stat.st_dev);
+        if (existing == NULL) {
+            return EAGAIN;      /* it went away again in the meantime; the caller can just retry */
+        }
+        *out = existing;
+        return 0;
+    }
+    if (status != 0) {
+        KeDerefObject(child_node);
+        return status;
+    }
+
     *out = child_node;
-    return KeRegisterNewVnode(child_node);
+    return 0;
 }
 
 /*
@@ -158,6 +189,7 @@ static const struct vnode_operations dev_ops = {
     .truncate       = FatVnodeTruncate,
     .create         = FatVnodeCreate,
     .follow         = FatVnodeFollow,
+    .cleanup        = FatVnodeCleanup,
 };
 
 static struct vnode* FatCreateVnode(uint32_t ino, bool directory, uint32_t size, dev_t dev) {
@@ -194,22 +226,43 @@ int FatMountCreator(struct file* raw_device, struct file** out) {
     data->file.entry_byte = 0;      /* ... or an entry */
 
     /*
+    * Everything that can fail without needing the thread stopped comes first, as
+    * starting the driver can't be undone.
+    */
+    struct vnode* node = FatCreateVnode(FAT_ROOT_INO, true, 0, raw_device->node->stat.st_dev);
+    if (node == NULL) {
+        FreeHeap(data);
+        FatDestroy(fat);
+        return ENOMEM;
+    }
+    node->data = data;      /* from here on the vnode owns 'data' (see FatVnodeCleanup) */
+
+    struct file* root = KeCreateFile(node, 0, 0, true, false);
+    if (root == NULL) {
+        KeDerefObject(node);
+        FatDestroy(fat);
+        return ENOMEM;
+    }
+
+    /*
     * Last, as the thread can't be stopped again.
     */
     status = FatStartDriver(fat);
     if (status != 0) {
-        FreeHeap(data);
+        KeDerefObject(root);    /* drops the file's reference to the vnode ... */
+        KeDerefObject(node);    /* ... and this one frees it, and 'data' */
         FatDestroy(fat);
         return status;
     }
 
-    struct vnode* node = FatCreateVnode(FAT_ROOT_INO, true, 0, raw_device->node->stat.st_dev);
-    node->data = data;
-
-    *out = KeCreateFile(node, 0, 0, true, false);
+    KeDerefObject(node);        /* the file keeps the vnode alive; this was only the creator's reference */
+    *out = root;
     return 0;
 }
 
 void FatInit(void) {
-    KeRegisterFilesystem("fat", FatMountCreator);
+    int res = KeRegisterFilesystem("fat", FatMountCreator);
+    if (res != 0) {
+        KeLogPrintf("[fat]: couldn't register the filesystem (error %d)\n", res);
+    }
 }

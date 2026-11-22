@@ -14,6 +14,24 @@ struct path_entry {
     int y;
 };
 
+/*
+ * Frees everything a path owns and leaves it as the 'no path' value (data == NULL), which every
+ * function here already treats as 'nothing to do'. Used both to finish with a path and when it runs
+ * out of memory partway through being built.
+ */
+static pageable void CdDestroyPathData(struct path* p) {
+    if (p->data != NULL) {
+        CdFreeDynamicArray(*((struct dynamic_array*) p->data));
+        FreeHeap(p->data);
+        p->data = NULL;
+    }
+    if (p->count_data != NULL) {
+        CdFreeDynamicArray(*((struct dynamic_array*) p->count_data));
+        FreeHeap(p->count_data);
+        p->count_data = NULL;
+    }
+}
+
 export pageable struct path CdCreatePath(int start_x, int start_y) {
     struct dynamic_array* data = AllocHeap(sizeof(struct dynamic_array));
     struct dynamic_array* count_data = AllocHeap(sizeof(struct dynamic_array));
@@ -26,6 +44,15 @@ export pageable struct path CdCreatePath(int start_x, int start_y) {
     };
     *data = CdCreateDynamicArray(sizeof(struct path_entry), 8);
     *count_data = CdCreateDynamicArray(sizeof(int), 4);
+    if (data->array == 0 || count_data->array == 0) {
+        CdFreeDynamicArray(*data);
+        CdFreeDynamicArray(*count_data);
+        FreeHeap(data);
+        FreeHeap(count_data);
+        return (struct path) {
+            .data = NULL,
+        };
+    }
 
     struct path p = (struct path) {
         .x = start_x,
@@ -70,7 +97,13 @@ export pageable void CdLiftPath(struct path* p, int start_x, int start_y) {
     
     int count = p->num_points_total - p->count_total_so_far;
     CdDrawPath(p, start_x, start_y);
-    CdInsertDynamicArray((struct dynamic_array*) p->count_data, &count);
+    if (p->data == NULL) {
+        return;     /* the draw ran out of memory and gave the path up */
+    }
+    if (CdInsertDynamicArray((struct dynamic_array*) p->count_data, &count) != 0) {
+        CdDestroyPathData(p);
+        return;
+    }
     p->count_total_so_far = p->num_points_total;
     p->polygons++;
 }
@@ -83,7 +116,8 @@ static pageable int CdTransform(int64_t pos, int scale_16_16, int trans) {
 } 
 
 export pageable struct region CdClosePath(struct path p, int mode) {
-    struct region rgn;
+    /* Stays 'bad' (out of memory) unless one of the branches below produces a real result. */
+    struct region rgn = CdBadRegion();
 
     if (p.data == NULL) {
         return CdEmptyRegion();
@@ -136,11 +170,8 @@ export pageable struct region CdClosePath(struct path p, int mode) {
     }
 
 nomem:
-    /* Clear the actual array data. */
-    CdFreeDynamicArray(*((struct dynamic_array*) p.data));
-
-    /* The pointer to the data was allocated dynamically, so clear that. */
-    FreeHeap(p.data);
+    /* Both the point array and the polygon counts array (and the structs holding them) belong to the path. */
+    CdDestroyPathData(&p);
 
     return rgn;
 }
@@ -150,11 +181,24 @@ export pageable struct path CdCopyPath(struct path old) {
         return old;
     }
 
+    /* The copy needs its own point array AND its own polygon counts: sharing either would free it twice. */
     struct dynamic_array* data = AllocHeap(sizeof(struct dynamic_array));
+    struct dynamic_array* count_data = AllocHeap(sizeof(struct dynamic_array));
+    if (data == NULL || count_data == NULL) {
+        FreeHeap(data);
+        FreeHeap(count_data);
+        return (struct path) { .data = NULL };
+    }
     *data = CdCopyDynamicArray(*((struct dynamic_array*) old.data));
+    *count_data = CdCopyDynamicArray(*((struct dynamic_array*) old.count_data));
 
     struct path p = old;
     p.data = (void*) data;
+    p.count_data = (void*) count_data;
+    if (data->array == 0 || count_data->array == 0) {
+        CdDestroyPathData(&p);
+        return (struct path) { .data = NULL };
+    }
 
     return p;
 }
@@ -172,7 +216,11 @@ export pageable void CdDrawPath(struct path* p, int x, int y) {
         .x = p->x,
         .y = p->y
     };
-    CdInsertDynamicArray((struct dynamic_array*) p->data, &data);
+    if (CdInsertDynamicArray((struct dynamic_array*) p->data, &data) != 0) {
+        /* Out of memory: a path with a missing point would draw the wrong shape, so give it up entirely. */
+        CdDestroyPathData(p);
+        return;
+    }
 
     /* 
      * Now we can set the current point. 

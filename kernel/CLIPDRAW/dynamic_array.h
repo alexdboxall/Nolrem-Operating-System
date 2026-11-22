@@ -17,9 +17,14 @@ struct __attribute__((packed)) dynamic_array {
     uint8_t data_size;
 };
 
+/*
+ * Create and Copy can run out of memory. When they do, the array comes back with
+ * .array == 0 (and nothing allocated), which CdFreeDynamicArray accepts.
+ */
 struct dynamic_array CdCreateDynamicArray(int data_size, int initial_allocation);
 struct dynamic_array CdCopyDynamicArray(struct dynamic_array old);
 void CdFreeDynamicArray(struct dynamic_array da);
-void CdInsertDynamicArray(struct dynamic_array* da, void* data);
+/* Returns 0, or ENOMEM (the array is left as it was). */
+int CdInsertDynamicArray(struct dynamic_array* da, void* data);
 void CdSortDynamicArray(struct dynamic_array* da, int (*comparator)(void* d1, void* d2, int n));
 void* CdFindInDynamicArray(struct dynamic_array* da, void* data, int (*comparator)(void* d1, void* d2, int n));

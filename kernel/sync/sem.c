@@ -98,7 +98,6 @@ static struct wait_clot* KeCreateClot(struct sem** sems, int count, struct threa
         FreeHeap(clot);
         return NULL;
     }
-    KeLogPrintf("A..?\n");
     clot->nexts = AllocHeap(sizeof(void*) * count);
     if (clot->nexts == NULL) {
         FreeHeap(clot->sems);
@@ -270,6 +269,16 @@ export int KeAcquireSemFromMany(struct sem** sems, int count, int64_t timeout, i
     struct thread* curr_thread = KeGetCurrentThread();
     int res = KeAddThreadToSemQueues(curr_thread, sems, count);
     if (res != 0) {
+        if (needs_timer_wait) {
+            /*
+             * KeAddThreadToSleepQueue has already put us on the timer queue and
+             * marked us blocked. Undo both, or we would be put to sleep until the
+             * timeout (or forever, for a timer that is later dropped) and then
+             * woken with a bogus result, with a stale entry left on the queue.
+             */
+            KeCancelTimer(curr_thread);
+        }
+        curr_thread->state = THREAD_STATE_RUNNING;
         KeReleaseScheduler();
         return res;
     }

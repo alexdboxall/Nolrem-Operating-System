@@ -19,6 +19,7 @@
 #define OBJTYPE_WAITCLOT        10
 #define OBJTYPE_AIO             11
 #define OBJTYPE_CPZ_INST        12
+#define OBJTYPE_RWLOCK          13
 
 struct obj_header {
 #ifndef NDEBUG

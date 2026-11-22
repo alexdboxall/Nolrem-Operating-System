@@ -115,6 +115,7 @@ struct phys_page {
     uint8_t allocated : 1;    
     uint8_t exists : 1;     /* there's actually RAM here */
     uint8_t dirty  : 1;     /* synced in critical section on eviction */
+    uint8_t discardable_counted : 1;    /* whether this page is in the discardable count (see KeUpdateDiscardableCount) */
 };
 
 

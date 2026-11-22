@@ -47,12 +47,12 @@ export struct thread* KeCreateThreadEx(struct vas* vas, void(*entry)(void*), voi
         size_t kernel_stack_bottom;
         if (kstack_size < PAGE_SIZE) {
             kernel_stack_bottom = (size_t) AllocHeap(thr->kernel_stack_size);
-            if (kernel_stack_bottom == 0) {
-                FreeHeap(thr);
-                return NULL;
-            }
         } else {
             kernel_stack_bottom = (size_t) KeAllocAnonMemory(thr->kernel_stack_size, VP_WRITE);
+        }
+        if (kernel_stack_bottom == 0) {
+            FreeHeap(thr);
+            return NULL;
         }
         thr->kernel_stack_top = kernel_stack_bottom + thr->kernel_stack_size;
     }
@@ -74,6 +74,18 @@ export struct thread* KeCreateThreadEx(struct vas* vas, void(*entry)(void*), voi
         thr->stack_pointer = thr->kernel_stack_top;
     } else {
         thr->user_stack_base = (size_t) KeAllocAnonMemory(USTACK_SIZE, VP_WRITE | VP_USER);
+        if (thr->user_stack_base == 0) {
+            if (entry != NULL) {
+                size_t kernel_stack_bottom = thr->kernel_stack_top - thr->kernel_stack_size;
+                if (thr->kernel_stack_size < PAGE_SIZE) {
+                    FreeHeap((void*) kernel_stack_bottom);
+                } else {
+                    KeFreeMemory((void*) kernel_stack_bottom, thr->kernel_stack_size);
+                }
+            }
+            FreeHeap(thr);
+            return NULL;
+        }
         thr->stack_pointer = thr->user_stack_base + USTACK_SIZE;
     }
 

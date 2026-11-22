@@ -63,16 +63,31 @@ static int KePartitionAccess(struct aio* aio, bool write) {
     if (tr->offset + tr->length_remaining > partition->length_bytes) {
         length = ((int64_t) partition->length_bytes) - ((int64_t) tr->offset);
     }
+    if (length < 0) {
+        length = 0;     /* starts beyond the end of the partition: nothing to transfer, not a huge unsigned count */
+    }
 
     struct transfer real_transfer = *tr;
     real_transfer.length_remaining = length;
     real_transfer.offset = start_addr;
 
     struct aio* subaio = AllocHeap(sizeof(struct aio));
+    if (subaio == NULL) {
+        return ENOMEM;
+    }
     KeCreateIO(subaio, partition->disk, real_transfer, KePartitionAccessAsyncCallback, (void*) aio);
     aio->sub = subaio;
     subaio->extra_data = length;
-    return (write ? KeWriteFile : KeReadFile)(subaio);
+    int res = (write ? KeWriteFile : KeReadFile)(subaio);
+    if (res != 0) {
+        /* Not queued, so it will never be signalled: finish it off ourselves (see KeFileAccess). */
+        aio->sub = NULL;
+        subaio->callback = NULL;
+        KeSignalDoneIO(subaio, res);
+        KeWaitIO(subaio, TIMEOUT_INFINITE);
+        FreeHeap(subaio);
+    }
+    return res;
 }
 
 static int KePartitionRead(struct aio* aio) {   
@@ -120,6 +135,9 @@ pageable struct file* KeCreatePartition(
     int sector_size, int media_type, bool boot
 ) {
     struct partition_data* data = AllocHeap(sizeof(struct partition_data));
+    if (data == NULL) {
+        return NULL;
+    }
     data->disk = disk;
     data->disk_bytes_per_sector = sector_size;
     data->id = id;
@@ -138,10 +156,21 @@ pageable struct file* KeCreatePartition(
         .st_dev = KeNextDevId()
     });
 
+    if (node == NULL) {
+        FreeHeap(data);
+        return NULL;
+    }
     node->data = data;
 
     struct file* partition = KeCreateFile(node, 0, 0, true, true);
-    KeMountFilesystemForDisk(partition);
+    KeDerefObject(node);        /* the file holds its own reference now (or, if it failed, this frees the node) */
+    if (partition == NULL) {
+        FreeHeap(data);
+        return NULL;
+    }
+
+    /* Not every partition holds a filesystem we know, so 'nothing mounted' is not an error here. */
+    (void) KeMountFilesystemForDisk(partition);
     return partition;
 }
 
@@ -205,8 +234,12 @@ static pageable struct file** KeGetMbrPartitions(struct file* disk) {
         return NULL;
     }
 
-    struct file** partitions = AllocHeap(sizeof(struct file) * 5);
-    memset(partitions, 0, sizeof(struct file) * 5);
+    struct file** partitions = AllocHeap(sizeof(struct file*) * 5);
+    if (partitions == NULL) {
+        FreeHeap(mem);
+        return NULL;
+    }
+    memset(partitions, 0, sizeof(struct file*) * 5);
 
     int partitions_found = 0;
     for (int i = 0; i < 4; ++i) {

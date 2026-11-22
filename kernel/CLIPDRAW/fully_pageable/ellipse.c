@@ -1,14 +1,19 @@
 #include "../api.h"
+#include "../clipdraw_internal.h"
 #include "../region_internal.h"
 
 export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int height) {
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
     
-    CdBuildNewRegion(&rgn, (int16_t) y, &ctxt);
+    if (CdBuildNewRegion(&rgn, (int16_t) y, &ctxt) != 0) {
+        return CdBadRegion();
+    }
 
     if (width <= 0 || height <= 0) {
-        CdFinishRegion(&rgn, &ctxt);
+        if (CdFinishRegion(&rgn, &ctxt) != 0) {
+            goto fail;
+        }
         return rgn;
     }
 
@@ -26,7 +31,9 @@ export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int
         int remaining = b2 - dy2;
 
         if (remaining < 0) {
-            CdAddScanline(&rgn, &ctxt, 0, NULL, false);
+            if (CdAddScanline(&rgn, &ctxt, 0, NULL, false) != 0) {
+                goto fail;
+            }
             continue;
         }
 
@@ -47,16 +54,26 @@ export pageable struct region CdCreateEllipseRegion(int x, int y, int width, int
             /* 
              * Empty line.
              */
-            CdAddScanline(&rgn, &ctxt, 0, NULL, false);
+            if (CdAddScanline(&rgn, &ctxt, 0, NULL, false) != 0) {
+                goto fail;
+            }
 
         } else {
             int16_t spans[2];
             spans[0] = (int16_t)(center_x - dx);
             spans[1] = (int16_t)(center_x + dx);
-            CdAddScanline(&rgn, &ctxt, 1, spans, false);
+            if (CdAddScanline(&rgn, &ctxt, 1, spans, false) != 0) {
+                goto fail;
+            }
         }
     }
 
-    CdFinishRegion(&rgn, &ctxt);
+    if (CdFinishRegion(&rgn, &ctxt) != 0) {
+        goto fail;
+    }
     return rgn;
+
+fail:
+    CdAbortNewRegion(&rgn, &ctxt);
+    return CdBadRegion();
 }

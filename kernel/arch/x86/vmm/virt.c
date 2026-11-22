@@ -130,6 +130,10 @@ static void x86SetPte(struct vas* vas, size_t virt, size_t entry) {
     if (!(directory[level1_index] & PAGE_PRESENT)) {
         /* Time to map a new table. */
         size_t phys = KeAllocPhys(true);
+        if (phys == 0) {
+            /* Mapping frame 0 as the page table would corrupt whatever lives there. */
+            KePanic(PANIC_OUT_OF_MEMORY);
+        }
         directory[level1_index] = phys | PAGE_PRESENT | PAGE_WRITE;
         size_t* table = x86GetRecursiveTable(level1_index);
         x86Invalidate((size_t) table);

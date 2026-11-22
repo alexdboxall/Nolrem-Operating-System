@@ -94,12 +94,17 @@ static int mouse_screen_h = 0;
 static struct graphics_driver* CdGetMouseDriver(void) {
     static struct graphics_driver* drv = NULL;
     if (drv == NULL) {
-        drv = KeGetKernelGraphicsDriver();
-        struct graphics_capabilities caps = drv->get_capabilities(drv);
+        struct graphics_driver* d = KeGetKernelGraphicsDriver();
+        struct graphics_capabilities caps = d->get_capabilities(d);
         int bytes = 32 * 32 * 4;
         if (caps.desired_mouse_restore_buffer_mode == MOUSE_BUFFER_UINT8) bytes /= 4;
         if (caps.desired_mouse_restore_buffer_mode == MOUSE_BUFFER_UINT16) bytes /= 2;
-        drv->mouse_restore_buffer = KeAllocPermanentHeap(bytes);
+        void* buffer = KeAllocPermanentHeap(bytes);
+        if (buffer == NULL) {
+            return NULL;        /* no pointer for now; the next call tries again */
+        }
+        d->mouse_restore_buffer = buffer;
+        drv = d;
     }
     return drv;
 }
@@ -111,6 +116,9 @@ static void CdRealRemoveMouse(void) {
         return;
     }
     struct graphics_driver* drv = CdGetMouseDriver();
+    if (drv == NULL) {
+        return;     /* can't have been drawn without the buffer, so there is nothing to remove */
+    }
     drv->remove_mouse(drv, mouse_screen_x, mouse_screen_y, drv->mouse_restore_buffer, mouse_screen_w, mouse_screen_h);
     mouse_onscreen = false;
 }
@@ -121,6 +129,9 @@ static void CdRealDrawMouse(int x, int y) {
     CdRealRemoveMouse();
 
     struct graphics_driver* drv = CdGetMouseDriver();
+    if (drv == NULL) {
+        return;     /* no memory for the restore buffer: go without a pointer rather than crash */
+    }
     int left = x - current_hotspot_x;
     int top  = y - current_hotspot_y;
     drv->draw_mouse(

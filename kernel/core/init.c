@@ -17,6 +17,7 @@
 #include <filesystem.h>
 #include <module.h>
 #include <syscall.h>
+#include <rwlock.h>
 #include <fcntl.h>
 #include <vmm.h>
 #include <sem.h>
@@ -79,6 +80,7 @@ export _Noreturn pageable void KeInitKernel(struct kernel_boot_info* boot_info) 
     boot_info = NULL;
 
     KeInitSem();
+    KeInitRwLock();
     KeInitThread();
     KeCreateInitialVas();
     KeInitScheduler();
@@ -97,6 +99,9 @@ export _Noreturn pageable void KeInitKernel(struct kernel_boot_info* boot_info) 
     KeInitNullDevice();
     ArchInit2();
     KeLoadKernelModule();
-    KeCreateThreadEx(KeGetKernelVas(), KeLowPriorityBackgroundThread, NULL, 1024);
+    if (KeCreateThreadEx(KeGetKernelVas(), KeLowPriorityBackgroundThread, NULL, 1024) == NULL) {
+        /* Not fatal: it only does housekeeping (zeroed pages, purging caches), so just say so. */
+        KeLogPrintf("Couldn't start the low priority background thread.\n");
+    }
     KeInitKernelResidentPortion();
 }

@@ -229,8 +229,11 @@ static int FatReadEntry(struct fat* fat, uint32_t cluster, uint32_t* value) {
 
     uint8_t bytes[4];
 
-    KeAcquireMutex(fat->table_lock, TIMEOUT_INFINITE);
-    int status = FatTableRead(fat, offset, length, bytes);
+    int status = KeAcquireMutex(fat->table_lock, TIMEOUT_DISK_ACCESS);
+    if (status != 0) {
+        return status;
+    }
+    status = FatTableRead(fat, offset, length, bytes);
     KeReleaseMutex(fat->table_lock);
 
     if (status != 0) {
@@ -283,9 +286,11 @@ static int FatWriteEntry(struct fat* fat, uint32_t cluster, uint32_t value) {
     FatEntryLocation(fat, cluster, &offset, &length);
 
     uint8_t bytes[4];
-    int status = 0;
 
-    KeAcquireMutex(fat->table_lock, TIMEOUT_INFINITE);
+    int status = KeAcquireMutex(fat->table_lock, TIMEOUT_DISK_ACCESS);
+    if (status != 0) {
+        return status;
+    }
 
     switch (fat->type) {
     case FAT_TYPE_12:

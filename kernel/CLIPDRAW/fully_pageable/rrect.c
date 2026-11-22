@@ -1,4 +1,5 @@
 #include "../api.h"
+#include "../clipdraw_internal.h"
 #include "../region_internal.h"
 
 export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width, int height, int radius) {
@@ -12,10 +13,14 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
     }
     if (radius < 0) radius = 0;
 
-    CdBuildNewRegion(&rgn, (int16_t)y, &ctxt);
+    if (CdBuildNewRegion(&rgn, (int16_t)y, &ctxt) != 0) {
+        return CdBadRegion();
+    }
 
     if (width <= 0 || height <= 0) {
-        CdFinishRegion(&rgn, &ctxt);
+        if (CdFinishRegion(&rgn, &ctxt) != 0) {
+            goto fail;
+        }
         return rgn;
     }
 
@@ -32,7 +37,9 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
         int16_t spans[2];
         spans[0] = (int16_t)(x + dx);
         spans[1] = (int16_t)(x + width - dx);
-        CdAddScanline(&rgn, &ctxt, 1, spans, false);
+        if (CdAddScanline(&rgn, &ctxt, 1, spans, false) != 0) {
+            goto fail;
+        }
     }
 
     // Phase B: The Straight Middle
@@ -45,7 +52,9 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
     
     int mid_height = height - (2 * radius);
     for (int i = 0; i < mid_height; i++) {
-        CdAddScanline(&rgn, &ctxt, 1, mid_spans, i != 0);
+        if (CdAddScanline(&rgn, &ctxt, 1, mid_spans, i != 0) != 0) {
+            goto fail;
+        }
     }
 
     // Phase C: Bottom Rounded Corners
@@ -60,9 +69,17 @@ export pageable struct region CdCreateRoundedRectRegion(int x, int y, int width,
         int16_t spans[2];
         spans[0] = (int16_t)(x + dx);
         spans[1] = (int16_t)(x + width - dx);
-        CdAddScanline(&rgn, &ctxt, 1, spans, false);
+        if (CdAddScanline(&rgn, &ctxt, 1, spans, false) != 0) {
+            goto fail;
+        }
     }
 
-    CdFinishRegion(&rgn, &ctxt);
+    if (CdFinishRegion(&rgn, &ctxt) != 0) {
+        goto fail;
+    }
     return rgn;
+
+fail:
+    CdAbortNewRegion(&rgn, &ctxt);
+    return CdBadRegion();
 }

@@ -4,6 +4,7 @@
 #include <allocvirt.h>
 #include <heap.h>
 #include <vmm.h>
+#include <panic.h>
 
 /* 
  * FreeVirtEx USES THE HEAP! (TO ALLOCATE!)
@@ -21,6 +22,9 @@ struct virt_range {
  
 export void InitVirtArena(struct virt_arena* va, size_t start, size_t bytes) {
     va->free_list_head = AllocVmmHeap(sizeof(struct virt_range));
+    if (va->free_list_head == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);       /* boot time: an arena with nothing in it is useless */
+    }
     va->free_list_head->start_addr = start;
     va->free_list_head->pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     va->free_list_head->next = NULL;
@@ -102,6 +106,11 @@ export void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes) {
     }
 
     struct virt_range* node = AllocVmmHeap(sizeof(struct virt_range));
+    if (node == NULL) {
+        /* Nowhere to record the range, so it is lost. That wastes address space but nothing else. */
+        ReleaseSpinlock(&va->lock);
+        return;
+    }
     node->start_addr = start_addr;
     node->pages = pages;
     node->next = curr;

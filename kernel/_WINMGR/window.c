@@ -344,6 +344,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     
     struct window* win = AllocHeap(sizeof(struct window) + wc->extra_ptrs * sizeof(void*));
     if (win == NULL) {
+        KeDerefObject(wc);      /* WmOpenWindowClass took a reference for the window we failed to make */
         return NULL;
     }
     KeInitUserObject(win, UOBJ_WINDOW);
@@ -361,6 +362,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
         /* Don't deref as the win->winclass not set yet and the cleanup code
          * would try to free that. */
         FreeHeap(win);
+        KeDerefObject(wc);      /* ... which also means nothing else will give back our class reference */
         return NULL;
     }
 
@@ -499,14 +501,24 @@ export void WmEndPaint(struct window* win, struct dc* dc) {
     WmReturnDC(dc);
 }
 
+/*
+ * Returns NULL if there is no DC to paint with (out of memory). Nothing has been changed then, so the
+ * window is still dirty and will be painted when there is memory again; callers must not paint or call
+ * WmEndPaint.
+ */
 export struct dc* WmBeginPaint(struct window* win) {
+    /* First, so that giving up leaves the dirty region alone. */
+    struct dc* dc = WmGetDC();
+    if (dc == NULL) {
+        return NULL;
+    }
+
     struct region invl_rgn = CdIntersectRegion(win->vis_rgn, win->dirty_rgn);
 
     struct region new_dirty = CdSubtractRegion(win->dirty_rgn, invl_rgn);
     CdFreeRegion(win->dirty_rgn);
     win->dirty_rgn = new_dirty;
 
-    struct dc* dc = WmGetDC();
     CdRestrictClipRegion(dc, invl_rgn);
     CdFreeRegion(invl_rgn);
 

@@ -57,9 +57,18 @@ void* VmmSpecialHeapGetMemory(size_t* bytes) {
 
     } else {
         size_t virt = KeAllocVirt(*bytes);
+        if (virt == 0) {
+            return NULL;        /* the heap treats this as 'no memory' */
+        }
         size_t pages = (*bytes + PAGE_SIZE - 1) / PAGE_SIZE;
         for (size_t i = 0; i < pages; ++i) {
-            ArchMapKernelPageDirectly(KeAllocPhys(true), virt + i * PAGE_SIZE);
+            size_t frame = KeAllocPhys(true);
+            if (frame == 0) {
+                /* We are on the fault path, so there is nothing to wait for or fail back to. Mapping frame 0 instead
+                 * would corrupt whatever lives there. */
+                KePanic(PANIC_OUT_OF_MEMORY);
+            }
+            ArchMapKernelPageDirectly(frame, virt + i * PAGE_SIZE);
         }
         *bytes = pages * PAGE_SIZE;
         return (void*) virt;
@@ -233,6 +242,9 @@ static struct page_origin* KeCreatePageOrigin(struct file* file, size_t file_off
 
 static void KeMarkKernelPageDiscardable(size_t existing_virt, size_t existing_phys, bool allow_user, struct file* file, size_t file_offset) {
     struct virt_page* vp = KeAllocVmmHeap(sizeof(struct virt_page));
+    if (vp == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);       /* boot time: no way to carry on without it */
+    }
     struct vas* vas = KeGetKernelVas();
     KeInitObject(vp, OBJTYPE_PAGE_VIRT);
     vp->vas = vas;
@@ -256,7 +268,11 @@ static void KeMarkKernelPageDiscardable(size_t existing_virt, size_t existing_ph
     KeRefObject(vp);
     KeRefObject(vas);
     pp->origin = KeCreatePageOrigin(file, file_offset, NULL, existing_phys, false);
+    if (pp->origin == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);
+    }
     KeLogPrintf("Origin set!\n");
+    KeUpdateDiscardableCount(pp);       /* boot time, so nothing else can be looking at this page */
     KeLockVas(vp->vas);
     struct virt_page** slot = KeGetVirtualPageSlot(vas, existing_virt, true);
     if (slot == NULL || *slot != NULL) {
@@ -281,6 +297,9 @@ void KeMarkPageableSegmentsDiscardable(void) {
     size_t u_end_page   = (((size_t) __end_pageablekuser) + PAGE_SIZE - 1) / PAGE_SIZE;
 
     struct obj_header* dummy_file = AllocHeap(sizeof(struct file));
+    if (dummy_file == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);
+    }
     KeLogPrintf("The dummy file is at: 0x%X\n", dummy_file);
     KeInitObject(dummy_file, OBJTYPE_FILE);
     for (size_t i = k_start_page; i < k_end_page; ++i) {
@@ -525,10 +544,13 @@ static void KeLeaveCriticalVirt(struct phys_page* pp, struct virt_page* vp) {
 /* These prevent anyone else accessing the physical page while held. */
 static void KeEnterPhysPageCriticalSection(struct phys_page* pp) {
     KeAcquireSpinlock(&pp->lock);
-    KeCallOnVirtualUsers(pp, KeEnterCriticalVirt);
+    KeCallOnVirtualUsers(pp, KeEnterCriticalVirt);      /* may have just harvested the dirty bit */
+    KeUpdateDiscardableCount(pp);
 }
 
 static void KeLeavePhysPageCriticalSection(struct phys_page* pp) {
+    /* Whatever the section did (mapped it, unmapped it, detached its origin) is settled by now. */
+    KeUpdateDiscardableCount(pp);
     KeCallOnVirtualUsers(pp, KeLeaveCriticalVirt);
     KeReleaseSpinlock(&pp->lock);
 }
@@ -585,10 +607,7 @@ static struct phys_page* KeFindDiscardPage(void) {
         }
 
         KeEnterPhysPageCriticalSection(pp);   /* harvests accessed/dirty */
-        bool usable = pp->wired == 0
-                   && !pp->dirty
-                   && pp->origin != NULL && pp->origin->is_file
-                   && (pp->vas != NULL || pp->chain != NULL);
+        bool usable = KeIsPageDiscardable(pp);
 
         if (usable && !(pp->lru & LRU_REFERENCED)) {
             clock_hand = curr;
@@ -855,6 +874,7 @@ retry:
             newpp->dirty = 0;
             newpp->wired = 0;               /* manually unwire */
             newpp->lru = 0xFFFF;            /* fresh: don't reclaim immediately */
+            KeUpdateDiscardableCount(newpp);
             KeReleaseSpinlock(&newpp->lock);
 
             origin->phys = frame;           /* publish last */
@@ -1173,6 +1193,7 @@ static int KeWireVirtPage(struct vas* vas, size_t virt) {
 
         assert(pp->wired != 0xFFFF);        /* overflow */
         pp->wired++;
+        KeUpdateDiscardableCount(pp);
         KeUnlockVas(vas);
         KeReleaseSpinlock(&pp->lock);
         KeDerefObject(vp);
@@ -1198,6 +1219,7 @@ static void KeUnwireVirtPage(struct vas* vas, size_t virt) {
     if (pp->wired > 0) {
         pp->wired--;
     }
+    KeUpdateDiscardableCount(pp);
     KeReleaseSpinlock(&pp->lock);
 }
 

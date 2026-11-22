@@ -684,7 +684,10 @@ int FatCreate(struct fat* fat, uint32_t dir_cluster, const char* name, struct fa
         return status;
     }
 
-    KeAcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    status = KeAcquireMutex(fat->write_lock, TIMEOUT_DISK_OPERATION);
+    if (status != 0) {
+        return status;
+    }
     status = FatCreateLocked(fat, dir_cluster, name, padded, nt_flags, out);
     KeReleaseMutex(fat->write_lock);
 

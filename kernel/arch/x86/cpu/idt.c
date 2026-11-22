@@ -4,6 +4,7 @@
 #include <arch.h>
 #include <cpu.h>
 #include <heap.h>
+#include <panic.h>
 
 struct idt_entry
 {
@@ -56,6 +57,9 @@ void x86InitIdt(void) {
 	platform_cpu_data_t* cpu_data = KeGetCpu()->platform_specific;
 
 	cpu_data->idt = KeAllocPermanentHeap(sizeof(struct idt));
+	if (cpu_data->idt == NULL) {
+		KePanic(PANIC_OUT_OF_MEMORY);
+	}
 	struct idt* idt = cpu_data->idt;
 
 	size_t* isr_vectors = &isr_vectors_first_33;

@@ -24,6 +24,11 @@ export pageable uint8_t* CdGetCacheScaledGlyph(struct font* font, font_style_id 
         return NULL;
     }
     KeAcquireSpinlock(&lock);
+    if (scaled_font_cache == NULL) {
+        /* Nothing has been cached yet (the array is made on the first suggestion). */
+        KeReleaseSpinlock(&lock);
+        return NULL;
+    }
     for (int i = 0; i < NUM_CACHED_GLYPHS; ++i) {
         if (scaled_font_cache[i].fnt == font 
             && scaled_font_cache[i].ascii == c 
@@ -31,10 +36,11 @@ export pageable uint8_t* CdGetCacheScaledGlyph(struct font* font, font_style_id 
             && scaled_font_cache[i].data != NULL
         ) {
             scaled_font_cache[i].in_use++;
+            scaled_font_cache[i].lru |= 0x8000;
+            uint8_t* data = scaled_font_cache[i].data;
             KeReleaseSpinlock(&lock);
-            scaled_font_cache->lru |= 0x8000;
-            *index_out = 1;
-            return scaled_font_cache->data;
+            *index_out = i;
+            return data;
         }
     }
     KeReleaseSpinlock(&lock);
@@ -43,7 +49,7 @@ export pageable uint8_t* CdGetCacheScaledGlyph(struct font* font, font_style_id 
 
 export pageable void CdReleaseCachedScaledGlyph(int index) {
     KeAcquireSpinlock(&lock);
-    if (index >= NUM_CACHED_GLYPHS || index < 0) {
+    if (scaled_font_cache != NULL && index >= 0 && index < NUM_CACHED_GLYPHS && scaled_font_cache[index].in_use > 0) {
         uint8_t remaining = --scaled_font_cache[index].in_use;
         if (remaining == 0 && KeIsMemoryLow()) {
             FreeHeap(scaled_font_cache[index].data);
@@ -51,7 +57,7 @@ export pageable void CdReleaseCachedScaledGlyph(int index) {
             --num_cached;
         }
     }
-    if (num_cached == 0) {
+    if (scaled_font_cache != NULL && num_cached == 0) {
         FreeHeap(scaled_font_cache);
         scaled_font_cache = NULL;
     }
@@ -95,7 +101,7 @@ export pageable void CdSuggestAddScaledGlyphToCache(struct font* font, font_styl
             KeReleaseSpinlock(&lock);
             return;
         }
-        memset(scaled_font_cache, 0, NUM_CACHED_GLYPHS);
+        memset(scaled_font_cache, 0, sizeof(struct glyph_cache_entry) * NUM_CACHED_GLYPHS);
     }
     for (int i = 0; i < NUM_CACHED_GLYPHS; ++i) {
         if (scaled_font_cache[i].data != NULL 
@@ -122,15 +128,18 @@ export pageable void CdSuggestAddScaledGlyphToCache(struct font* font, font_styl
     {
         if (scaled_font_cache[lowest_index].data != NULL) {
             FreeHeap(scaled_font_cache[lowest_index].data);
-        } else {
-            ++num_cached;
+            scaled_font_cache[lowest_index].data = NULL;
+            --num_cached;
         }
-        scaled_font_cache[lowest_index].data = AllocHeap(size);
-        if (scaled_font_cache[lowest_index].data == NULL) {
+        uint8_t* copy = AllocHeap(size);
+        if (copy == NULL) {
+            /* The slot is empty and uncounted, which is what it now is. */
             KeReleaseSpinlock(&lock);
             return;
         }
-        memcpy(scaled_font_cache[lowest_index].data, bitmap, size);
+        ++num_cached;
+        scaled_font_cache[lowest_index].data = copy;
+        memcpy(copy, bitmap, size);
         scaled_font_cache[lowest_index].lru = 0xFFFF;
         scaled_font_cache[lowest_index].ascii = c; 
         scaled_font_cache[lowest_index].style = style;

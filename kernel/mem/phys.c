@@ -16,6 +16,14 @@
 static struct phys_page* sys_pp_table;
 static _Atomic size_t sys_total_pp;
 static _Atomic size_t sys_free_pp;
+
+/*
+ * How many pages KeDiscardPage() could discard right now: the same test as
+ * KeFindDiscardPage() applies, i.e. file backed, in use by something, not wired, not dirty.
+ * Each page remembers whether it is counted (discardable_counted), so the count only ever
+ * moves when a page's answer changes.
+ */
+static _Atomic size_t sys_discardable_pp;
 static size_t sys_pp_table_max_index;
 
 struct phys_page* KeGetPhysPage(size_t addr) {
@@ -47,6 +55,58 @@ export size_t KeGetFreeMemory(void) {
     return sys_free_pp * PAGE_SIZE;
 }
 
+/* The one definition of 'KeDiscardPage() could take this page'. KeFindDiscardPage() (vmm.c) uses it too, apart from
+ * the second-chance bit, which only decides the order pages go in, not whether they can. Caller holds pp->lock. */
+bool KeIsPageDiscardable(const struct phys_page* pp) {
+    return pp->wired == 0
+        && !pp->dirty
+        && pp->origin != NULL && pp->origin->is_file
+        && (pp->vas != NULL || pp->chain != NULL);
+}
+
+void KeUpdateDiscardableCount(struct phys_page* pp) {
+    bool now = KeIsPageDiscardable(pp);
+    if (now == pp->discardable_counted) {
+        return;
+    }
+    pp->discardable_counted = now;
+    if (now) {
+        ++sys_discardable_pp;
+    } else {
+        --sys_discardable_pp;
+    }
+}
+
+/*
+ * Free memory plus every page that KeDiscardPage() could free. Not exact: the dirty flag in a
+ * phys_page is only brought up to date by the VMM looking at the page (the hardware sets its own
+ * dirty bit in the mapping), so a file page that was written to since then still counts here, though
+ * the discarder will find it dirty and leave it. Nothing else can make it too low.
+ */
+export size_t KeGetFreeMemoryIfDiscarded(void) {
+    return (sys_free_pp + sys_discardable_pp) * PAGE_SIZE;
+}
+
+bool KeVerifyDiscardableCount(void) {
+    size_t expected = 0;
+    bool ok = true;
+    for (struct phys_page* pp = KeGetFirstPhysPage(); pp != NULL; pp = KeGetNextPhysPage(pp)) {
+        KeAcquireSpinlock(&pp->lock);
+        bool now = KeIsPageDiscardable(pp);
+        if (now != (bool) pp->discardable_counted) {
+            KeLogPrintf("Discardable count is wrong for the page at 0x%X\n", KeGetPhysAddr(pp));
+            ok = false;
+        }
+        expected += now;
+        KeReleaseSpinlock(&pp->lock);
+    }
+    if (expected != sys_discardable_pp) {
+        KeLogPrintf("Discardable count is %d, should be %d\n", (int) sys_discardable_pp, (int) expected);
+        ok = false;
+    }
+    return ok;
+}
+
 void KeFreeDiscardedPhys(struct phys_page* pp) {
     /*
      * Reset ALL the state, not just 'allocated'. A frame that had been dirtied
@@ -59,6 +119,7 @@ void KeFreeDiscardedPhys(struct phys_page* pp) {
     pp->dirty = 0;
     pp->wired = 0;
     pp->lru = 0;
+    KeUpdateDiscardableCount(pp);       /* now has no origin, so it stops being counted */
     ++sys_free_pp;
 }
 
@@ -195,6 +256,9 @@ size_t KeAllocZeroedPhys(void) {
 
     please_provide_zeroed_phys = ZEROED_PHYS_BUFFER_COUNT;
     size_t frame = KeAllocPhys(true);
+    if (frame == 0) {
+        return 0;       /* out of memory: there is no frame to zero (frame 0 is not a frame we own) */
+    }
     KeZeroPhysPage(frame);
     return frame;
 }

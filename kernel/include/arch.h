@@ -54,6 +54,31 @@ void ArchInit2(void);   // after VFS, VMM, scheduler, etc. active
 export uint64_t ArchGetUtcTime(int64_t timezone_offset);
 export int ArchSetUtcTime(uint64_t time, int64_t timezone_offset);
 
+/*
+ * A fast counter, for timing short things. It only ever counts up, and it
+ * ticks ArchGetPerformanceCounterFrequency() times a second.
+ *
+ * What it counts is up to the architecture: the x86 build uses the CPU's cycle
+ * counter where there is one (so a tick is a cycle), and otherwise the best it
+ * can do, which is the 8254 timer (about 0.84us per tick). So never assume a
+ * tick length; always divide by the frequency.
+ *
+ * It is not comparable between CPUs, as they do not necessarily agree on the
+ * count, and it is not a clock: it starts at an arbitrary value. Use
+ * KeGetTimeSinceBoot() for time.
+ */
+export uint64_t ArchGetPerformanceCounter(void);
+
+/* Ticks of ArchGetPerformanceCounter() per second. */
+export uint64_t ArchGetPerformanceCounterFrequency(void);
+
+/*
+ * The speed of the CPU, in kilohertz, measured at boot. Accurate to well under
+ * a percent when the CPU has a cycle counter. Without one (i486) it is a rough
+ * estimate that assumes a typical CPU, and it is rounded to whole megahertz.
+ */
+export uint32_t ArchGetCpuSpeed(void);
+
 void ArchCallGlobalConstructors();
 
 

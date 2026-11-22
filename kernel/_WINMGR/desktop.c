@@ -30,11 +30,15 @@ int WmDesktopWinProc(struct window* win, struct msg msg) {
 
     case WM_PAINT: {
         struct dc* dc = WmBeginPaint(win);
+        if (dc == NULL) {
+            return 0;       /* out of memory; still dirty, so it is painted when there is some */
+        }
         if (desktop_bitmap == NULL) {
             struct open_mapped_file omf;
-            KeOpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", OMF_TRANSPARENT_DECOMPRESS, &omf);
-            desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, omf.f, 640, 480);
-            KeOmfClose(&omf);
+            if (KeOpenAndMapFile("drv0:/SYSTEM/WATTLE.BMP", OMF_TRANSPARENT_DECOMPRESS, &omf) == 0) {
+                desktop_bitmap = CdCreateCompatibleBitmapStretched(dc, omf.f, 640, 480);
+                KeOmfClose(&omf);
+            }
         }
         if (KeIsOutOfMemory() || oom > 0 || desktop_bitmap == NULL) {
             if (KeIsOutOfMemory() && oom == 0) {

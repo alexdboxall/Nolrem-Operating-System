@@ -9,6 +9,7 @@ void ArchInit(void) {
     x86InitTss();
     x86InitPic();
     x86InitPit(25);
+    x86InitPerformanceCounter();
     x86InitCmos();
     Ps2Init();
 }

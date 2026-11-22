@@ -32,7 +32,7 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
     int res = KePerformTransfer(&pp, &tr, sizeof(struct polypoly));
     if (res != 0) {
         KeSetLastUserError(res);
-        return res;
+        return 0;      /* this returns a handle, so an error code is not a valid return value */
     }
 
     if (polygons > SIZE_MAX / sizeof(int)) {
@@ -56,7 +56,8 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
 
     int calculated_sum = 0;
     for (size_t i = 0; i < polygons; ++i) {
-        if (calculated_sum > MAX_POINTS - cc[i]) {
+        /* A negative count would shrink the total below what the other polygons really use. */
+        if (cc[i] < 0 || calculated_sum > MAX_POINTS - cc[i]) {
             KeSetLastUserError(EINVAL);
             FreeHeap(cc);
             return 0;
@@ -87,6 +88,13 @@ pageable size_t SysCreatePolyPolygonRegion(size_t ppp, size_t, size_t polygons, 
     tr = KeCreateTransferReadingFromUser((const void*) pp.y, sizeof(int) * calculated_sum, 0);
     if (KePerformTransfer(yy, &tr, sizeof(int) * calculated_sum) != 0) {
         goto cleanup;
+    }
+
+    /* Regions only hold 16-bit coordinates (the same check SysPaintPolygon makes). */
+    for (int i = 0; i < calculated_sum; ++i) {
+        if (xx[i] < INT16_MIN || xx[i] > INT16_MAX || yy[i] < INT16_MIN || yy[i] > INT16_MAX) {
+            goto cleanup;
+        }
     }
 
     struct region rgn = CdCreatePolyPolygonRegion(xx, yy, cc, polygons, mode);

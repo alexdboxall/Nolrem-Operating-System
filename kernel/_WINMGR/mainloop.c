@@ -42,6 +42,9 @@ static struct rect drag_win_og_bounds;
 static void WmDrawInvFrame(struct rect pos) {
     const int BORDER = 3;
     struct dc* dc = WmGetDC();
+    if (dc == NULL) {
+        return;     /* out of memory: skip drawing the drag frame */
+    }
     CdActualInvertRect(dc, pos.x, pos.y, pos.x + pos.w, pos.y + BORDER, true);
     CdActualInvertRect(dc, pos.x, pos.y + pos.h - BORDER, pos.x + pos.w, pos.y + pos.h, true);
     CdActualInvertRect(dc, pos.x, pos.y + BORDER, pos.x + BORDER, pos.y + pos.h - BORDER, true);
@@ -344,8 +347,10 @@ export _Noreturn void WmMainloop(void) {
     size_t prev_kb_free = 0;
     while (true) {
         extern bool anything_happened;
-        KeGetMessage(KeGetSystemMessageBox(), &msg, TIMEOUT_INFINITE);
-        WmProcessMessage(msg);
+        /* On an error 'msg' still holds the previous message, which must not be handled twice. */
+        if (KeGetMessage(KeGetSystemMessageBox(), &msg, TIMEOUT_INFINITE) == 0) {
+            WmProcessMessage(msg);
+        }
 
         int r = WmAppGetMessage(WmGetDesktop()->app, &msg, true);
         if (r == 0) {

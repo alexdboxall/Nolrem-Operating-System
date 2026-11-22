@@ -51,11 +51,20 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
 
     struct region rgn = {0};
     struct region_build_context ctxt = {0};
-    CdBuildNewRegion(&rgn, (int16_t)y_min, &ctxt);
+    if (CdBuildNewRegion(&rgn, (int16_t)y_min, &ctxt) != 0) {
+        FreeHeap(scanline_x);
+        return CdBadRegion();
+    }
+
+    /* Whatever the current scanline owns, so that running out of memory can release it from anywhere below. */
+    struct dynamic_array intersections = {0};
 
     // 2. Process each scanline row by row
     for (int y = y_min; y < y_max; ++y) {
-        struct dynamic_array intersections = CdCreateDynamicArray(sizeof(struct intersection), 8);
+        intersections = CdCreateDynamicArray(sizeof(struct intersection), 8);
+        if (intersections.array == 0) {
+            goto fail;
+        }
 
         int poly_offset = 0;
         for (int p = 0; p < polygons; ++p) {
@@ -73,7 +82,9 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
                         // Linear interpolation to find X at this integer Y
                         isect.x = x0 + (int)((long)(x1 - x0) * (y - y0) / (y1 - y0));
                         isect.direction = (y0 < y1) ? 1 : -1;
-                        CdInsertDynamicArray(&intersections, &isect);
+                        if (CdInsertDynamicArray(&intersections, &isect) != 0) {
+                            goto fail;
+                        }
                     }
                 }
             }
@@ -81,8 +92,11 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
         }
 
         if (intersections.used == 0) {
-            CdAddScanline(&rgn, &ctxt, 0, NULL, false);
             CdFreeDynamicArray(intersections);
+            intersections = (struct dynamic_array) {0};
+            if (CdAddScanline(&rgn, &ctxt, 0, NULL, false) != 0) {
+                goto fail;
+            }
             continue;
         }
 
@@ -121,11 +135,24 @@ export pageable struct region CdCreatePolyPolygonRegion(int* px, int* py, int* c
             }
         }
 
-        CdAddScanline(&rgn, &ctxt, num_spans, scanline_x, false);
         CdFreeDynamicArray(intersections);
+        intersections = (struct dynamic_array) {0};
+        if (CdAddScanline(&rgn, &ctxt, num_spans, scanline_x, false) != 0) {
+            goto fail;
+        }
     }
 
     FreeHeap(scanline_x);
-    CdFinishRegion(&rgn, &ctxt);
+    if (CdFinishRegion(&rgn, &ctxt) != 0) {
+        CdAbortNewRegion(&rgn, &ctxt);
+        return CdBadRegion();
+    }
     return rgn;
+
+fail:
+    /* Out of memory: give back everything and report a 'bad' region, like the other region operations. */
+    CdFreeDynamicArray(intersections);
+    FreeHeap(scanline_x);
+    CdAbortNewRegion(&rgn, &ctxt);
+    return CdBadRegion();
 }

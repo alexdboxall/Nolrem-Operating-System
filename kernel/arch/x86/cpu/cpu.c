@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <cpu.h>
 #include <heap.h>
+#include <panic.h>
 #include <machine/x86.h>
 
 size_t ArchLockToCpu(void) {
@@ -21,6 +22,9 @@ int ArchGetCpuNum(void) {
 
 void ArchInitPlatformSpecificData(struct cpu_data* cpu) {
     cpu->platform_specific = KeAllocPermanentHeap(sizeof(platform_cpu_data_t));
+    if (cpu->platform_specific == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);
+    }
     /* The TSS, GDT and IDT are allocated by x86InitTss/Gdt/Idt, which run on
        the CPU that owns them. */
     cpu->platform_specific->tss = NULL;

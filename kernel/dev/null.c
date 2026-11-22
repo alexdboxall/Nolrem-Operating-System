@@ -33,6 +33,9 @@ void KeInitNullDevice(void) {
         .st_nlink = 1,
         .st_dev = KeNextDevId()
     });
+    if (node == NULL) {
+        return;
+    }
     KeMount(node, "null");
     KeDerefObject(node);      // let the mount keep the last reference
 }

@@ -4,6 +4,7 @@
 #include <arch.h>
 #include <cpu.h>
 #include <heap.h>
+#include <panic.h>
 #include <machine/x86.h>
 
 struct gdt_entry
@@ -70,6 +71,9 @@ void x86InitGdt(void) {
 	platform_cpu_data_t* cpu_data = KeGetCpu()->platform_specific;
 
 	cpu_data->gdt = KeAllocPermanentHeap(sizeof(struct gdt));
+	if (cpu_data->gdt == NULL) {
+		KePanic(PANIC_OUT_OF_MEMORY);
+	}
 	struct gdt* gdt = cpu_data->gdt;
 
 	gdt->entries[0] = x86CreateGdtEntry(0, 0, 0, 0);			   // null segment

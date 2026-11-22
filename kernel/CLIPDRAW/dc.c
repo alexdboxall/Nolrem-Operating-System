@@ -156,6 +156,13 @@ export struct dc* CdCreateDc(void) {
     KeRefObject(dc->brush);
     KeRefObject(dc->pen);
     dc->cliprgn = CdEverythingRegion();
+    if (CdIsRegionBad(dc->cliprgn)) {
+        /* No memory for the clip region. Give back the references taken above. */
+        KeDerefObject(dc->brush);
+        KeDerefObject(dc->pen);
+        FreeHeap(dc);
+        return NULL;
+    }
     dc->trans_x = 0;
     dc->trans_y = 0;
     CdAddGraphicsFallbacksWhereNeeded(dc->drv);

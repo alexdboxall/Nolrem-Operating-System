@@ -29,8 +29,8 @@ static struct spinlock modlock;
 
 static void KeCleanupModule(void* _mod) {
     struct module* mod = _mod;
-    FreeHeap(mod->sym_list);
-    FreeHeap(mod->name);
+    KeDestroySymbolList(mod->sym_list);
+    /* name[] is inside the module's own allocation, so there is nothing separate to free for it. */
     FreeHeap(mod->path);
     FreeHeap(mod);
 }
@@ -42,15 +42,25 @@ void KeInitModule(void) {
 
 static struct symbol_list* KeCreateSymbolListFromSymFile(struct file* f) {
     void* initial = KeAllocFileMemory(f, 0, PAGE_SIZE, 0, 0);
+    if (initial == NULL) {
+        return NULL;
+    }
     void* mem = initial;
     int total_symbols = ReadUnaligned16AndAdvance(&mem);
     size_t address = ReadUnalignedSizeT(mem);
     KeFreeMemory(initial, PAGE_SIZE);
 
     struct symbol_list* symlist = KeCreateSymbolList(total_symbols);
+    if (symlist == NULL) {
+        return NULL;
+    }
     size_t file_size = 2 + sizeof(size_t) + total_symbols * 10;
     
     void* og_mem = KeAllocFileMemory(f, 0, file_size, 0, 0);
+    if (og_mem == NULL) {
+        KeDestroySymbolList(symlist);
+        return NULL;
+    }
     mem = AddVoidPtr(og_mem, 2 + sizeof(size_t));
 
     for (int i = 0; i < total_symbols; ++i) {
@@ -71,6 +81,9 @@ struct module* KeLoadKernelModule(void) {
     uint16_t min_ver = 0;
 
     struct module* mod = KeAllocPermanentHeap(sizeof(struct module) + strlen("KERNEL") + 1);
+    if (mod == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);       /* boot time: nothing can be linked without the kernel's symbols */
+    }
     KeInitObject(mod, OBJTYPE_MODULE);
 
     strcpy(mod->name, "KERNEL");
@@ -85,6 +98,9 @@ struct module* KeLoadKernelModule(void) {
     }
     mod->sym_list = KeCreateSymbolListFromSymFile(file);
     KeDerefObject(file);
+    if (mod->sym_list == NULL) {
+        KePanic(PANIC_BAD_KERNEL);
+    }
 
     KeAcquireSpinlock(&modlock);
     mod->next = module_list_head;
@@ -108,15 +124,40 @@ export struct module* KeCreateModule(const char* path) {
     uint16_t min_ver = 0;
 
     struct module* mod = AllocHeap(sizeof(struct module) + strlen(name) + 1);
+    if (mod == NULL) {
+        KeDerefObject(file);
+        return NULL;
+    }
+    char* path_copy = KeStrdup(path);
+    if (path_copy == NULL) {
+        FreeHeap(mod);
+        KeDerefObject(file);
+        return NULL;
+    }
+
+    /* The mapping ArchLoadSymbols makes keeps the file alive, so we can let go of ours. */
+    struct symbol_list* sym_list = ArchLoadSymbols(file, 0, false);
+    KeDerefObject(file);
+    if (sym_list == NULL) {
+        /* Not a usable symbol table. Don't register a module nothing can resolve against. */
+        FreeHeap(path_copy);
+        FreeHeap(mod);
+        return NULL;
+    }
+
     KeInitObject(mod, OBJTYPE_MODULE);
 
     strcpy(mod->name, name);
     mod->major_ver = maj_ver;
     mod->minor_ver = min_ver;
-    mod->path = KeStrdup(path);
+    mod->path = path_copy;
+    mod->sym_list = sym_list;
 
-    mod->sym_list = ArchLoadSymbols(file, 0, false);
-
+    /*
+     * The list holds a reference of its own: modules are never unloaded, and without
+     * it the creator dropping its reference would free a module still in the list.
+     */
+    KeRefObject(mod);
     KeAcquireSpinlock(&modlock);
     mod->next = module_list_head;
     module_list_head = mod;
@@ -138,7 +179,7 @@ export size_t KeResolveSymbol(const char* sym, const char* mod_name, int ver_mod
     struct module* curr = module_list_head;
     while (curr) {
         if (mod_name == NULL || !strcmp(curr->name, mod_name)) {
-            if (KeIsMatchingModuleVersion(curr, ver_mode, major, minor)) {
+            if (curr->sym_list != NULL && KeIsMatchingModuleVersion(curr, ver_mode, major, minor)) {
                 struct symbol* s = KeFindSymbol(curr->sym_list, sym);
                 if (s != NULL) {
                     KeReleaseSpinlock(&modlock);

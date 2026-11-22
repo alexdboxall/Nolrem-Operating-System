@@ -3,6 +3,7 @@
 #include <common.h>
 #include <arch.h>
 #include <heap.h>
+#include <panic.h>
 #include <cpu.h>
 #include <machine/x86.h>
 
@@ -14,6 +15,9 @@ void x86InitTss(void) {
     platform_cpu_data_t* cpu_data = KeGetCpu()->platform_specific;
     
     cpu_data->tss = KeAllocPermanentHeap(sizeof(struct tss));
+    if (cpu_data->tss == NULL) {
+        KePanic(PANIC_OUT_OF_MEMORY);
+    }
     memset(cpu_data->tss, 0, sizeof(struct tss));
     cpu_data->tss->link = 0x10;
     cpu_data->tss->esp0 = 0;

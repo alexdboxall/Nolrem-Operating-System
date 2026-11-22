@@ -13,6 +13,9 @@
 
 static void WmHandleWmPaint(struct window* win) {
     struct dc* dc = WmBeginPaint(win);
+    if (dc == NULL) {
+        return;     /* out of memory; the window stays dirty */
+    }
 
     CdPaintRectWithBrush(
         dc, 

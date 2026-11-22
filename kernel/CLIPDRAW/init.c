@@ -4,7 +4,6 @@
 
 export void CdInit(void) {
     /* Cached scaled glyphs can always be regenerated, so give them back when memory is tight. */
-    KeRegisterReclaimCallback(CdPurgeScaledGlyphCacheIfNeeded);
     CdInitSyscalls();
     CdInitMouseSubsystem();
     CdInitBrushSubsystem();
@@ -13,6 +12,8 @@ export void CdInit(void) {
     CdInitDcSubsystem();
     CdInitTypefaceSubsystem();
     
+    KeRegisterReclaimCallback(CdPurgeScaledGlyphCacheIfNeeded);
+
     extern void VgaInit();
     VgaInit();
 }

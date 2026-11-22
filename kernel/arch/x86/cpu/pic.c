@@ -8,6 +8,7 @@
 #define PIC2_DATA       0xA1
 
 #define PIC_EOI         0x20
+#define PIC_REG_IRR     0x0A
 #define PIC_REG_ISR     0x0B
 
 #define ICW1_ICW4       0x01
@@ -23,6 +24,17 @@ void x86SendPicEoi(int irq_num) {
         outb(PIC2_COMMAND, PIC_EOI);
     }
     outb(PIC1_COMMAND, PIC_EOI);
+}
+
+/*
+ * Whether the IRQ has been raised but not yet taken by a CPU, which is the case
+ * while interrupts are off (or the line is masked). Nothing else reads the
+ * PIC's registers, so nothing minds the register that this leaves selected.
+ */
+bool x86IsIrqPending(int irq) {
+    uint16_t port = irq >= 8 ? PIC2_COMMAND : PIC1_COMMAND;
+    outb(port, PIC_REG_IRR);
+    return (inb(port) >> (irq & 7)) & 1;
 }
 
 /*

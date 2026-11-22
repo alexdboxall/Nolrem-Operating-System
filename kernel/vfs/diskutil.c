@@ -137,19 +137,38 @@ static pageable char* KeGetPartitionNameString(int index) {
 export pageable void KeCreateDiskPartitions(struct file* disk) {
     struct file** partitions = KeGetPartitionsForDisk(disk);
 
+    /*
+     * The disk keeps the name strings for as long as it exists (the partition
+     * helper stores the pointer), so a name is only freed here if it wasn't
+     * accepted.
+     */
     if (partitions == NULL || partitions[0] == NULL) {
         struct stat st = disk->node->stat;
-        struct vnode* whole_disk = KeCreatePartition(
-            disk, 0, st.st_size, 0, st.st_blksize, 0, false)->node;
-        VnodeCreate(disk->node, &whole_disk, KeGetPartitionNameString(0), 0, 0);
+        struct file* whole = KeCreatePartition(disk, 0, st.st_size, 0, st.st_blksize, 0, false);
+        char* name = KeGetPartitionNameString(0);
+        if (whole != NULL && name != NULL) {
+            struct vnode* whole_disk = whole->node;
+            if (VnodeCreate(disk->node, &whole_disk, name, 0, 0) != 0) {
+                FreeHeap(name);
+            }
+        } else {
+            FreeHeap(name);
+        }
+        FreeHeap(partitions);
         return;
     }
     
     for (int i = 0; partitions[i]; ++i) {
         struct vnode* partition = partitions[i]->node;
         char* str = KeGetPartitionNameString(i);
-        VnodeCreate(disk->node, &partition, str, 0, 0);
+        if (str == NULL) {
+            continue;
+        }
+        if (VnodeCreate(disk->node, &partition, str, 0, 0) != 0) {
+            FreeHeap(str);
+        }
     }
+    FreeHeap(partitions);       /* just the array: the partition files themselves are permanent */
 }
 
 export void KeInitDiskPartitionHelper(struct disk_partition_helper* helper) {

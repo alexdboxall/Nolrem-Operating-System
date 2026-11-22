@@ -31,6 +31,12 @@ struct region_build_context {
 };
 
 int CdBuildNewRegion(struct region* rgn, int16_t y0, struct region_build_context* ctxt);
+
+/*
+ * Throws away a half-built region. Call it when CdAddScanline or CdFinishRegion fails (they run out of
+ * memory), then return CdBadRegion(). Safe after a failed CdBuildNewRegion too.
+ */
+void CdAbortNewRegion(struct region* rgn, struct region_build_context* ctxt);
 int CdAddScanline(
     struct region* rgn,
     struct region_build_context* ctxt,

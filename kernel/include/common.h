@@ -15,6 +15,20 @@
 
 #define MS_TO_NS(ms) ((ms) * 1000ULL * 1000ULL)
 
+/*
+ * How long to wait on something that depends on a storage device (a lock held
+ * while the disk is being used, ...) before giving up with an error, rather than
+ * letting a dead disk hang every thread that comes near it.
+ *
+ *  - TIMEOUT_DISK_ACCESS is for locks held across a single access to the device.
+ *  - TIMEOUT_DISK_OPERATION is for locks held for a whole operation that makes
+ *    many accesses (writing a file, mounting a disk), so it needs to be longer.
+ *
+ * These are for locks only. Don't use them for KeWaitIO; see the comment there.
+ */
+#define TIMEOUT_DISK_ACCESS     ((long long) MS_TO_NS(5000))
+#define TIMEOUT_DISK_OPERATION  ((long long) MS_TO_NS(30000))
+
 #define OS_VERSION_STRING   "Nolrem"
 #define OS_VERSION_MAJOR    0x00
 #define OS_VERSION_MINOR    0x01

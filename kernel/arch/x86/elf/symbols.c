@@ -23,22 +23,12 @@ static bool x86IsVisibleSymbol(const struct Elf32_Sym* symbol) {
     return (symbol->st_other & 3) == 0;
 }
 
-struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_hash) {
-    size_t size = (size_t) file->node->stat.st_size;
-
-    if (size < sizeof(struct Elf32_Ehdr)) {
-        return NULL;
-    }
-
-    /*
-     * Read-only, kernel-only (flags == 0), demand-loaded from 'file' by the
-     * page fault handler as we touch it. Not relocated, so reloc_base is 0.
-     */
-    void* map = KeAllocFileMemory(file, 0, size, 0, 0);
-    if (map == NULL) {
-        return NULL;
-    }
-    size_t mem = (size_t) map;
+/*
+ * Does the actual work on a file that is already mapped read-only at 'mem'.
+ * Everything it keeps is copied out (names are strduped or hashed), so the
+ * caller is free to unmap afterwards, whether this succeeded or not.
+ */
+static struct symbol_list* x86ReadSymbolsFromMapping(size_t mem, size_t size, size_t adjust, bool use_hash) {
 
     struct Elf32_Ehdr* elf_header = (struct Elf32_Ehdr*) mem;
     if (!x86IsElfValid(elf_header) || elf_header->e_shoff == 0) {
@@ -118,8 +108,8 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
      * Pass 2: register them. The index is the slot in the symbol list, i.e.
      * the Nth *visible* symbol, not the position in the ELF symbol table.
      *
-     * NOTE: this assumes KeAddToSymbolList() copies the name (as AddSymbol() did
-     * with strdup), because the mapping holding 'string_table' goes away below.
+     * NOTE: KeAddToSymbolList() copies the name (or just hashes it), because the
+     * mapping holding 'string_table' is released by our caller.
      */
     int next = 0;
     for (size_t i = 0; i < symbol_count; ++i) {
@@ -127,11 +117,35 @@ struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_h
         if (!x86IsVisibleSymbol(symbol)) {
             continue;
         }
-        KeAddToSymbolList(sym_list, next++, string_table + symbol->st_name,
-                        use_hash, symbol->st_value + adjust);
+        if (KeAddToSymbolList(sym_list, next, string_table + symbol->st_name,
+                        use_hash, symbol->st_value + adjust) != 0) {
+            KeDestroySymbolList(sym_list);      /* frees the names copied so far too */
+            return NULL;
+        }
+        ++next;
     }
     assert(next == total_syms);
 
-    //UnmapVirt(mem, size);
+    return sym_list;
+}
+
+struct symbol_list* ArchLoadSymbols(struct file* file, size_t adjust, bool use_hash) {
+    size_t size = (size_t) file->node->stat.st_size;
+
+    if (size < sizeof(struct Elf32_Ehdr)) {
+        return NULL;
+    }
+
+    /*
+     * Read-only, kernel-only (flags == 0), demand-loaded from 'file' by the
+     * page fault handler as we touch it. Not relocated, so reloc_base is 0.
+     */
+    void* map = KeAllocFileMemory(file, 0, size, 0, 0);
+    if (map == NULL) {
+        return NULL;
+    }
+
+    struct symbol_list* sym_list = x86ReadSymbolsFromMapping((size_t) map, size, adjust, use_hash);
+    KeFreeMemory(map, size);
     return sym_list;
 }

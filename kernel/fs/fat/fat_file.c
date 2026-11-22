@@ -386,12 +386,13 @@ int FatWriteFileSync(struct fat* fat, struct fat_file* file, struct transfer* io
 
     uint64_t total = MIN((uint64_t) io->length_remaining, FAT_MAX_FILE_SIZE - start);
 
-    KeAcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    int status = KeAcquireMutex(fat->write_lock, TIMEOUT_DISK_OPERATION);
+    if (status != 0) {
+        return status;
+    }
 
     uint32_t old_first_cluster = file->first_cluster;
     uint32_t old_size = file->size;
-
-    int status = 0;
 
     if (start > file->size) {
         /*
@@ -467,11 +468,13 @@ int FatTruncateFileSync(struct fat* fat, struct fat_file* file, uint64_t new_siz
         return EIO;
     }
 
-    KeAcquireMutex(fat->write_lock, TIMEOUT_INFINITE);
+    int status = KeAcquireMutex(fat->write_lock, TIMEOUT_DISK_OPERATION);
+    if (status != 0) {
+        return status;
+    }
 
     uint32_t old_first_cluster = file->first_cluster;
     uint32_t old_size = file->size;
-    int status = 0;
 
     if (new_size > old_size) {
         status = FatWriteRange(fat, file, old_size, new_size - old_size, NULL);

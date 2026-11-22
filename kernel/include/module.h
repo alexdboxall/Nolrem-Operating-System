@@ -29,6 +29,7 @@ struct symbol {
 } __attribute__((packed));
 
 struct symbol_list* KeCreateSymbolList(int total_syms);
-void KeAddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);
+int KeAddToSymbolList(struct symbol_list* sl, int index, const char* id, bool use_hash, size_t addr);
+void KeDestroySymbolList(struct symbol_list* sl);
 void KeAddToSymbolListPreHashed(struct symbol_list* sl, int index, uint64_t hash, size_t addr);
 struct symbol* KeFindSymbol(struct symbol_list* sl, const char* id);

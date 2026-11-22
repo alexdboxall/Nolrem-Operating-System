@@ -125,9 +125,14 @@ export int KeMount(struct vnode* node, const char* name) {
 	}
 	strcpy(mount->name, name);
     mount->node = KeCreateFile(node, 0, 0, true, true);
+	if (mount->node == NULL) {
+		FreeHeap(mount);
+		KeReleaseMutex(mount_list_lock);
+		return ENOMEM;
+	}
+	/* KeCreateFile gave us the one reference the mount list owns; KeUnmount drops it. */
 	mount->next = mounted_file_list;
 	mounted_file_list = mount;
-	KeRefObject(mount->node);
     KeReleaseMutex(mount_list_lock);
     return 0;
 }
@@ -172,7 +177,7 @@ export int KeUnmount(const char* name) {
 		}
 	}
 	
-	FreeHeap(actual->name);
+	/* name[] is a flexible array inside this allocation, so there is nothing separate to free. */
 	FreeHeap(actual);
     KeReleaseMutex(mount_list_lock);
     return 0;
@@ -277,13 +282,18 @@ static int KeGetVnodeFromPath(const char* path, struct vnode** out, bool want_pa
 		if (err != 0) {
 			return err;
 		}
+		/*
+		* KeUnmount frees the mount entry (and drops its file) once it has the lock,
+		* so take our reference to the vnode before letting go of it.
+		*/
 		struct mounted_file* mount = KeGetMountPointFromName(component_buffer);
-		KeReleaseMutex(mount_list_lock);
-		struct file* current_file = mount == NULL ? NULL : mount->node;
-		if (current_file == NULL) {
-			return ENODEV;
+		if (mount != NULL && mount->node != NULL) {
+			current_vnode = mount->node->node;
+			if (current_vnode != NULL) {
+				KeRefObject(current_vnode);
+			}
 		}
-		current_vnode = current_file->node;
+		KeReleaseMutex(mount_list_lock);
 	}
 	
 	if (current_vnode == NULL) {
@@ -291,11 +301,10 @@ static int KeGetVnodeFromPath(const char* path, struct vnode** out, bool want_pa
 	}
 
 	/*
-	* This will be dereferenced either as we go through the loop, or
-	* after a call to vfs_close (this function should only be called 
-	* by vfs_open).
+	* current_vnode now holds a reference (taken above). It will be dereferenced
+	* either as we go through the loop, or after a call to vfs_close (this function
+	* should only be called by vfs_open).
 	*/
-	KeRefObject(current_vnode);
 
 	char component[MAX_COMPONENT_LENGTH + 1];
 
@@ -391,6 +400,7 @@ export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** ou
 			char name[MAX_COMPONENT_LENGTH + 1];
 			status = KeGetFinalPathComponent(path, name, MAX_COMPONENT_LENGTH);
 			if (status) {
+				KeDerefObject(node);
 				return status;
 			}
 
@@ -404,12 +414,17 @@ export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** ou
 
 			node = child;
 
+		} else if (status != 0) {
+			/* A real error (not just 'doesn't exist'), and there is no vnode to use. */
+			return status;
+
 		} else if (flags & O_EXCL) {
 			/*
 			 * The file already exists (as we didn't get ENOENT), but we were 
 			 * passed O_EXCL so we must give an error. If O_EXCL isn't passed, 
 			 * then O_CREAT will just open the existing file.
 			 */
+			KeDerefObject(node);
 			return EEXIST;
 		}
 
@@ -438,14 +453,23 @@ export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** ou
 		if (can_write) {
 			struct aio a;
 			status = KeCreateTruncateIO(&a, node, 0, NULL, NULL);
-			if (status) {
-				return status;
+			if (status == 0) {
+				/* The aio only describes the request: it has to be handed to the filesystem too, or the wait never ends. */
+				status = VnodeTruncate(&a);
+				if (status != 0) {
+					/* Never queued, so nothing will signal it. Finish it ourselves to release its reference and mutex. */
+					KeSignalDoneIO(&a, status);
+					KeWaitIO(&a, TIMEOUT_INFINITE);
+				} else {
+					status = KeWaitIO(&a, TIMEOUT_INFINITE);
+				}
 			}
-			status = KeWaitIO(&a, TIMEOUT_INFINITE);
 			if (status) {
+				KeDerefObject(node);
 				return status;
 			}
 		} else {
+			KeDerefObject(node);
 			return EINVAL;
 		}
 	}
@@ -453,7 +477,14 @@ export int KeOpenFile(const char* path, int flags, mode_t mode, struct file** ou
 	// TODO: may need to actually have a VnodeOpOpen, for things like FatFS.
 
 	node->flags = flags & (O_NONBLOCK | O_APPEND);
-	*out = KeCreateFile(node, mode, flags & O_CLOEXEC, can_read, can_write);
+	struct file* file = KeCreateFile(node, mode, flags & O_CLOEXEC, can_read, can_write);
+
+	/* The file holds its own reference to the vnode, so drop the one the path walk gave us. */
+	KeDerefObject(node);
+	if (file == NULL) {
+		return ENOMEM;
+	}
+	*out = file;
     return 0;
 }
 
@@ -488,7 +519,20 @@ static int KeFileAccess(struct aio* aio, bool write) {
 	}
 	KeCreateIO(subaio, file->node, *io, KeFileAccessAsyncCallback, (void*) aio);
 	aio->sub = subaio;
-	return (write ? VnodeWrite : VnodeRead)(subaio);
+	int res = (write ? VnodeWrite : VnodeRead)(subaio);
+	if (res != 0) {
+		/*
+		 * The driver didn't take it, so it will never be signalled and the
+		 * callback will never free it. Finish it off here so its vnode
+		 * reference, its mutex and the allocation aren't lost.
+		 */
+		aio->sub = NULL;
+		subaio->callback = NULL;
+		KeSignalDoneIO(subaio, res);
+		KeWaitIO(subaio, TIMEOUT_INFINITE);
+		FreeHeap(subaio);
+	}
+	return res;
 }
 
 export int KeReadFile(struct aio* aio) {

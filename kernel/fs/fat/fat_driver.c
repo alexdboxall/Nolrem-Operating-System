@@ -95,7 +95,16 @@ int FatStartDriver(struct fat* fat) {
         return ENOMEM;
     }
 
-    KeCreateThreadEx(KeGetKernelVas(), FatDriverThread, fat, 4096);
+    if (KeCreateThreadEx(KeGetKernelVas(), FatDriverThread, fat, 4096) == NULL) {
+        /* Without the thread nothing queued would ever be handled, and every waiter would hang. */
+        KeDerefObject(fat->msgbox);
+        KeDerefObject(fat->write_lock);
+        KeDerefObject(fat->table_lock);
+        fat->msgbox = NULL;
+        fat->write_lock = NULL;
+        fat->table_lock = NULL;
+        return ENOMEM;
+    }
     return 0;
 }
 

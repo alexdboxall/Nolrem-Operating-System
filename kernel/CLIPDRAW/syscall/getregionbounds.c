@@ -3,6 +3,7 @@
 #include <string.h>
 #include <transfer.h>
 #include <syscall.h>
+#include <usersys.h>
 #include "../api.h"
 #include "../clipdraw_internal.h"
 
@@ -30,7 +31,7 @@ export pageableuserexec struct rect GetRegionBounds(region_t rgn) {
         return r;
     } else {
         struct rect r2 = {0};
-        KeSetLastUserError(res);
+        SetLastError((int) res);
         return r2; 
     }
 }

@@ -158,6 +158,15 @@ export int KeWriteWordToUsermode(size_t* location, size_t value) {
     return res;
 }
 
+export int KeWriteU64ToUsermode(uint64_t* location, uint64_t value) {
+    struct transfer io = KeCreateTransferWritingToUser(location, sizeof(uint64_t), 0);
+    int res = KePerformTransfer(&value, &io, sizeof(uint64_t));
+    if (io.length_remaining != 0) {
+        return EINVAL;
+    }
+    return res;
+}
+
 export int KeReadWordFromUsermode(size_t* location, size_t* output) {
     struct transfer io = KeCreateTransferReadingFromUser(location, sizeof(size_t), 0);
     int res = KePerformTransfer(output, &io, sizeof(size_t));

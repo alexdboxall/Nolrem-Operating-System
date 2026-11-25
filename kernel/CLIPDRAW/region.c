@@ -816,6 +816,15 @@ static bool CdCheckRegionCondition(int mode, bool a, bool b) {
     }
 }
 
+/* Whether the region's origin is anywhere but (0, 0), ie. it holds a translation that its bands don't include. */
+static bool CdHasTranslation(struct region rgn) {
+    if (CdIsRegionEmpty(rgn)) {
+        return false;
+    }
+    struct region_data* data = rgn.data;
+    return data->trans_x != 0 || data->trans_y != 0;
+}
+
 export struct region CdGetRegionCombinationEx(int mode, struct region a, struct region b, struct dc* scale_dc) { 
     /* A bad input poisons the output. */
     if (CdIsRegionBad(a) || CdIsRegionBad(b)) {
@@ -837,6 +846,12 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
     int a_trans_y   = a_empty ? 0 : a_data->trans_y;
     int b_trans_y   = b_empty ? 0 : b_data->trans_y;
 
+    /*
+     * The result of a combination always has its origin at (0, 0): the translation is baked into the bands.
+     * (CdResetRegionOrigin relies on that, with a union with an empty region.) A copy keeps the translation of
+     * what it copies, so these shortcuts that return a copy can only be taken when that is already (0, 0). If it
+     * isn't, we go on to the general path below, which copes with the empty one and does the baking.
+     */
     if (a_empty || b_empty) {
         switch (mode) {
         case REGION_COMBINE_INTERSECT:
@@ -844,19 +859,28 @@ export struct region CdGetRegionCombinationEx(int mode, struct region a, struct 
 
         case REGION_COMBINE_DIFFERENCE:
             /* a && !b : empty if a is empty, else b contributes nothing. */
-            return a_empty ? CdEmptyRegion() : CdCopyRegion(a);
+            if (a_empty) {
+                return CdEmptyRegion();
+            }
+            if (!CdHasTranslation(a)) {
+                return CdCopyRegion(a);
+            }
+            break;
 
         case REGION_COMBINE_UNION:
         case REGION_COMBINE_XOR:
             if (b_empty) {
-                return CdCopyRegion(a);
+                if (!CdHasTranslation(a)) {
+                    return CdCopyRegion(a);
+                }
+                break;
             }
             /*
              * a is empty, so the answer is b -- but only if b isn't being
              * remapped. With a scale_dc we'd have to transform it, so fall
              * through to the general path instead.
              */
-            if (scale_dc == NULL) {
+            if (scale_dc == NULL && !CdHasTranslation(b)) {
                 return CdCopyRegion(b);
             }
             break;

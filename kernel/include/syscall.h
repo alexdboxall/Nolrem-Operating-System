@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdint.h>
 #include <errno.h>
 #include <phys.h>
 
@@ -32,7 +33,9 @@
  * calls to the end of the list so the existing numbers don't move.
  */
 #define KE_SYSCALLS(X) \
-    X(Ref) X(GetObjectType)
+    X(Ref) X(GetObjectType) \
+    X(Yield) X(Sleep) X(SleepUntil) X(GetTimeSinceBoot) \
+    X(GetUtcTime) X(QuerySystemInformation) X(LastError)
 
 #define CD_SYSCALLS(X) \
     X(EmptyOrEveryRegion) X(GetRegionCombination) X(CreateRectRegion) X(CreateEllipseRegion) \
@@ -64,6 +67,15 @@ static_assert(SYS_CD_END <= SYSCALL_BASE(SYSCALL_RANGE_CD + 1), "too many CLIPDR
 KE_SYSCALLS(SYSCALL_PROTOTYPE)
 CD_SYSCALLS(SYSCALL_PROTOTYPE)
 
+/*
+ * Arguments are one machine word, so 64-bit values (times, mostly) are passed as
+ * two: the low half first, then the high half. For results that are 64 bits
+ * wide the user passes a pointer, which the kernel writes through.
+ */
+#define SYSCALL_U64_LO(v)       ((size_t) (uint32_t) (v))
+#define SYSCALL_U64_HI(v)       ((size_t) (uint32_t) ((uint64_t) (v) >> 32))
+#define SYSCALL_U64(lo, hi)     (((uint64_t) (uint32_t) (hi) << 32) | (uint32_t) (lo))
+
 // User side - requests it
 size_t SystemCall(int call, size_t arg1, size_t arg2, size_t arg3, size_t arg4);
 size_t SystemCall1(size_t arg1);
@@ -86,3 +98,9 @@ int KeRegisterSyscallRange(int range, const ke_syscall_handler_t* table, size_t 
 void KeInitSyscalls(void);
 
 size_t KePerformSystemCall(size_t call, size_t a, size_t b, size_t c, size_t d);
+
+/*
+ * Sets the error that the calling thread can read back with GetLastError().
+ * Handlers use it to say why they failed, when the return value has no room.
+ */
+void KeSetLastUserError(int err);

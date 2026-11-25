@@ -39,6 +39,7 @@ int KeWriteStringToUsermode(const char* trusted_string, char* untrusted_buffer, 
 int KeReadStringFromUsermode(char* trusted_buffer, const char* untrusted_string, uint64_t max_length);
 
 int KeWriteWordToUsermode(size_t* location, size_t value);
+int KeWriteU64ToUsermode(uint64_t* location, uint64_t value);
 int KeReadWordFromUsermode(size_t* location, size_t* output);
 
 struct transfer KeCreateKernelTransfer(void* addr, uint64_t length, uint64_t offset, int direction);

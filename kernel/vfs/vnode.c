@@ -55,7 +55,10 @@ int VnodeRead(struct aio* aio) {
     struct vnode* node = aio->node;
     struct transfer* io = &aio->transfer;
     KeCheckVnode(node);
-    if (node->ops.read == NULL || io->direction != TRANSFER_READ) {
+    if (node->ops.read == NULL) {
+        return ENOTSUP;
+    }
+    if (io->direction != TRANSFER_READ) {
         return EINVAL;
     }
     return node->ops.read(aio);
@@ -65,7 +68,10 @@ int VnodeWrite(struct aio* aio) {
     struct vnode* node = aio->node;
     struct transfer* io = &aio->transfer;
     KeCheckVnode(node);
-    if (node->ops.write == NULL || io->direction != TRANSFER_WRITE) {
+    if (node->ops.write == NULL) {
+        return ENOTSUP;
+    }
+    if (io->direction != TRANSFER_WRITE) {
         return EINVAL;
     }
     return node->ops.write(aio);
@@ -76,7 +82,7 @@ int VnodeTruncate(struct aio* aio) {
     KeCheckVnode(node);
 
     if (node->ops.truncate == NULL) {
-        return EINVAL;
+        return ENOTSUP;
     }
     return node->ops.truncate(aio);
 }
@@ -88,7 +94,7 @@ int VnodeIoctl(struct vnode* node, int command, void* buffer) {
             command == TIOCGPGRP || command == TIOCSPGRP) {
             return ENOTTY;
         }
-        return EINVAL;
+        return ENOTSUP;
     }
     return node->ops.ioctl(node, command, buffer);
 }
@@ -96,7 +102,7 @@ int VnodeIoctl(struct vnode* node, int command, void* buffer) {
 int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int flags, mode_t mode) {
     KeCheckVnode(node);
     if (node->ops.create == NULL) {
-        return EINVAL;
+        return ENOTSUP;
     }
     return node->ops.create(node, out, name, flags, mode);
 }
@@ -104,7 +110,7 @@ int VnodeCreate(struct vnode* node, struct vnode** out, const char* name, int fl
 int VnodeFollow(struct vnode* node, struct vnode** new_node, const char* name) {
     KeCheckVnode(node);
     if (node->ops.follow == NULL) {
-        return ENOTDIR;
+        return ENOTSUP;
     }
     return node->ops.follow(node, new_node, name);
 }
@@ -116,7 +122,7 @@ uint8_t VnodeDirentType(struct vnode* node) {
 int VnodeUnlink(struct vnode* node) {
     KeCheckVnode(node);
     if (node->ops.unlink == NULL) {
-        return EINVAL;
+        return ENOTSUP;
     }
     return node->ops.unlink(node);
 }
@@ -124,7 +130,7 @@ int VnodeUnlink(struct vnode* node) {
 int VnodeDelete(struct vnode* node) {
     KeCheckVnode(node);
     if (node->ops.delete == NULL) {
-        return EINVAL;
+        return ENOTSUP;
     }
     return node->ops.delete(node);
 }

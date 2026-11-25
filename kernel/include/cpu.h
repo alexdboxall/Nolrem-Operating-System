@@ -14,4 +14,6 @@ struct cpu_data {
 }  __attribute__((aligned(64)));
 
 void KeInitCpuTable(void);
+int KeRegisterNewCpu(void);
+int KeGetNumActiveCpus(void);
 struct cpu_data* KeGetCpu(void);

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <transfer.h>
 #include <syscall.h>
+#include <usersys.h>
 #include "../api.h"
 #include "../clipdraw_internal.h"
 
@@ -43,7 +44,7 @@ export pageableuserexec struct point GetBrushOrigin(brush_t br) {
     struct point p = {0};
     size_t res = SystemCall4(SYS_BrushOrigin, (size_t) br, OP_GET, (size_t) &p);
     if (res != 0) {
-        KeSetLastUserError(res);
+        SetLastError((int) res);
         struct point zero = {0};
         return zero;
     }

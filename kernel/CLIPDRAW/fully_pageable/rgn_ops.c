@@ -33,6 +33,17 @@ static pageable struct region CdResetRegionOrigin(struct region rgn) {
 }
 
 export pageable bool CdIsRegionEqual(struct region a, struct region b) {
+    /* Empty regions have no data (or no bands) to look at below, and all of them are equal. A bad one is
+       not equal to anything, as it isn't a region. */
+    if (CdIsRegionBad(a) || CdIsRegionBad(b)) {
+        return false;
+    }
+    bool a_empty = CdIsRegionEmpty(a);
+    bool b_empty = CdIsRegionEmpty(b);
+    if (a_empty || b_empty) {
+        return a_empty && b_empty;
+    }
+
     if (a.used_length != b.used_length) {
         return false;
     }
@@ -45,7 +56,10 @@ export pageable bool CdIsRegionEqual(struct region a, struct region b) {
     }
 
     if (a_data->trans_x == b_data->trans_x && a_data->trans_y == b_data->trans_y) {
-        return !memcmp(a_data->band_data, b_data->band_data, a.used_length);
+        /* `used_length` counts from the start of the region_data, header included, but the comparison starts
+           after the header. Without taking it off, it reads that many bytes past the end of what is used, and
+           the bytes there (whatever the allocation held before) can make equal regions compare unequal. */
+        return !memcmp(a_data->band_data, b_data->band_data, a.used_length - offsetof(struct region_data, band_data));
     }
 
     /* 

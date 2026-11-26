@@ -76,6 +76,10 @@ export int KeWaitIO(struct aio* aio, uint64_t timeout) {
         }
     }
     res = KeAcquireMutex(&aio->mtx, timeout);
+    if (res == EAGAIN || res == ETIMEDOUT) {
+        /* Not completed yet, allow to try again later. */
+        return res;
+    }
     if (res != 0) {
         goto cleanup_on_err;
     }

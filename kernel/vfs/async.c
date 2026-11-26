@@ -55,14 +55,7 @@ export int KeCreateIO(struct aio* aio, void* node_or_file, struct transfer tr, v
  * Must be called before you read the result of the aio.
  * If trying to do sync io, call this straight after requesting.
  * If doing async io, call this when you're ready for the result.
- *
- * Don't pass a finite timeout (yet). If it expires, this gives up on the aio
- * (it is marked completed and its mutex is destroyed) but the driver still has
- * it queued, and will later write the result into it and signal it. For the
- * usual aio on the caller's stack, that is a write into a dead stack frame. Until
- * an aio can outlive its waiter (heap allocated and reference counted), a
- * stuck device is dealt with by the driver, which has to time out its own
- * hardware waits and complete the aio with an error, as the floppy driver does.
+ * If it returns with EAGAIN or ETIMEDOUT, you can safely call it again.
  */
 export int KeWaitIO(struct aio* aio, uint64_t timeout) {
     if (aio->completed) {
@@ -71,9 +64,14 @@ export int KeWaitIO(struct aio* aio, uint64_t timeout) {
     int res;
     if (aio->sub != NULL) {
         res = KeWaitIO(aio->sub, timeout);
+        if (res == EAGAIN || res == ETIMEDOUT) {
+            /* Not completed yet, allow to try again later. */
+        return res;
+        }
         if (res != 0) {
             goto cleanup_on_err;
         }
+        aio->sub = NULL;
     }
     res = KeAcquireMutex(&aio->mtx, timeout);
     if (res == EAGAIN || res == ETIMEDOUT) {

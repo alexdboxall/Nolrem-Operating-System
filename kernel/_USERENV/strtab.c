@@ -1,5 +1,7 @@
 #include <unaligned.h>
 #include <common.h>
+#include <errno.h>
+#include <usersys.h>
 
 #define STRTAB_OFF16    (0 << 1)
 #define STRTAB_OFF32    (1 << 1)
@@ -18,15 +20,15 @@ struct string_table {
 };
 
 export pageableuserexec const char* GetString(struct string_table* strtab, int index) {
-    if (index < 0 || strtab == NULL || index >= strtab->num_strings) {
+    if (index < 0 || strtab == NULL || strtab->mmap_ptr == NULL || index >= strtab->mmap_ptr->num_strings) {
         SetLastError(EINVAL);
         return NULL;
     }
     uint32_t offset;
-    if (strtab->flags & STRTAB_OFF32) {
-        offset = ReadUnaligned32LE(strtab->data + index * 4);
+    if (strtab->mmap_ptr->flags & STRTAB_OFF32) {
+        offset = ReadUnaligned32LE(strtab->mmap_ptr->data + index * 4);
     } else {
-        offset = ReadUnaligned16LE(strtab->data + index * 2);
+        offset = ReadUnaligned16LE(strtab->mmap_ptr->data + index * 2);
     }
-    return strtab->data + offset;
+    return (const char*) strtab->mmap_ptr->data + offset;
 }

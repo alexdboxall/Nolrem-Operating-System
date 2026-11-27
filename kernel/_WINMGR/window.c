@@ -444,7 +444,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     WmDispatchMessage((struct msg) {
         .win = win,
         .type = WM_CREATE,
-    })
+    });
 
     return win;
 }

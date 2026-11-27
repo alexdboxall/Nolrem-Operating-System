@@ -22,8 +22,8 @@ pageable size_t SysInvertRect(size_t a, size_t args_ptr, size_t, size_t) {
         return res;
     }
 
-    struct dc* dc = (struct dc*) a;
-    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+    struct dc* dc = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_DC);
+    if (dc == NULL) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }

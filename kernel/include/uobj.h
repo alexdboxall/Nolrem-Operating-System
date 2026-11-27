@@ -1,48 +1,23 @@
 #pragma once
 
 #include <stdbool.h>
+#include <objtypes.h>
 
 /*
  * User objects: the handles that usermode holds onto (windows, brushes, ...).
  *
- * The kernel owns this header because it owns the machinery behind it: the
- * validation of handles that come in from usermode, the user reference counts,
- * and the Ref()/Deref()/GetObjectType() calls that work on any handle. See
- * obj.h for the object header, and KeRegisterUserObjectType() for how a
- * subsystem (CLIPDRAW, the window manager, ...) attaches its own cleanup code
- * to a type.
+ * A handle is NOT a pointer to the object. It is a pointer to a small wrapper object (an OBJ_USER_REF, see
+ * obj.h) that the kernel keeps for the purpose, which holds the real object and the user reference count. So
+ * handles are opaque: only ever pass them back to the kernel. Two handles can be to the same object, and the
+ * same object can be given out as a new handle more than once (GetGraphicsObject() does), so compare objects,
+ * not handles.
  *
- * The type IDs below are a single namespace shared by everything that creates
- * user objects, so a new type has to be added here. There is room for 128
- * (the id is stored in 7 bits), and KeRegisterUserObjectType() currently
- * handles the first 32.
+ * Ref() and Deref() work on any handle. The kernel keeps the object alive for as long as there is a handle with
+ * a user reference to it, and for as long as it is using it for you.
+ *
+ * GetObjectType() says what kind of object a handle is to, as one of the OBJ_ types (objtypes.h): the type of
+ * the object under it, not of the wrapper. A bad handle, or one that has been closed, is OBJ_INVALID.
  */
-
-#define UOBJ_ANYTYPE            (-1)
-
-#define UOBJ_INVALID             0
-#define UOBJ_MUTEX               1
-#define UOBJ_THREAD              2
-#define UOBJ_PROCESS             3
-#define UOBJ_FILE                4
-#define UOBJ_DIRECTORY           5
-#define UOBJ_TIMER               6
-#define UOBJ_MEMORY_REGION       7
-#define UOBJ_SOUND               8
-#define UOBJ_DYNAMIC_LIBRARY     9
-#define UOBJ_WINDOW              10
-#define UOBJ_WINDOW_CLASS        11
-#define UOBJ_BRUSH               12
-#define UOBJ_PEN                 13
-#define UOBJ_BITMAP              14
-#define UOBJ_TYPEFACE            15
-#define UOBJ_FONT                16
-#define UOBJ_MAILBOX             17
-#define UOBJ_REGION              18
-#define UOBJ_DC                  19
-#define UOBJ_CURSOR              20
-#define UOBJ_APP                 21
-#define UOBJ_ICON                22
 
 typedef void* any_t;
 
@@ -53,34 +28,27 @@ void Deref(any_t);
 int GetObjectType(any_t handle);
 bool IsAnything(any_t handle);
 
-#define IsMutex(handle)           (GetObjectType(handle) == UOBJ_MUTEX)
-#define IsThread(handle)          (GetObjectType(handle) == UOBJ_THREAD)
-#define IsProcess(handle)         (GetObjectType(handle) == UOBJ_PROCESS)
-#define IsFile(handle)            (GetObjectType(handle) == UOBJ_FILE)
-#define IsDirectory(handle)       (GetObjectType(handle) == UOBJ_DIRECTORY)
-#define IsTimer(handle)           (GetObjectType(handle) == UOBJ_TIMER)
-#define IsMemoryRegion(handle)    (GetObjectType(handle) == UOBJ_MEMORY_REGION)
-#define IsSound(handle)           (GetObjectType(handle) == UOBJ_SOUND)
-#define IsDynamicLibrary(handle)  (GetObjectType(handle) == UOBJ_DYNAMIC_LIBRARY)
-#define IsWindow(handle)          (GetObjectType(handle) == UOBJ_WINDOW)
-#define IsWindowClass(handle)     (GetObjectType(handle) == UOBJ_WINDOW_CLASS)
-#define IsBrush(handle)           (GetObjectType(handle) == UOBJ_BRUSH)
-#define IsPen(handle)             (GetObjectType(handle) == UOBJ_PEN)
-#define IsBitmap(handle)          (GetObjectType(handle) == UOBJ_BITMAP)
-#define IsTypeface(handle)        (GetObjectType(handle) == UOBJ_TYPEFACE)
-#define IsFont(handle)            (GetObjectType(handle) == UOBJ_FONT)
-#define IsMailbox(handle)         (GetObjectType(handle) == UOBJ_MAILBOX)
-#define IsRegion(handle)          (GetObjectType(handle) == UOBJ_REGION)
-#define IsDc(handle)              (GetObjectType(handle) == UOBJ_DC)
-#define IsCursor(handle)          (GetObjectType(handle) == UOBJ_CURSOR)
-#define IsApp(handle)             (GetObjectType(handle) == UOBJ_APP)
-#define IsIcon(handle)            (GetObjectType(handle) == UOBJ_ICON)
-
-/*
- * Checks that `obj` is a live user object of the given type (or of any type, if
- * UOBJ_ANYTYPE), and takes a kernel reference on it if so. Returns false if it
- * isn't. On success the caller must KeDerefObject() it when done.
- *
- * This is the first thing every syscall that takes a handle does.
- */
-bool KeValidateUserObjectAndAtomicallyRef(void* obj, int type);
+#define IsSemaphore(handle)       (GetObjectType(handle) == OBJ_SEM)
+#define IsMutex(handle)           IsSemaphore(handle)     /* a mutex is a semaphore (see usersync.h) */
+#define IsRwLock(handle)          (GetObjectType(handle) == OBJ_RWLOCK)
+#define IsThread(handle)          (GetObjectType(handle) == OBJ_THREAD)
+#define IsProcess(handle)         (GetObjectType(handle) == OBJ_PROCESS)
+#define IsFile(handle)            (GetObjectType(handle) == OBJ_FILE)
+#define IsDirectory(handle)       (GetObjectType(handle) == OBJ_DIRECTORY)
+#define IsTimer(handle)           (GetObjectType(handle) == OBJ_TIMER)
+#define IsMemoryRegion(handle)    (GetObjectType(handle) == OBJ_MEMORY_REGION)
+#define IsSound(handle)           (GetObjectType(handle) == OBJ_SOUND)
+#define IsDynamicLibrary(handle)  (GetObjectType(handle) == OBJ_MODULE)
+#define IsWindow(handle)          (GetObjectType(handle) == OBJ_WINDOW)
+#define IsWindowClass(handle)     (GetObjectType(handle) == OBJ_WINDOW_CLASS)
+#define IsBrush(handle)           (GetObjectType(handle) == OBJ_BRUSH)
+#define IsPen(handle)             (GetObjectType(handle) == OBJ_PEN)
+#define IsBitmap(handle)          (GetObjectType(handle) == OBJ_BITMAP)
+#define IsTypeface(handle)        (GetObjectType(handle) == OBJ_TYPEFACE)
+#define IsFont(handle)            (GetObjectType(handle) == OBJ_FONT)
+#define IsMailbox(handle)         (GetObjectType(handle) == OBJ_MSGBOX)
+#define IsRegion(handle)          (GetObjectType(handle) == OBJ_REGION)
+#define IsDc(handle)              (GetObjectType(handle) == OBJ_DC)
+#define IsCursor(handle)          (GetObjectType(handle) == OBJ_CURSOR)
+#define IsApp(handle)             (GetObjectType(handle) == OBJ_APP)
+#define IsIcon(handle)            (GetObjectType(handle) == OBJ_ICON)

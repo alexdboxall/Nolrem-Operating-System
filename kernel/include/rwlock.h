@@ -71,3 +71,15 @@ int KeAcquireRwLockWrite(struct rwlock* rw, int64_t timeout);
 
 int KeReleaseRwLockRead(struct rwlock* rw);
 int KeReleaseRwLockWrite(struct rwlock* rw);
+
+/*
+ * The same, for callers that can't be trusted to hold what they are releasing (usermode). The plain versions
+ * assert, or let the lock's counts go below zero; these refuse with EOVERFLOW instead, and change nothing.
+ *
+ * That is all they can do. The lock doesn't know who holds it, so a release that nothing could have been
+ * holding is caught, but a thread releasing a hold that is really another thread's is not, and it takes the
+ * exclusion away from them. That is the caller's own bug and spoils only this lock: nothing in the kernel
+ * takes a lock that usermode can reach.
+ */
+int KeReleaseRwLockReadChecked(struct rwlock* rw);
+int KeReleaseRwLockWriteChecked(struct rwlock* rw);

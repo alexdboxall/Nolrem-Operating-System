@@ -170,7 +170,7 @@ export struct vas* KeCreateVas(void) {
     if (vas == NULL) {
         return NULL;
     }
-    KeInitObject(vas, OBJTYPE_VAS);
+    KeInitObject(vas, OBJ_VAS);
 
     vas->lock = KeCreateMutex();
     vas->va = AllocHeap(sizeof(struct virt_arena));
@@ -193,7 +193,7 @@ export struct vas* KeCreateVas(void) {
 void KeCreateInitialVas(void) {
     struct vas* vas = KeAllocPermanentHeap(sizeof(struct vas));
     assert(vas != NULL);
-    KeInitObject(vas, OBJTYPE_VAS);
+    KeInitObject(vas, OBJ_VAS);
 
     vas->va = KeGetKernelVirtArena();
     vas->lock = KeCreateMutex();
@@ -223,7 +223,7 @@ static struct page_origin* KeCreatePageOrigin(struct file* file, size_t file_off
         return NULL;
     }
     KeInitStaticMutex(&po->mtx);
-    KeInitObject(po, OBJTYPE_PAGE_ORIGIN);
+    KeInitObject(po, OBJ_PAGE_ORIGIN);
     po->is_file = file != NULL;
     po->phys = phys;
     po->fixed = fixed;
@@ -246,7 +246,7 @@ static void KeMarkKernelPageDiscardable(size_t existing_virt, size_t existing_ph
         KePanic(PANIC_OUT_OF_MEMORY);       /* boot time: no way to carry on without it */
     }
     struct vas* vas = KeGetKernelVas();
-    KeInitObject(vp, OBJTYPE_PAGE_VIRT);
+    KeInitObject(vp, OBJ_PAGE_VIRT);
     vp->vas = vas;
     vp->virt = existing_virt;
     vp->executable = 1;
@@ -301,7 +301,7 @@ void KeMarkPageableSegmentsDiscardable(void) {
         KePanic(PANIC_OUT_OF_MEMORY);
     }
     KeLogPrintf("The dummy file is at: 0x%X\n", dummy_file);
-    KeInitObject(dummy_file, OBJTYPE_FILE);
+    KeInitObject(dummy_file, OBJ_FILE);
     for (size_t i = k_start_page; i < k_end_page; ++i) {
         // TODO: need a real file! And offset! To know where to reload them from!
         KeMarkKernelPageDiscardable(i * PAGE_SIZE, i * PAGE_SIZE - ARCH_KRNL_MAPPING_BASE, false, (void*) dummy_file, 0xCAFEBABE);
@@ -337,7 +337,7 @@ static struct virt_page* KeCreateVirtPage(struct vas* vas, size_t virt, int flag
         return NULL;
     }
 
-    KeInitObject(vp, OBJTYPE_PAGE_VIRT);
+    KeInitObject(vp, OBJ_PAGE_VIRT);
 
     vp->vas = vas;              /* back-pointer, deliberately unreferenced */
     vp->virt = virt;
@@ -490,9 +490,9 @@ static void KeCleanupVirtPage(void* _vp) {
 }
 
 void KeInitVmm(void) {
-    KeRegisterObjectType(OBJTYPE_PAGE_ORIGIN, KeCleanupPageOrigin);
-    KeRegisterObjectType(OBJTYPE_VAS, KeCleanupVas);
-    KeRegisterObjectType(OBJTYPE_PAGE_VIRT, KeCleanupVirtPage);
+    KeRegisterObjectType(OBJ_PAGE_ORIGIN, KeCleanupPageOrigin);
+    KeRegisterObjectType(OBJ_VAS, KeCleanupVas);
+    KeRegisterObjectType(OBJ_PAGE_VIRT, KeCleanupVirtPage);
     KeInitSpinlock(&vmm_heap_lock);
     InitHeapEx(&vmm_special_heap, VmmSpecialHeapGetMemory, NULL);
 }

@@ -28,7 +28,7 @@ pageable size_t SysCreateCustomBrush(size_t primary, size_t secondary, size_t pa
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    return (size_t) br;
+    return (size_t) KeCreateUserRef(br);       /* gives the brush its handle, taking our reference */
 }
 
 export pageableuserexec brush_t CreateCustomBrush(colour_t primary, colour_t secondary, uint8_t* pattern) {

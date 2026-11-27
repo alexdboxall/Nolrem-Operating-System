@@ -160,7 +160,7 @@ static void KeCleanupCpzImage(void* _img) {
 }
 
 void KeInitCpzImages(void) {
-    KeRegisterObjectType(OBJTYPE_CPZ_INST, KeCleanupCpzImage);
+    KeRegisterObjectType(OBJ_CPZ_INST, KeCleanupCpzImage);
 }
 
 /*
@@ -439,7 +439,7 @@ export struct cpz_image* KeOpenCpzImage(struct file* file) {
     if (img == NULL) {
         return NULL;
     }
-    KeInitObject(img, OBJTYPE_CPZ_INST);
+    KeInitObject(img, OBJ_CPZ_INST);
     KeRefObject(file);
     img->file = file;
     img->pages = (uint32_t) pages;

@@ -42,7 +42,7 @@ export struct window_class* WmCreateWindowClassEx(
             *extra_off_out = parent->extra_ptrs;
         }
     }
-    KeInitUserObject(wc, UOBJ_WINDOW_CLASS);
+    KeInitObject(wc, OBJ_WINDOW_CLASS);
 
     if (icon != NULL) {
         KeRefObject(icon);

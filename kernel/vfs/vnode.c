@@ -12,7 +12,7 @@ export struct vnode* KeCreateVnode(struct vnode_operations ops, struct stat st) 
     if (node == NULL) {
         return NULL;
     }
-    KeInitObject(node, OBJTYPE_VNODE);
+    KeInitObject(node, OBJ_VNODE);
     node->data = NULL;
     node->stat = st;
     node->flags = 0;
@@ -35,7 +35,7 @@ static void KeCleanupVnode(void* _node) {
 }
 
 void KeInitVnode(void) {
-    KeRegisterObjectType(OBJTYPE_VNODE, KeCleanupVnode);
+    KeRegisterObjectType(OBJ_VNODE, KeCleanupVnode);
 }
 
 static void KeCheckVnode(struct vnode* node) {

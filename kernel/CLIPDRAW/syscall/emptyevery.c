@@ -14,9 +14,9 @@ pageable size_t SysEmptyOrEveryRegion(size_t type, size_t, size_t, size_t) {
         return 0;
     }
     if (type == TYPE_EMPTY) {
-        return (size_t) CdRegionToUserRegion(CdEmptyRegion());
+        return (size_t) CdRegionToUserHandle(CdEmptyRegion());
     } else if (type == TYPE_EVERY) {
-        return (size_t) CdRegionToUserRegion(CdEverythingRegion());
+        return (size_t) CdRegionToUserHandle(CdEverythingRegion());
     } else {
         KeSetLastUserError(EINVAL);
         return 0;

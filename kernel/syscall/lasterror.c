@@ -18,7 +18,7 @@ pageable size_t SysLastError(size_t op, size_t value, size_t, size_t) {
 }
 
 export pageableuserexec int GetLastError(void) {
-    return (int) SystemCall3(SYS_LastError, OP_GET, 0);
+    return (int) SystemCall2(SYS_LastError, OP_GET);
 }
 
 export pageableuserexec void SetLastError(int error) {

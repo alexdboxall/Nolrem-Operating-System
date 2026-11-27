@@ -9,18 +9,17 @@
  * Returns 0 on success, or an errno. Only brushes and pens can be selected into
  * a DC; CdSetGraphicsObject rejects any other type with EINVAL.
  *
- * The DC takes its own reference to `obj`, so the caller is free to Deref() it
- * straight after this returns.
+ * The DC takes its own reference to the object (not to the handle), so the caller
+ * is free to Deref() the handle straight after this returns.
  */
-pageable size_t SysSetGraphicsObject(size_t dc_ptr, size_t obj_ptr, size_t, size_t) {
-    struct dc* dc = (struct dc*) dc_ptr;
-    void* obj = (void*) obj_ptr;
-
-    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+pageable size_t SysSetGraphicsObject(size_t dc_handle, size_t obj_handle, size_t, size_t) {
+    struct dc* dc = KeValidateUserObjectAndAtomicallyRef((void*) dc_handle, OBJ_DC);
+    if (dc == NULL) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(obj, UOBJ_ANYTYPE)) {
+    void* obj = KeValidateUserObjectAndAtomicallyRef((void*) obj_handle, OBJ_ANYTYPE);
+    if (obj == NULL) {
         KeDerefObject(dc);
         KeSetLastUserError(EINVAL);
         return EINVAL;

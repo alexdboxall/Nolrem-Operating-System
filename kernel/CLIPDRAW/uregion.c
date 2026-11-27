@@ -28,9 +28,16 @@ struct uregion* CdRegionToUserRegion(struct region rgn) {
         KeSetLastUserError(ENOMEM);
         return NULL;
     }
-    KeInitUserObject(ur, UOBJ_REGION);
+    KeInitObject(ur, OBJ_REGION);
     ur->rgn = rgn;
     return ur;
+}
+
+// The same, but then gives the new region object its handle for usermode, which is what a system call wants.
+// So this makes the one thing that usermode holds, and the object under it is only kept alive by the handle.
+// Fails (ENOMEM, as above) for a bad region, or if there is no memory for the handle.
+struct user_obj_ref* CdRegionToUserHandle(struct region rgn) {
+    return KeCreateUserRef(CdRegionToUserRegion(rgn));
 }
 
 // No transfer of ownership, nor changing of ref count happens
@@ -39,5 +46,5 @@ struct region CdUserRegionToRegion(struct uregion* urgn) {
 }
     
 void CdInitUserRegionSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_REGION, CdCleanupUserRegion);
+    KeRegisterObjectType(OBJ_REGION, CdCleanupUserRegion);
 }

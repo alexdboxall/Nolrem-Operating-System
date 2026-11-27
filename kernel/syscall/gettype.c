@@ -4,13 +4,14 @@
 #include <syscall.h>
 #include <uobj.h>
 
+/* The type of the object that the handle is to, so a closed or bad handle is OBJ_INVALID. */
 pageable size_t SysGetObjectType(size_t handle, size_t, size_t, size_t) {
-    struct user_obj_header* uo = (void*) handle;
-    if (!KeValidateUserObjectAndAtomicallyRef(uo, UOBJ_ANYTYPE)) {
-        return UOBJ_INVALID;
+    void* obj = KeValidateUserObjectAndAtomicallyRef((void*) handle, OBJ_ANYTYPE);
+    if (obj == NULL) {
+        return OBJ_INVALID;
     }
-    int type = uo->user_type;
-    KeDerefObject(uo);
+    int type = KeGetObjectType(obj);
+    KeDerefObject(obj);
     return type;
 }
 
@@ -19,5 +20,5 @@ export pageableuserexec int GetObjectType(any_t handle) {
 }
 
 export pageableuserexec bool IsAnything(any_t handle) {
-    return GetObjectType(handle) != UOBJ_INVALID;
+    return GetObjectType(handle) != OBJ_INVALID;
 }

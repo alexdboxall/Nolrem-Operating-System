@@ -32,7 +32,7 @@ pageable size_t SysCreateCustomPen(size_t colour, size_t width, size_t height, s
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    return (size_t) pen;
+    return (size_t) KeCreateUserRef(pen);      /* gives the pen its handle, taking our reference */
 }
 
 export pageableuserexec pen_t CreateCustomPen(colour_t colour, int width, int height, uint8_t* rows_bitmap) {

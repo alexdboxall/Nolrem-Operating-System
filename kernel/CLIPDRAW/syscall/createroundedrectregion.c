@@ -23,7 +23,7 @@ pageable size_t SysCreateRoundedRectRegion(size_t rect_ptr, size_t radius, size_
     int w = rect.w;
     int h = rect.h;
     struct region rgn = CdCreateRoundedRectRegion(x, y, w, h, radius);
-    return (size_t) CdRegionToUserRegion(rgn);
+    return (size_t) CdRegionToUserHandle(rgn);
 }
 
 export pageableuserexec region_t CreateRoundedRectRegion(int x, int y, int w, int h, int radius) {

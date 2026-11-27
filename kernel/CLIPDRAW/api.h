@@ -21,19 +21,29 @@ struct compat_bitmap {
     uint8_t* data;
 };
 
+/*
+ * What usermode holds for each kind of object: a handle (see uobj.h), which is not a pointer to the object. The
+ * types are only distinct so that a brush can't be passed where a DC is wanted. They are never defined, and
+ * nothing can look through one. Inside the kernel the objects are `struct brush`, `struct dc` and so on.
+ */
+struct region_handle;
+struct dc_handle;
+struct pen_handle;
+struct brush_handle;
+struct font_handle;
+
+typedef struct region_handle* region_t;
+typedef struct dc_handle* dc_t;
+typedef struct pen_handle* pen_t;
+typedef struct brush_handle* brush_t;
+typedef struct font_handle* font_t;
+
+/* The objects themselves, for the kernel's side of this. */
 struct uregion;
-
-typedef struct uregion* region_t;
-
 struct dc;
 struct pen;
 struct brush;
 struct font;
-
-typedef struct dc* dc_t;
-typedef struct pen* pen_t;
-typedef struct brush* brush_t;
-typedef struct font* font_t;
 
 /* Helper Functions */
 int CdIntegerSqrt(int x);
@@ -251,9 +261,9 @@ colour_t GetBrushSecondaryColour(brush_t br);
 #define STOCK_BRUSH_SYSTEM          3
 
 // you do *NOT* need to close this handle - the stock brushes always have a 
-// reference to them, so this func doesn't allocate you a new handle, so no
-// need to free it. the stock brushes are used *to* avoid allocating and freeing
-// new ones often
+// handle open to them, so this func doesn't allocate you a new one, so no
+// need to free it (and it is the same handle every time). the stock brushes are
+// used *to* avoid allocating and freeing new ones often
 brush_t GetStockBrush(int type);
 // stock brushes are shared by everyone and are read-only: SetBrush*() on one
 // fails with EACCES, so use CopyBrush() first if you want to change it
@@ -271,9 +281,10 @@ brush_t CopyBrush(brush_t br);
 // reference, so you can Deref() the object straight after selecting it.
 int SetGraphicsObject(dc_t dc, void* obj);
 
-// `type` is UOBJ_BRUSH or UOBJ_PEN. You get your own reference, so Deref() it
-// when you're done (stock brushes/pens excepted, as with GetStockBrush). Fails
-// with EGONE if the object's only owner is the DC, i.e. you already Deref()'d it.
+// `type` is OBJ_BRUSH or OBJ_PEN. You get a new handle of your own, so Deref() it
+// when you're done (stock brushes/pens excepted, as with GetStockBrush) - it is
+// not the one you selected the object with, even if you did. That one can be
+// closed already; the DC keeps the object alive.
 any_t GetGraphicsObject(dc_t dc, int type);
 
 
@@ -350,6 +361,7 @@ struct point GetPenOrigin(pen_t pen);
 #define WM_ACTIVATE_APP         11
 #define WM_ACTIVATE             12
 #define WM_COMMAND              13
+#define WM_CREATE               14
 
 #define HIT_TOP_BORDER      (1 << 0)
 #define HIT_LEFT_BORDER     (1 << 1)

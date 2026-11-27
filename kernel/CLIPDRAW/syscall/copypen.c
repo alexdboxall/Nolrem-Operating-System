@@ -6,13 +6,12 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysCopyPen(size_t a, size_t, size_t, size_t) {
-    struct pen* pen = (struct pen*) a;
-
     if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    struct pen* pen = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_PEN);
+    if (pen == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
@@ -24,7 +23,7 @@ pageable size_t SysCopyPen(size_t a, size_t, size_t, size_t) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    return (size_t) copy;
+    return (size_t) KeCreateUserRef(copy);
 }
 
 export pageableuserexec pen_t CopyPen(pen_t pen) {

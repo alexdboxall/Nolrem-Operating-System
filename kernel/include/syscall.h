@@ -35,7 +35,10 @@
 #define KE_SYSCALLS(X) \
     X(Ref) X(GetObjectType) \
     X(Yield) X(Sleep) X(SleepUntil) X(GetTimeSinceBoot) \
-    X(GetUtcTime) X(QuerySystemInformation) X(LastError)
+    X(GetUtcTime) X(QuerySystemInformation) X(LastError) \
+    X(CreateSemaphore) X(AcquireSemaphore) X(ReleaseSemaphore) \
+    X(CreateMutex) X(AcquireMutex) X(ReleaseMutex) \
+    X(CreateRwLock) X(AcquireRwLock) X(ReleaseRwLock)
 
 #define CD_SYSCALLS(X) \
     X(EmptyOrEveryRegion) X(GetRegionCombination) X(CreateRectRegion) X(CreateEllipseRegion) \

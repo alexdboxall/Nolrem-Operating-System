@@ -6,6 +6,7 @@ extern void RunSemAbandonTests(void);
 extern void RunMsgboxTests(void);
 extern void RunTimerTests(void);
 extern void RunSemTimeoutTests(void);
+extern void RunUserSyncTests(void);
 
 extern void RunSfnTests(void);
 
@@ -16,6 +17,7 @@ export void RunTestSuite(void) {
     RunSemTimeoutTests();
     RunSemAbandonTests();
     RunMsgboxTests();
+    RunUserSyncTests();
 
     /* FAT tests */
     RunSfnTests();

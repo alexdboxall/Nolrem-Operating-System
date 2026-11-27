@@ -12,7 +12,7 @@
 struct paint_polygon_args {
     int* x;
     int* y;
-    struct brush* brush;    /* ignored with PAINT_USE_DC_BRUSH */
+    brush_t brush;          /* ignored with PAINT_USE_DC_BRUSH */
     int flags;
 };
 

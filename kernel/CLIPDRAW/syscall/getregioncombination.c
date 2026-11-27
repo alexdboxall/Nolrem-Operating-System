@@ -19,14 +19,13 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
         return 0;
     }
 
-    struct uregion* ua = (struct uregion*) a;
-    struct uregion* ub = (struct uregion*) b;
-
-    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    struct uregion* ua = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_REGION);
+    if (ua == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(ub, UOBJ_REGION)) {
+    struct uregion* ub = KeValidateUserObjectAndAtomicallyRef((void*) b, OBJ_REGION);
+    if (ub == NULL) {
         KeSetLastUserError(EINVAL);
         KeDerefObject(ua);
         return 0;
@@ -38,7 +37,7 @@ pageable size_t SysGetRegionCombination(size_t a, size_t b, size_t mode, size_t)
     
     KeDerefObject(ua);
     KeDerefObject(ub);
-    return (size_t) CdRegionToUserRegion(c);
+    return (size_t) CdRegionToUserHandle(c);
 }
 
 export pageableuserexec region_t GetRegionCombination(int mode, region_t a, region_t b) {

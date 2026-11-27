@@ -33,7 +33,7 @@ static void KeCleanupMsgbox(void* _mbox) {
 }
 
 void KeInitMessageBox(void) {
-    KeRegisterObjectType(OBJTYPE_MSGBOX, KeCleanupMsgbox);
+    KeRegisterObjectType(OBJ_MSGBOX, KeCleanupMsgbox);
 }
 
 #define SYSTEM_MSGBOX_SIZE      8
@@ -56,7 +56,7 @@ export struct msgbox* KeCreateMessageBox(size_t message_size, size_t max_count) 
     if (mbox == NULL) {
         return NULL;
     }
-    KeInitObject(mbox, OBJTYPE_MSGBOX);
+    KeInitObject(mbox, OBJ_MSGBOX);
     mbox->message_size = message_size;
     mbox->max_count = max_count;
     mbox->data = AllocHeap(message_size * max_count);

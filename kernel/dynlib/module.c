@@ -36,7 +36,7 @@ static void KeCleanupModule(void* _mod) {
 }
 
 void KeInitModule(void) {
-    KeRegisterObjectType(OBJTYPE_MODULE, KeCleanupModule);  
+    KeRegisterObjectType(OBJ_MODULE, KeCleanupModule);  
     KeInitSpinlock(&modlock); 
 }
 
@@ -84,7 +84,7 @@ struct module* KeLoadKernelModule(void) {
     if (mod == NULL) {
         KePanic(PANIC_OUT_OF_MEMORY);       /* boot time: nothing can be linked without the kernel's symbols */
     }
-    KeInitObject(mod, OBJTYPE_MODULE);
+    KeInitObject(mod, OBJ_MODULE);
 
     strcpy(mod->name, "KERNEL");
     mod->major_ver = maj_ver;
@@ -145,7 +145,7 @@ export struct module* KeCreateModule(const char* path) {
         return NULL;
     }
 
-    KeInitObject(mod, OBJTYPE_MODULE);
+    KeInitObject(mod, OBJ_MODULE);
 
     strcpy(mod->name, name);
     mod->major_ver = maj_ver;

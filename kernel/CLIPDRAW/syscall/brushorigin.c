@@ -16,13 +16,12 @@
  * Both return 0 on success, or an errno.
  */
 pageable size_t SysBrushOrigin(size_t br_ptr, size_t op, size_t a, size_t b) {
-    struct brush* br = (struct brush*) br_ptr;
-
     if (op != OP_GET && op != OP_SET) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    struct brush* br = KeValidateUserObjectAndAtomicallyRef((void*) br_ptr, OBJ_BRUSH);
+    if (br == NULL) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }

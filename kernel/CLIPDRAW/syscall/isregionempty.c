@@ -6,9 +6,8 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysIsRegionEmpty(size_t a, size_t, size_t, size_t) {
-    struct uregion* ua = (struct uregion*) a;
-
-    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    struct uregion* ua = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_REGION);
+    if (ua == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }

@@ -42,9 +42,9 @@ export _Noreturn void KeInitKernelResidentPortion(void) {
     extern _Noreturn void WmMainloop();
 
     KeMarkPageableSegmentsDiscardable();
-    while (KeDiscardPage() != NULL) {
+    /*while (KeDiscardPage() != NULL) {
         ;
-    }
+    }*/
 
     CdInit();
 #ifndef NDEBUG
@@ -93,7 +93,7 @@ export _Noreturn pageable void KeInitKernel(struct kernel_boot_info* boot_info) 
     KeInitDiskUtil();
     KeInitFile();
     KeInitFilesystemTable();
-    KeInitUserObjectType();
+    KeInitUserRefType();
     KeInitSyscalls();
     KeInitVfs();
     KeInitNullDevice();

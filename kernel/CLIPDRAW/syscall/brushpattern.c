@@ -13,13 +13,12 @@
  * SET returns 0 on success, or an errno.
  */
 pageable size_t SysBrushPattern(size_t a, size_t op, size_t pattern, size_t) {
-    struct brush* br = (struct brush*) a;
-
     if (op != OP_GET && op != OP_SET) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    struct brush* br = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_BRUSH);
+    if (br == NULL) {
         KeSetLastUserError(EINVAL);
         return op == OP_GET ? (size_t) BRUSH_INVALID : EINVAL;
     }

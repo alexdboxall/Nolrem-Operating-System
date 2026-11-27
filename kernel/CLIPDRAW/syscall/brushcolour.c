@@ -20,13 +20,12 @@ static bool CdIsGetOp(size_t op) {
  * SET returns 0 on success, or an errno.
  */
 pageable size_t SysBrushColour(size_t a, size_t op, size_t argb, size_t) {
-    struct brush* br = (struct brush*) a;
-
     if (op > OP_SET_SECONDARY) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(br, UOBJ_BRUSH)) {
+    struct brush* br = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_BRUSH);
+    if (br == NULL) {
         KeSetLastUserError(EINVAL);
         return CdIsGetOp(op) ? 0 : EINVAL;
     }

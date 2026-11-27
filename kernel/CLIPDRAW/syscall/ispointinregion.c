@@ -6,13 +6,12 @@
 #include "../clipdraw_internal.h"
 
 pageable size_t SysIsPointInRegion(size_t a, size_t x, size_t y, size_t) {
-    struct uregion* ua = (struct uregion*) a;
-    
     if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    struct uregion* ua = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_REGION);
+    if (ua == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }

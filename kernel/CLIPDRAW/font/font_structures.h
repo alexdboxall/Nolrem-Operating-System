@@ -12,7 +12,7 @@ typedef uint32_t font_style_id;
 #define BAD_GLYPH_CHAR     ((uint32_t) -1)
 
 struct typeface {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     struct open_mapped_file omf;
     uint8_t num_fonts;
 };
@@ -50,7 +50,7 @@ struct typeface {
  * in the table is the same width and is always wide enough for a glyph index.
  */
 struct font {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     struct typeface* tf;
     font_style_id requested_style;
     font_style_id underlying_style;

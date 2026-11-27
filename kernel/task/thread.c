@@ -26,7 +26,7 @@ export struct thread* KeCreateThreadEx(struct vas* vas, void(*entry)(void*), voi
     if (thr == NULL) {
         return NULL;
     }
-    KeInitObject(thr, OBJTYPE_THREAD);
+    KeInitObject(thr, OBJ_THREAD);
 
     thr->vas = vas;
 
@@ -144,5 +144,5 @@ void KeEndDelayTermination(void) {
 }
 
 void KeInitThread(void) { 
-    KeRegisterObjectType(OBJTYPE_THREAD, KeCleanupThread);
+    KeRegisterObjectType(OBJ_THREAD, KeCleanupThread);
 }

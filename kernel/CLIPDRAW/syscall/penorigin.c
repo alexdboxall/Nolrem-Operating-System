@@ -16,13 +16,12 @@
  * Both return 0 on success, or an errno.
  */
 pageable size_t SysPenOrigin(size_t pen_ptr, size_t op, size_t a, size_t b) {
-    struct pen* pen = (struct pen*) pen_ptr;
-
     if (op != OP_GET && op != OP_SET) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    struct pen* pen = KeValidateUserObjectAndAtomicallyRef((void*) pen_ptr, OBJ_PEN);
+    if (pen == NULL) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }

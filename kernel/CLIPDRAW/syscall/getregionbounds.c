@@ -12,8 +12,8 @@ pageable size_t SysGetRegionBounds(size_t rect_ptr, size_t rgn, size_t, size_t) 
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    struct uregion* ua = (struct uregion*) rgn;
-    if (!KeValidateUserObjectAndAtomicallyRef(ua, UOBJ_REGION)) {
+    struct uregion* ua = KeValidateUserObjectAndAtomicallyRef((void*) rgn, OBJ_REGION);
+    if (ua == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }

@@ -32,7 +32,7 @@ static int current_mouse_h = 0;
 
 /* A cursor object: one whole cursor file. A file can hold several cursor types, picked by index. */
 struct cursor {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     void* data;
     size_t len;
 };
@@ -53,7 +53,7 @@ struct cursor* CdCreateCursor(void* file_data, size_t length) {
     if (cur == NULL) {
         return NULL;
     }
-    KeInitUserObject(cur, UOBJ_CURSOR);
+    KeInitObject(cur, OBJ_CURSOR);
     cur->len = length;
     if (file_data == standard_mouse_file) {
         cur->data = standard_mouse_file;     /* shared, never freed */
@@ -405,7 +405,7 @@ export int CdSetStandardCursor(int index) {
 
 void CdInitMouseSubsystem(void) {
     KeInitSpinlock(&video_lock);
-    KeRegisterUserObjectType(UOBJ_CURSOR, CdCleanupCursor);
+    KeRegisterObjectType(OBJ_CURSOR, CdCleanupCursor);
     standard_cursor = CdCreateCursor(standard_mouse_file, sizeof(standard_mouse_file));
     CdSetStandardCursor(CURSOR_WAIT);
 }

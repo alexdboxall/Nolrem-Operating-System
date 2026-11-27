@@ -50,6 +50,17 @@ static int64_t KeRwTimeRemaining(const struct rw_timeout* t) {
     return (int64_t) (t->deadline - now);
 }
 
+/*
+ * Gives back the gate, or the room, that the caller has just been holding on its own behalf. These are the two that a
+ * release from usermode (the *Checked ones below) can take away from under whoever is holding them, as there is
+ * no telling whose hold a release is of. A plain release would then take the count below zero, and so let in more holders
+ * than there is room for; this makes it a release of nothing instead, and what happens to that lock's users is their own
+ * doing. (readers_lock is not like that: only the thread that has it ever releases it.)
+ */
+static void KeLetGoOfRwMutex(struct mutex* mtx) {
+    KeReleaseMutexChecked(mtx);
+}
+
 export int KeAcquireRwLockWrite(struct rwlock* rw, int64_t timeout) {
     struct rw_timeout t = KeStartRwTimeout(timeout);
 
@@ -60,7 +71,7 @@ export int KeAcquireRwLockWrite(struct rwlock* rw, int64_t timeout) {
 
     res = KeAcquireMutex(&rw->room, KeRwTimeRemaining(&t));
     if (res != 0) {
-        KeReleaseMutex(&rw->gate);
+        KeLetGoOfRwMutex(&rw->gate);
         return res;
     }
     return 0;
@@ -82,7 +93,7 @@ export int KeAcquireRwLockRead(struct rwlock* rw, int64_t timeout) {
     if (res != 0) {
         return res;
     }
-    KeReleaseMutex(&rw->gate);
+    KeLetGoOfRwMutex(&rw->gate);
 
     res = KeAcquireMutex(&rw->readers_lock, KeRwTimeRemaining(&t));
     if (res != 0) {
@@ -129,8 +140,43 @@ export int KeReleaseRwLockRead(struct rwlock* rw) {
     return 0;
 }
 
+export int KeReleaseRwLockReadChecked(struct rwlock* rw) {
+    int res = KeAcquireMutex(&rw->readers_lock, TIMEOUT_INFINITE);
+    if (res != 0) {
+        return res;
+    }
+
+    /* Only a reader that is in has bumped this (the first one waits for the room before it does), so it
+       is zero exactly when nobody is reading. */
+    if (rw->readers <= 0) {
+        KeReleaseMutex(&rw->readers_lock);
+        return EOVERFLOW;
+    }
+    if (--rw->readers == 0) {
+        /* The room is the readers' to give back, but a release of the wrong sort (see the write one below) may
+           already have given it away, so don't let that take the count below zero. */
+        KeReleaseMutexChecked(&rw->room);
+    }
+    KeReleaseMutex(&rw->readers_lock);
+    return 0;
+}
+
+export int KeReleaseRwLockWriteChecked(struct rwlock* rw) {
+    /*
+     * A writer that has the lock holds both the gate and the room, so if either is free there is nothing to
+     * release as a writer. The other way round is not a proof: a writer that is still waiting for the room
+     * holds the gate, and readers that are in hold the room, which looks the same from here. That is the
+     * caller releasing another thread's hold, which can't be told apart, and is dealt with in the header.
+     *
+     * What matters to the kernel is that the counts can't go below zero, and that it can't be left with the
+     * gate let go of and the room not (or the other way round) by two of these at once. So the checking and
+     * both releases are one step.
+     */
+    return KeReleaseMutexPairChecked(&rw->gate, &rw->room);
+}
+
 export void KeInitStaticRwLock(struct rwlock* rw) {
-    KeInitObject(rw, OBJTYPE_RWLOCK);
+    KeInitObject(rw, OBJ_RWLOCK);
     KeInitStaticMutex(&rw->gate);
     KeInitStaticMutex(&rw->room);
     KeInitStaticMutex(&rw->readers_lock);
@@ -161,5 +207,5 @@ export struct rwlock* KeCreateRwLock(void) {
 }
 
 void KeInitRwLock(void) {
-    KeRegisterObjectType(OBJTYPE_RWLOCK, KeCleanupRwLock);
+    KeRegisterObjectType(OBJ_RWLOCK, KeCleanupRwLock);
 }

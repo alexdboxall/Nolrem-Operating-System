@@ -33,27 +33,32 @@ pageable int CdReadShapeArgs(size_t user_ptr, struct user_shape_args* out) {
 }
 
 /*
- * Validates and takes a reference to the DC, and to the brush unless the flags
- * say to use the DC's own. With PAINT_USE_DC_BRUSH `*brush_out` is NULL, which
- * is how the caller knows to use the plain Cd function.
+ * Takes the user's handles to the DC, and to the brush unless the flags say to
+ * use the DC's own, and gives back the objects under them, each with a reference
+ * of ours. With PAINT_USE_DC_BRUSH `*brush_out` is NULL, which is how the caller
+ * knows to use the plain Cd function.
  *
  * On success, call CdReleasePaintObjects() when finished. On failure nothing is
  * held, and the return value is an errno.
  */
-pageable int CdAcquirePaintObjects(void* dc_ptr, struct brush* brush_ptr, int flags,
+pageable int CdAcquirePaintObjects(void* dc_handle, brush_t brush_handle, int flags,
     struct dc** dc_out, struct brush** brush_out) {
 
-    if (!KeValidateUserObjectAndAtomicallyRef(dc_ptr, UOBJ_DC)) {
+    struct dc* dc = KeValidateUserObjectAndAtomicallyRef(dc_handle, OBJ_DC);
+    if (dc == NULL) {
         return EINVAL;
     }
-    if (!(flags & PAINT_USE_DC_BRUSH)
-        && !KeValidateUserObjectAndAtomicallyRef(brush_ptr, UOBJ_BRUSH)) {
-        KeDerefObject(dc_ptr);
-        return EINVAL;
+    struct brush* brush = NULL;
+    if (!(flags & PAINT_USE_DC_BRUSH)) {
+        brush = KeValidateUserObjectAndAtomicallyRef(brush_handle, OBJ_BRUSH);
+        if (brush == NULL) {
+            KeDerefObject(dc);
+            return EINVAL;
+        }
     }
 
-    *dc_out = dc_ptr;
-    *brush_out = (flags & PAINT_USE_DC_BRUSH) ? NULL : brush_ptr;
+    *dc_out = dc;
+    *brush_out = brush;
     return 0;
 }
 

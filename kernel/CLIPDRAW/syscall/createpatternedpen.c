@@ -25,7 +25,7 @@ pageable size_t SysCreatePatternedPen(size_t colour, size_t thickness, size_t pa
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    return (size_t) pen;
+    return (size_t) KeCreateUserRef(pen);      /* gives the pen its handle, taking our reference */
 }
 
 export pageableuserexec pen_t CreatePatternedPen(colour_t colour, int thickness, int pattern) {

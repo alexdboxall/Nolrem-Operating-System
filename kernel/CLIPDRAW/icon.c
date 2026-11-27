@@ -6,7 +6,7 @@
 #include "clipdraw_internal.h"
 
 struct icon {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     uint8_t num_icons;
     uint8_t shift;
     uint16_t* ico_offsets_bitmap;
@@ -20,7 +20,7 @@ export pageable struct icon* CdOpenIcon(const char* file) {
     if (ico == NULL) {
         return NULL;
     }
-    KeInitUserObject(ico, UOBJ_ICON);
+    KeInitObject(ico, OBJ_ICON);
 
     int res = KeOpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &ico->omf);
     if (res != 0) {
@@ -86,5 +86,5 @@ static void CdCleanupIcon(void* _ico) {
 }
 
 void CdInitIconSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_ICON, CdCleanupIcon);
+    KeRegisterObjectType(OBJ_ICON, CdCleanupIcon);
 }

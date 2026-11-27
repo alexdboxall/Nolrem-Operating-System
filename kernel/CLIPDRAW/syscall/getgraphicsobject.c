@@ -6,25 +6,22 @@
 #include "../clipdraw_internal.h"
 
 /*
- * `type` is UOBJ_BRUSH or UOBJ_PEN. Returns the object currently selected into
- * the DC, or NULL on failure (with the last error set).
+ * `type` is OBJ_BRUSH or OBJ_PEN. Returns a handle to the object currently
+ * selected into the DC, or NULL on failure (with the last error set).
  *
- * The caller gets its own user reference, and must Deref() it when finished.
- * The exception is the stock brushes and pens, which are permanent and ignore
- * Ref/Deref, so they are handed out without a new reference.
- *
- * Fails with EGONE if the object has already had every user reference dropped
- * (e.g. SetGraphicsObject() then Deref(), leaving the DC as the only owner).
- * There is no handle left to give back, as a released object can't be revived.
+ * The caller gets a new handle of its own, and must Deref() it when finished,
+ * even if it already had one: it is not the one it selected the object with, and
+ * that one can have been closed since (it doesn't matter, as the DC keeps the
+ * object alive). The exception is the stock brushes and pens, whose handles are
+ * permanent and always the same, so they are handed out as they are.
  */
-pageable size_t SysGetGraphicsObject(size_t dc_ptr, size_t type, size_t, size_t) {
-    struct dc* dc = (struct dc*) dc_ptr;
-
-    if (type != UOBJ_BRUSH && type != UOBJ_PEN) {
+pageable size_t SysGetGraphicsObject(size_t dc_handle, size_t type, size_t, size_t) {
+    if (type != OBJ_BRUSH && type != OBJ_PEN) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(dc, UOBJ_DC)) {
+    struct dc* dc = KeValidateUserObjectAndAtomicallyRef((void*) dc_handle, OBJ_DC);
+    if (dc == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
@@ -37,18 +34,14 @@ pageable size_t SysGetGraphicsObject(size_t dc_ptr, size_t type, size_t, size_t)
         return 0;
     }
 
-    bool is_stock = (type == UOBJ_BRUSH) ? CdIsStockBrush(obj) : CdIsStockPen(obj);
-    if (!is_stock) {
-        int res = KeUserRef(obj);
-        if (res != 0) {
-            KeDerefObject(obj);
-            KeSetLastUserError(res);
-            return 0;
-        }
+    struct user_obj_ref* stock = (type == OBJ_BRUSH) ? CdFindStockBrushHandle(obj) : CdFindStockPenHandle(obj);
+    if (stock != NULL) {
+        KeDerefObject(obj);
+        return (size_t) stock;
     }
 
-    KeDerefObject(obj);
-    return (size_t) obj;
+    /* Takes over the reference that we have, and gives it back if it can't make the handle. */
+    return (size_t) KeCreateUserRef(obj);
 }
 
 export pageableuserexec any_t GetGraphicsObject(dc_t dc, int type) {

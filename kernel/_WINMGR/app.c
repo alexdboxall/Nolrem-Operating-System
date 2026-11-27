@@ -153,7 +153,7 @@ struct app* WmCreateApp(void) {
     if (app == NULL) {
         return NULL;
     }
-    KeInitUserObject(app, UOBJ_APP);
+    KeInitObject(app, OBJ_APP);
     app->caret_inverted = false;
     app->caret_level = 0;
     app->caret_owner = NULL;
@@ -178,5 +178,5 @@ static void WmCleanupApp(void* _app) {
 }
 
 void WmInitAppSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_APP, WmCleanupApp);
+    KeRegisterObjectType(OBJ_APP, WmCleanupApp);
 }

@@ -5,15 +5,16 @@
 #include "../api.h"
 #include "../clipdraw_internal.h"
 
-/* Stock brushes are shared by everyone, are read-only (see CdIsStockBrush),
-   and ignore user Ref/Deref, so we hand out the pointer without a new reference. */
+/* Stock brushes are shared by everyone, are read-only (see CdIsStockBrush), and
+   their handles are permanent and ignore user Ref/Deref, so we hand out the
+   same handle every time, without making a new one. */
 pageable size_t SysGetStockBrush(size_t type, size_t, size_t, size_t) {
-    struct brush* br = CdGetStockBrush((int) type);
-    if (br == NULL) {
+    struct user_obj_ref* handle = CdGetStockBrushHandle((int) type);
+    if (handle == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
-    return (size_t) br;
+    return (size_t) handle;
 }
 
 export pageableuserexec brush_t GetStockBrush(int type) {

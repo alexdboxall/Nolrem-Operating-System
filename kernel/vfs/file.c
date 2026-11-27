@@ -20,7 +20,7 @@ export struct file* KeCreateFile(
     if (file == NULL) {
         return NULL;
     }
-    KeInitObject(file, OBJTYPE_FILE);
+    KeInitObject(file, OBJ_FILE);
     
 	file->node = node;
 	file->can_read = can_read;
@@ -47,5 +47,5 @@ static void KeCleanupFile(void* _file) {
 }
 
 void KeInitFile(void) {
-    KeRegisterObjectType(OBJTYPE_FILE, KeCleanupFile);
+    KeRegisterObjectType(OBJ_FILE, KeCleanupFile);
 }

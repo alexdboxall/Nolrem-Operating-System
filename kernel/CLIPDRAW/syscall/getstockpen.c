@@ -6,14 +6,15 @@
 #include "../clipdraw_internal.h"
 
 /* Stock pens are shared by everyone, are read-only (see CdIsStockPen), and
-   ignore user Ref/Deref, so we hand out the pointer without a new reference. */
+   their handles are permanent and ignore user Ref/Deref, so we hand out the
+   same handle every time, without making a new one. */
 pageable size_t SysGetStockPen(size_t type, size_t, size_t, size_t) {
-    struct pen* pen = CdGetStockPen((int) type);
-    if (pen == NULL) {
+    struct user_obj_ref* handle = CdGetStockPenHandle((int) type);
+    if (handle == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
-    return (size_t) pen;
+    return (size_t) handle;
 }
 
 export pageableuserexec pen_t GetStockPen(int type) {

@@ -19,12 +19,12 @@ struct cpz_image;
  *     KeFreeMemory(b, PAGE_SIZE);
  *     KeDerefObject(img);                                       // LAST - see below
  *
- * The image is an ordinary refcounted object (OBJTYPE_CPZ_INST) that the caller owns. It holds the file's
+ * The image is an ordinary refcounted object (OBJ_CPZ_INST) that the caller owns. It holds the file's
  * table and is the loader context of every mapping made from it, so, exactly like the bitmap storage that
  * its reloader hangs off, it MUST outlive them: KeFreeMemory() every mapping first, then drop the image.
  */
 
-/* Call once at boot, after the object system is up. Registers OBJTYPE_CPZ_INST. */
+/* Call once at boot, after the object system is up. Registers OBJ_CPZ_INST. */
 void KeInitCpzImages(void);
 
 /*

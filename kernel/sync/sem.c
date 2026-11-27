@@ -23,7 +23,7 @@ static void KeAbandonSemLocked(struct sem* sem) {
         void* head = sem->waiting_list_start;
         struct thread* thr;
 
-        if (KeGetObjectType((struct obj_header*) head) == OBJTYPE_WAITCLOT) {
+        if (KeGetObjectType((struct obj_header*) head) == OBJ_WAITCLOT) {
             thr = ((struct wait_clot*) head)->thr;
         } else {
             thr = head;
@@ -60,12 +60,12 @@ void KeDestroyStaticSem(struct sem* sem) {
 }
 
 void KeInitSem(void) {
-    KeRegisterObjectType(OBJTYPE_SEM, KeCleanupSem);
-    KeRegisterObjectType(OBJTYPE_WAITCLOT, KeCleanupWaitClot);
+    KeRegisterObjectType(OBJ_SEM, KeCleanupSem);
+    KeRegisterObjectType(OBJ_WAITCLOT, KeCleanupWaitClot);
 }
 
 export void KeInitStaticSem(struct sem* sem, int max, int initial) {
-    KeInitObject(sem, OBJTYPE_SEM);
+    KeInitObject(sem, OBJ_SEM);
     sem->count = initial;
     sem->max = max;
     sem->waiting_list_start = NULL;
@@ -90,7 +90,7 @@ static struct wait_clot* KeCreateClot(struct sem** sems, int count, struct threa
     if (clot == NULL) {
         return NULL;
     }
-    KeInitObject(clot, OBJTYPE_WAITCLOT);
+    KeInitObject(clot, OBJ_WAITCLOT);
     clot->count = count;
     clot->thr = thr;
     clot->sems = AllocHeap(sizeof(struct sem*) * count);
@@ -137,7 +137,7 @@ static int KeAddThreadToSemQueues(struct thread* thr, struct sem** sems, int cou
 
         /* Point the existing last thing to the newly added last thing. */
         if (sem->waiting_list_end != NULL) {
-            if (KeGetObjectType(sem->waiting_list_end) == OBJTYPE_THREAD) {
+            if (KeGetObjectType(sem->waiting_list_end) == OBJ_THREAD) {
                 ((struct thread*) sem->waiting_list_end)->next_waiting_sem = to_add;
             } else {
                 struct wait_clot* clot = sem->waiting_list_end;
@@ -158,14 +158,14 @@ static void KeCleanupAfterSem(struct sem** sems, int count, struct thread* thr) 
         struct sem* sem = sems[i];
 
         uint8_t head_hdr_type = KeGetObjectType(sem->waiting_list_start);
-        if (head_hdr_type == OBJTYPE_THREAD && ((struct thread*) sem->waiting_list_start) == thr) {
+        if (head_hdr_type == OBJ_THREAD && ((struct thread*) sem->waiting_list_start) == thr) {
             /* Remove from head. */
             sem->waiting_list_start = ((struct thread*) sem->waiting_list_start)->next_waiting_sem;
             if (sem->waiting_list_start == NULL) {
                 sem->waiting_list_end = NULL;
             }
 
-        } else if (head_hdr_type == OBJTYPE_WAITCLOT && ((struct wait_clot*) sem->waiting_list_start)->thr == thr) {
+        } else if (head_hdr_type == OBJ_WAITCLOT && ((struct wait_clot*) sem->waiting_list_start)->thr == thr) {
             /* Remove from head. */
             struct wait_clot* clot = sem->waiting_list_start;
             int index = KeLookupClotIndex(clot, sem);
@@ -178,7 +178,7 @@ static void KeCleanupAfterSem(struct sem** sems, int count, struct thread* thr) 
             /* It's not the head, so we can start on element 2 and have a prev*/
             void* prev = sem->waiting_list_start;
             void* curr;
-            if (head_hdr_type == OBJTYPE_THREAD) {
+            if (head_hdr_type == OBJ_THREAD) {
                 curr = ((struct thread*) prev)->next_waiting_sem;
             } else {
                 struct wait_clot* clot = prev;
@@ -188,10 +188,10 @@ static void KeCleanupAfterSem(struct sem** sems, int count, struct thread* thr) 
             while (curr != NULL) {
                 struct wait_clot* curr_as_clot = curr;
                 struct thread* curr_as_thr = curr;
-                bool curr_is_clot = KeGetObjectType(curr) == OBJTYPE_WAITCLOT;
+                bool curr_is_clot = KeGetObjectType(curr) == OBJ_WAITCLOT;
                 struct wait_clot* prev_as_clot = prev;
                 struct thread* prev_as_thr = prev;
-                bool prev_is_clot = KeGetObjectType(prev) == OBJTYPE_WAITCLOT;
+                bool prev_is_clot = KeGetObjectType(prev) == OBJ_WAITCLOT;
                 int curr_clot_idx = curr_is_clot ? KeLookupClotIndex(curr_as_clot, sem) : -1;
                 int prev_clot_idx = prev_is_clot ? KeLookupClotIndex(prev_as_clot, sem) : -1;
 
@@ -221,7 +221,7 @@ static void KeCleanupAfterSem(struct sem** sems, int count, struct thread* thr) 
 }
 
 void KeCancelSems(struct thread* thr) {
-    if (KeGetObjectType(thr->waiting_sem_or_clot) == OBJTYPE_WAITCLOT) {
+    if (KeGetObjectType(thr->waiting_sem_or_clot) == OBJ_WAITCLOT) {
         struct wait_clot* clot = thr->waiting_sem_or_clot;
         KeCleanupAfterSem(clot->sems, clot->count, thr);
         KeDerefObject(clot);
@@ -302,20 +302,14 @@ export int KeAcquireSem(struct sem* sem, int64_t timeout) {
     return KeAcquireSemFromMany(&sem, 1, timeout, NULL);
 }
 
-export int KeReleaseSem(struct sem* sem) {
-    if (!KeIsSchedulingInitialised()) {
-        sem->count--;
-        return 0;
-    }
-
-    KeAcquireScheduler();
-
+/* The scheduler lock must be held. There must be something to release (sem->count > 0). */
+static void KeReleaseSemLocked(struct sem* sem) {
     if (sem->count == sem->max) {
         if (sem->waiting_list_start == NULL) {
             sem->count--;
         } else {
             struct obj_header* hdr = sem->waiting_list_start;
-            if (KeGetObjectType(hdr) == OBJTYPE_THREAD) {
+            if (KeGetObjectType(hdr) == OBJ_THREAD) {
                 KeUnblockThread((struct thread*) sem->waiting_list_start, 0);
             } else {
                 struct wait_clot* clot = sem->waiting_list_start;
@@ -326,6 +320,35 @@ export int KeReleaseSem(struct sem* sem) {
     } else {
         sem->count--;
     }
+}
+
+export int KeReleaseSem(struct sem* sem) {
+    if (!KeIsSchedulingInitialised()) {
+        sem->count--;
+        return 0;
+    }
+
+    KeAcquireScheduler();
+    KeReleaseSemLocked(sem);
+    KeReleaseScheduler();
+    return 0;
+}
+
+export int KeReleaseSemChecked(struct sem* sem) {
+    if (!KeIsSchedulingInitialised()) {
+        if (sem->count <= 0) {
+            return EOVERFLOW;
+        }
+        sem->count--;
+        return 0;
+    }
+
+    KeAcquireScheduler();
+    if (sem->count <= 0) {
+        KeReleaseScheduler();
+        return EOVERFLOW;
+    }
+    KeReleaseSemLocked(sem);
     KeReleaseScheduler();
     return 0;
 }
@@ -344,4 +367,32 @@ export int KeAcquireMutex(struct mutex* mtx, int64_t timeout) {
 
 export int KeReleaseMutex(struct mutex* mtx) {
     return KeReleaseSem((struct sem*) mtx);
+}
+
+export int KeReleaseMutexChecked(struct mutex* mtx) {
+    return KeReleaseSemChecked((struct sem*) mtx);
+}
+
+export int KeReleaseMutexPairChecked(struct mutex* first, struct mutex* second) {
+    struct sem* a = (struct sem*) first;
+    struct sem* b = (struct sem*) second;
+
+    if (!KeIsSchedulingInitialised()) {
+        if (a->count <= 0 || b->count <= 0) {
+            return EOVERFLOW;
+        }
+        a->count--;
+        b->count--;
+        return 0;
+    }
+
+    KeAcquireScheduler();
+    if (a->count <= 0 || b->count <= 0) {
+        KeReleaseScheduler();
+        return EOVERFLOW;
+    }
+    KeReleaseSemLocked(a);
+    KeReleaseSemLocked(b);
+    KeReleaseScheduler();
+    return 0;
 }

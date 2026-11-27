@@ -20,7 +20,8 @@ static struct brush* CdCreateBrush(colour_t primary, colour_t secondary, uint8_t
     if (br == NULL) {
         return NULL;
     }
-    KeInitUserObject(br, UOBJ_BRUSH);
+    KeInitObject(br, OBJ_BRUSH);
+    KeInitSpinlock(&br->lock);
     br->origin_x = 0;
     br->origin_y = 0;
     br->pattern_type = type;
@@ -35,15 +36,16 @@ export struct brush* CdCopyBrush(struct brush* old_br) {
     if (br == NULL) {
         return NULL;
     }
-    KeInitUserObject(br, UOBJ_BRUSH);
-    KeLockUserObject(old_br);
+    KeInitObject(br, OBJ_BRUSH);
+    KeInitSpinlock(&br->lock);
+    KeAcquireSpinlock(&old_br->lock);
     br->origin_x = old_br->origin_x;
     br->origin_y = old_br->origin_y;
     br->pattern_type = old_br->pattern_type;
     br->primary = old_br->primary;
     br->secondary = old_br->secondary;
     memcpy(br->pattern, old_br->pattern, sizeof(br->pattern));
-    KeUnlockUserObject(old_br);
+    KeReleaseSpinlock(&old_br->lock);
     return br;
 }
 
@@ -66,83 +68,103 @@ export int CdSetBrushPattern(struct brush* br, int pattern) {
     if (pattern < 0 || pattern >= BRUSH_PATTERN_CUSTOM) {
         return EINVAL;
     }
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     /* Can't change a custom brush to a standard pattern. */
     if (br->pattern_type == BRUSH_PATTERN_CUSTOM) {
-        KeUnlockUserObject(br);
+        KeReleaseSpinlock(&br->lock);
         return EINVAL;
     }
     br->pattern_type = pattern;
     memcpy(br->pattern, standard_brush_patterns[pattern], sizeof(br->pattern));
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return 0;
 }
 
 export int CdGetBrushPattern(struct brush* br) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     int retv = br->pattern_type;
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return retv;
 }
 
 export int CdSetBrushColour(struct brush* br, colour_t argb) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     br->primary = argb;
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return 0;
 }
 
 export colour_t CdGetBrushColour(struct brush* br) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     colour_t retv = br->primary;
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return retv;
 }
 
 export int CdSetBrushSecondaryColour(struct brush* br, colour_t argb) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     br->secondary = argb;
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return 0;
 }
 
 export colour_t CdGetBrushSecondaryColour(struct brush* br) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     colour_t retv = br->secondary;
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return retv;
 }
 
 export int CdSetBrushOrigin(struct brush* br, int x, int y) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     br->origin_x = x & 7;
     br->origin_y = y & 7;
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return 0;
 }
 
 export struct point CdGetBrushOrigin(struct brush* br) {
-    KeLockUserObject(br);
+    KeAcquireSpinlock(&br->lock);
     struct point retv = (struct point) {
         .x = br->origin_x,
         .y = br->origin_y
     };
-    KeUnlockUserObject(br);
+    KeReleaseSpinlock(&br->lock);
     return retv;
 }
 
-static struct brush* stock_brushes[4];
+#define NUM_STOCK_BRUSHES   4
+
+static struct brush* stock_brushes[NUM_STOCK_BRUSHES];
+static struct user_obj_ref* stock_brush_handles[NUM_STOCK_BRUSHES];
 
 export struct brush* CdGetStockBrush(int type) {
-    if (type >= 0 && type < 4) {
+    if (type >= 0 && type < NUM_STOCK_BRUSHES) {
         return stock_brushes[type];
     } else {
         return NULL;
     }
 }
 
+export struct user_obj_ref* CdGetStockBrushHandle(int type) {
+    if (type >= 0 && type < NUM_STOCK_BRUSHES) {
+        return stock_brush_handles[type];
+    } else {
+        return NULL;
+    }
+}
+
+export struct user_obj_ref* CdFindStockBrushHandle(struct brush* br) {
+    for (int i = 0; i < NUM_STOCK_BRUSHES; ++i) {
+        if (stock_brushes[i] == br) {
+            return stock_brush_handles[i];
+        }
+    }
+    return NULL;
+}
+
 export bool CdIsStockBrush(struct brush* br) {
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < NUM_STOCK_BRUSHES; ++i) {
         if (stock_brushes[i] == br) {
             return true;
         }
@@ -151,14 +173,20 @@ export bool CdIsStockBrush(struct brush* br) {
 }
 
 void CdInitBrushSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_BRUSH, CdCleanupBrush);
+    KeRegisterObjectType(OBJ_BRUSH, CdCleanupBrush);
     stock_brushes[STOCK_BRUSH_BLACK] = CdCreateSolidBrush(BlackColour());
     stock_brushes[STOCK_BRUSH_WHITE] = CdCreateSolidBrush(WhiteColour());
     stock_brushes[STOCK_BRUSH_TRANSPARENT] = CdCreateSolidBrush(TransparentColour());
     stock_brushes[STOCK_BRUSH_SYSTEM] = CdCreateSolidBrush(SystemColour());
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < NUM_STOCK_BRUSHES; ++i) {
         if (stock_brushes[i] != NULL) {
-            KeMarkUserObjectPermanent(stock_brushes[i]);
+            /* The handle is permanent, and the brush under it lives as long as the table does, so this is all
+               forever. Make the handle's own reference first, as creating it uses one up. */
+            KeRefObject(stock_brushes[i]);
+            stock_brush_handles[i] = KeCreateUserRef(stock_brushes[i]);
+            if (stock_brush_handles[i] != NULL) {
+                KeMarkUserRefPermanent(stock_brush_handles[i]);
+            }
         }
     }
 }

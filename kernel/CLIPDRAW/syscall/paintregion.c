@@ -6,12 +6,10 @@
 #include "../clipdraw_internal.h"
 
 /*
- * a = DC, rgn_ptr = region, brush_ptr = brush (ignored with PAINT_USE_DC_BRUSH).
+ * a = DC, rgn_ptr = region, brush_ptr = brush (ignored with PAINT_USE_DC_BRUSH). All handles.
  * Returns 0 on success, or an errno. Drawing is clipped to the DC's clip region.
  */
 pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_t flags) {
-    struct uregion* urgn = (struct uregion*) rgn_ptr;
-
     if (KeIsOutOfMemory()) {
         KeSetLastUserError(ENOMEM);
         return ENOMEM;
@@ -20,14 +18,15 @@ pageable size_t SysPaintRegion(size_t a, size_t rgn_ptr, size_t brush_ptr, size_
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(urgn, UOBJ_REGION)) {
+    struct uregion* urgn = KeValidateUserObjectAndAtomicallyRef((void*) rgn_ptr, OBJ_REGION);
+    if (urgn == NULL) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
 
     struct dc* dc;
     struct brush* brush;
-    int res = CdAcquirePaintObjects((void*) a, (struct brush*) brush_ptr, (int) flags, &dc, &brush);
+    int res = CdAcquirePaintObjects((void*) a, (brush_t) brush_ptr, (int) flags, &dc, &brush);
     if (res != 0) {
         KeDerefObject(urgn);
         KeSetLastUserError(res);

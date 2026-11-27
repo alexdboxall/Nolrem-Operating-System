@@ -15,13 +15,12 @@
  * SET returns 0 on success, or an errno.
  */
 pageable size_t SysPenPattern(size_t a, size_t op, size_t pattern, size_t) {
-    struct pen* pen = (struct pen*) a;
-
     if (op != OP_GET && op != OP_SET) {
         KeSetLastUserError(EINVAL);
         return EINVAL;
     }
-    if (!KeValidateUserObjectAndAtomicallyRef(pen, UOBJ_PEN)) {
+    struct pen* pen = KeValidateUserObjectAndAtomicallyRef((void*) a, OBJ_PEN);
+    if (pen == NULL) {
         KeSetLastUserError(EINVAL);
         return op == OP_GET ? (size_t) PEN_INVALID : EINVAL;
     }

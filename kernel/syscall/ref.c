@@ -7,24 +7,26 @@
 #define TYPE_REF    0
 #define TYPE_DEREF  1
 
-pageable size_t SysRef(size_t a, size_t type, size_t, size_t) {
-    void* uo = (void*) a;
-    if (!KeValidateUserObjectAndAtomicallyRef(uo, UOBJ_ANYTYPE)) {
+pageable size_t SysRef(size_t handle, size_t type, size_t, size_t) {
+    /* This is the one call that works on the handle rather than the object under it. We hold a reference to
+       the handle's wrapper, which the last Deref() would otherwise be taking away from under us. */
+    struct user_obj_ref* ref = KeValidateUserRefAndAtomicallyRef((void*) handle);
+    if (ref == NULL) {
         KeSetLastUserError(EINVAL);
         return 0;
     }
 
-    /* Objects marked permanent (e.g. the stock brushes) ignore this: KeUserRef
+    /* Handles marked permanent (e.g. the stock brushes) ignore this: KeUserRef
        and KeUserDeref do nothing to them, so a user Deref can't free them. */
     int retv;
     if (type == TYPE_REF) {
-        retv = KeUserRef(uo);
+        retv = KeUserRef(ref);
     } else if (type == TYPE_DEREF) {
-        retv = KeUserDeref(uo);
+        retv = KeUserDeref(ref);
     } else {
         retv = EINVAL;
     }
-    KeDerefObject(uo);
+    KeDerefObject(ref);
     return retv;
 }
 

@@ -10,7 +10,7 @@ export pageable struct typeface* CdOpenTypeface(const char* file) {
     if (tf == NULL) {
         return NULL;
     }
-    KeInitUserObject(tf, UOBJ_TYPEFACE);
+    KeInitObject(tf, OBJ_TYPEFACE);
 
     int res = KeOpenAndMapFile(file, OMF_TRANSPARENT_DECOMPRESS, &tf->omf);
     if (res != 0) {
@@ -48,7 +48,7 @@ export pageable struct font* CdOpenFont(struct typeface* tf, font_style_id style
     if (fn == NULL) {
         return NULL;
     }
-    KeInitUserObject(fn, UOBJ_FONT);
+    KeInitObject(fn, OBJ_FONT);
     KeRefObject(tf);
 
     fn->tf = tf;
@@ -485,8 +485,8 @@ static void CdCleanupFont(void* _fn) {
 }
 
 void CdInitTypefaceSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_TYPEFACE, CdCleanupTypeface);
-    KeRegisterUserObjectType(UOBJ_FONT, CdCleanupFont);
+    KeRegisterObjectType(OBJ_TYPEFACE, CdCleanupTypeface);
+    KeRegisterObjectType(OBJ_FONT, CdCleanupFont);
 
     extern void CdInitScaledGlyphCache();
     CdInitScaledGlyphCache();

@@ -4,6 +4,7 @@
 #include <mutex.h>
 #include <kgfx.h>
 #include <input.h>
+#include <errno.h>
 #include <harderror.h>
 #include "winmgr_internal.h"
 
@@ -41,7 +42,7 @@ static void WmCleanupWindow(void* _win) {
 }
 
 void WmInitWindowSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_WINDOW, WmCleanupWindow);
+    KeRegisterObjectType(OBJ_WINDOW, WmCleanupWindow);
 }
 
 void WmLock(void) {
@@ -192,8 +193,15 @@ static void WmInvalidateExposedRegion(struct window* win, struct region* exposed
     }
 }
 
+static bool WmDoesWindowShowBorderEx(int winstyle, int classflags) {
+    return !(winstyle & WS_MAXIMISED) && !(classflags & CS_ALLCLIENT);
+}
+
 bool WmDoesWindowShowBorder(struct window* win) {
-    return !(win->style & WS_MAXIMISED) && !(win->winclass->flags & CS_ALLCLIENT);
+    if (win == NULL || win->winclass == NULL) {
+        return false;
+    }
+    return WmDoesWindowShowBorderEx(win->style, win->winclass->flags);
 }
 
 /*
@@ -213,22 +221,51 @@ static struct region WmGetChildClipRegion(struct window* parent) {
     return parent->client_rgn;
 }
 
+
+#define ADJUST_CLIENT_TO_OUTER  (-1)
+#define ADJUST_OUTER_TO_CLIENT  ( 1)
+
+/* Supply EITHER `win` or the pair `wc` and `style`. If win != NULL, wc and style ignored. */
+export int WmAdjustWindowRect(struct rect* rect, struct window* win, struct window_class* wc, int style, int mode) {
+    if (rect == NULL) {
+        return EINVAL;
+    }
+    if (win == NULL && wc == NULL) {
+        return EINVAL;
+    }
+    if (mode != ADJUST_CLIENT_TO_OUTER && mode != ADJUST_OUTER_TO_CLIENT) {
+        return EINVAL;
+    }
+    bool has_border;
+    bool all_client;
+    if (win == NULL) {
+        has_border = WmDoesWindowShowBorderEx(style, wc->flags);
+        all_client = !!(wc->flags & CS_ALLCLIENT);
+    } else {
+        has_border = WmDoesWindowShowBorder(win);
+        all_client = !!(win->winclass->flags & CS_ALLCLIENT);
+    }
+    if (all_client) {
+        return 0;
+    }
+    int border_width = has_border ? BORDER_WIDTH : 0;
+    int shadow = has_border ? SHADOW_CUT_IN : 0;
+    rect->x += mode * (border_width);
+    rect->y += mode * (border_width + TITLEBAR_HEIGHT);
+    rect->w = MAX(0, rect->w - mode * (border_width * 2 + shadow));
+    rect->h = MAX(0, rect->h - mode * (border_width * 2 + TITLEBAR_HEIGHT + shadow));
+    return 0;
+}
+
 /*
  * Requires the parent's win_rgn/client_rgn to be up to date. That holds for
  * WmCreateWindow (the parent already exists) and for WmChangePosition (a window
  * is updated before the recursion into its children).
  */
 static void WmSetInternalWindowBounds(struct window* win, struct rect local_r) {
-    bool has_border = WmDoesWindowShowBorder(win);
-    int border_width = has_border ? BORDER_WIDTH : 0;
-    int shadow = has_border ? SHADOW_CUT_IN : 0;
-
     win->local_win_bound = local_r;
     win->local_client_bound = local_r;
-    win->local_client_bound.x += border_width;
-    win->local_client_bound.y += border_width + TITLEBAR_HEIGHT;
-    win->local_client_bound.w = MAX(0, win->local_win_bound.w - border_width * 2 - shadow);
-    win->local_client_bound.h = MAX(0, win->local_win_bound.h - border_width * 2 - TITLEBAR_HEIGHT - shadow);
+    WmAdjustWindowRect(&win->local_client_bound, win, NULL, 0, ADJUST_OUTER_TO_CLIENT);
     win->global_offset_cached = WmAccumulateScreenOrigin(win, false);
 
     struct region raw_win_rgn = CdCreateRectRegion(
@@ -347,7 +384,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
         KeDerefObject(wc);      /* WmOpenWindowClass took a reference for the window we failed to make */
         return NULL;
     }
-    KeInitUserObject(win, UOBJ_WINDOW);
+    KeInitObject(win, OBJ_WINDOW);
 
     if (lock) WmLock();
 
@@ -403,6 +440,11 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     }
     
     if (lock) WmUnlock();
+
+    WmDispatchMessage((struct msg) {
+        .win = win,
+        .type = WM_CREATE,
+    })
 
     return win;
 }

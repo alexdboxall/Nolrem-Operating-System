@@ -15,7 +15,7 @@ pageable size_t SysCreateRectRegion(size_t a, size_t b, size_t c, size_t d) {
     int w = c;
     int h = d;
     struct region rgn = CdCreateRectRegion(x, y, w, h);
-    return (size_t) CdRegionToUserRegion(rgn);
+    return (size_t) CdRegionToUserHandle(rgn);
 }
 
 export pageableuserexec region_t CreateRectRegion(int x, int y, int width, int height) {

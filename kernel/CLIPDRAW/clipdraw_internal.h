@@ -69,13 +69,14 @@ void CdStartVideoUpdate(int x1, int y1, int x2, int y2);
 void CdEndVideoUpdate(int x1, int y1, int x2, int y2);
 
 struct uregion {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     struct region rgn;
 };
 
 struct region CdGetRegionCombinationEx(int mode, struct region a, struct region b, struct dc* scale_dc);
 
 struct uregion* CdRegionToUserRegion(struct region rgn);
+struct user_obj_ref* CdRegionToUserHandle(struct region rgn);
 struct region CdUserRegionToRegion(struct uregion* urgn);
 
 void CdSetTranslation(struct dc* dc, int x, int y);
@@ -95,7 +96,7 @@ struct user_shape_args {
     int w;
     int h;
     int radius;             /* PaintRoundedRect only */
-    struct brush* brush;    /* ignored with PAINT_USE_DC_BRUSH, and by the invert calls */
+    brush_t brush;          /* ignored with PAINT_USE_DC_BRUSH, and by the invert calls */
     int flags;
 };
 
@@ -110,7 +111,7 @@ static inline bool CdIsShapeInRange(int x, int y, int w, int h) {
 
 /* Helpers for the paint syscalls (syscall/paintcommon.c). All return 0 or an errno. */
 int CdReadShapeArgs(size_t user_ptr, struct user_shape_args* out);
-int CdAcquirePaintObjects(void* dc_ptr, struct brush* brush_ptr, int flags, 
+int CdAcquirePaintObjects(void* dc_handle, brush_t brush_handle, int flags, 
     struct dc** dc_out, struct brush** brush_out);
 void CdReleasePaintObjects(struct dc* dc, struct brush* brush);
 
@@ -118,7 +119,8 @@ void CdReleasePaintObjects(struct dc* dc, struct brush* brush);
  * same values are placed in the same spot. lol.
  */
 struct brush {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
+    struct spinlock lock;
     uint8_t origin_x;
     uint8_t origin_y;
     uint8_t pattern_type;
@@ -128,7 +130,8 @@ struct brush {
 };
 
 struct pen {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
+    struct spinlock lock;
     uint8_t origin_x;
     uint8_t origin_y;
     uint8_t pattern_type;
@@ -194,6 +197,9 @@ colour_t CdGetBrushSecondaryColour(struct brush* br);
 
 struct brush* CdGetStockBrush(int type);
 bool CdIsStockBrush(struct brush* br);
+/* The handles to the stock brushes: permanent, and the same one every time. */
+struct user_obj_ref* CdGetStockBrushHandle(int type);
+struct user_obj_ref* CdFindStockBrushHandle(struct brush* br);     /* NULL if `br` isn't a stock brush */
 
 int CdSetBrushOrigin(struct brush* br, int x, int y);
 struct point CdGetBrushOrigin(struct brush* br);
@@ -230,6 +236,8 @@ int CdGetPenThickness(struct pen* pen);
 int CdSetPenThickness(struct pen* pen, int thickness);
 struct pen* CdGetStockPen(int type);
 bool CdIsStockPen(struct pen* pen);
+struct user_obj_ref* CdGetStockPenHandle(int type);
+struct user_obj_ref* CdFindStockPenHandle(struct pen* pen);        /* NULL if `pen` isn't a stock pen */
 struct pen* CdCopyPen(struct pen* pen);
 int CdSetPenOrigin(struct pen* pen, int x, int y);
 struct point CdGetPenOrigin(struct pen* pen);

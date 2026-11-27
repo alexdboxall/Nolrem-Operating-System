@@ -10,7 +10,7 @@ struct context {
     struct dc* dc;
     union {
         struct brush* brush;
-        pen_t pen;
+        struct pen* pen;
     };
 };
 
@@ -88,14 +88,14 @@ export int CdInvertRegion(struct dc* dc, struct region rgn) {
 }
 
 export int CdPaintRegion(struct dc* dc, struct region rgn) {
-    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
+    struct brush* brush = CdGetGraphicsObject(dc, OBJ_BRUSH);
     int retv = CdPaintRegionWithBrush(dc, rgn, brush);
     KeDerefObject(brush);
     return retv;
 }
 
 export int CdPaintRect(struct dc* dc, int x, int y, int width, int height) {
-    struct brush* brush = CdGetGraphicsObject(dc, UOBJ_BRUSH);
+    struct brush* brush = CdGetGraphicsObject(dc, OBJ_BRUSH);
     int retv = CdPaintRectWithBrush(dc, x, y, width, height, brush);
     KeDerefObject(brush);
     return retv;
@@ -176,13 +176,13 @@ export int CdPaintRectWithBrush(struct dc* dc, int x, int y, int width, int heig
 
 /*
 struct dc* PaintBitmap(struct dc* dc, struct dc* bitmap, int x, int y);
-int PaintTextWithFont(struct dc* dc, const char* text, int x, int y, font_t font);
+int PaintTextWithFont(struct dc* dc, const char* text, int x, int y, struct font* font);
 int PaintText(struct dc* dc, const char* text, int x, int y);
 int GreyText(struct dc* dc, const char* text, int x, int y);
-int PaintLineWithPen(struct dc* dc, int x1, int y1, int x2, int y2, pen_t pen);
+int PaintLineWithPen(struct dc* dc, int x1, int y1, int x2, int y2, struct pen* pen);
 int PaintLine(struct dc* dc, int x1, int y1, int x2, int y2);
 int FloodFill(struct dc* dc, int x, int y, colour_t col, int mode);
-int FrameRectWithPen(struct dc* dc, int x, int y, int w, int h, pen_t pen);
+int FrameRectWithPen(struct dc* dc, int x, int y, int w, int h, struct pen* pen);
 int FrameRect(struct dc* dc, int x, int y, int w, int h);
-int FrameRegionWithPen(struct dc* dc, struct region rgn, pen_t pen);
+int FrameRegionWithPen(struct dc* dc, struct region rgn, struct pen* pen);
 int FrameRegion(struct dc* dc, struct region rgn);*/

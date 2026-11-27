@@ -10,7 +10,8 @@
 #include "clipdraw_internal.h"
 
 struct dc {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
+    struct spinlock lock;
     struct graphics_driver* drv;
     struct brush* brush;
     struct pen* pen;
@@ -27,12 +28,12 @@ export struct graphics_driver* CdGetOutputDriver(struct dc* dc) {
 
 void CdMapDCCoordinates(struct dc* dc, int* x1, int* y1, int* x2, int* y2) {
     // TODO: the future add viewport/window origin/extents
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     *x1 += dc->trans_x;
     *x2 += dc->trans_x;
     *y1 += dc->trans_y;
     *y2 += dc->trans_y;
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
 }
 
 
@@ -43,32 +44,32 @@ void CdLogicalToDevice(struct dc* dc, int* x, int* y) {
 
 
 export void CdSetTranslation(struct dc* dc, int x, int y) {
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     dc->trans_x = x;
     dc->trans_y = y;
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
 }
 
 // Makes a COPY of the input region
 export int CdSetClipRegion(struct dc* dc, struct region rgn) {
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     CdFreeRegion(dc->cliprgn);
     dc->cliprgn = CdCopyRegion(rgn);
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
     return 0;
 }
 
 export int CdRestrictClipRegion(struct dc* dc, struct region rgn) {
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     CdIntersectRegionInPlace(&dc->cliprgn, rgn);
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
     return 0;
 }
 
 export struct region CdGetCopyOfClipRegion(struct dc* dc) {
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     struct region retv = CdCopyRegion(dc->cliprgn);
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
     return retv;
 }
 
@@ -77,53 +78,52 @@ export struct region CdGetCopyOfClipRegion(struct dc* dc) {
 //       CdGetRegionCombinationEx(op, a, b, dc) that uses DC coords on `b`
 //       and apply dc->trans_x, dc->trans_y as  a simple offset
 export struct region CdIntersectWithClipRegion(struct dc* dc, struct region rgn) {
-    //KeLockUserObject(dc);
+    //KeAcquireSpinlock(&dc->lock);
     // TODO: the DC gets locked on scaling within this function.
     // might need to pass in the scale params in a struct?
     // copying the DC or the region sound slow
     struct region retv = CdGetRegionCombinationEx(REGION_COMBINE_INTERSECT, dc->cliprgn, rgn, dc);
-    //KeUnlockUserObject(dc);
+    //KeReleaseSpinlock(&dc->lock);
     return retv;
 }
 
 export int CdSetGraphicsObject(struct dc* dc, void* obj) {
-    KeLockUserObject(dc);
-    struct user_obj_header* hdr = obj;
-    switch (hdr->user_type) {
-    case UOBJ_BRUSH:
+    KeAcquireSpinlock(&dc->lock);
+    switch (KeGetObjectType(obj)) {
+    case OBJ_BRUSH:
         KeRefObject(obj);
         KeDerefObject(dc->brush);
         dc->brush = obj;
-        KeUnlockUserObject(dc);
+        KeReleaseSpinlock(&dc->lock);
         return 0;
-    case UOBJ_PEN:
+    case OBJ_PEN:
         KeRefObject(obj);
         KeDerefObject(dc->pen);
         dc->pen = obj;
-        KeUnlockUserObject(dc);
+        KeReleaseSpinlock(&dc->lock);
         return 0;
     default:
-        KeUnlockUserObject(dc);
+        KeReleaseSpinlock(&dc->lock);
         return EINVAL;
     }
 }
 
 export void* CdGetGraphicsObject(struct dc* dc, int type) {
     void* retv = NULL;
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     switch (type) {
-    case UOBJ_BRUSH:
+    case OBJ_BRUSH:
         retv = dc->brush;
         break;
-    case UOBJ_PEN:
+    case OBJ_PEN:
         retv = dc->pen;
         break;
     default:
-        KeUnlockUserObject(dc);
+        KeReleaseSpinlock(&dc->lock);
         return NULL;
     }
     KeRefObject(retv);
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
     return retv;
 }
 
@@ -139,7 +139,7 @@ void CdCleanupDc(void* _dc) {
 }
 
 void CdInitDcSubsystem(void) {
-    KeRegisterUserObjectType(UOBJ_DC, CdCleanupDc);
+    KeRegisterObjectType(OBJ_DC, CdCleanupDc);
 }
 
 export struct dc* CdCreateDc(void) {
@@ -147,7 +147,8 @@ export struct dc* CdCreateDc(void) {
     if (dc == NULL) {
         return NULL;
     }
-    KeInitUserObject(dc, UOBJ_DC);
+    KeInitObject(dc, OBJ_DC);
+    KeInitSpinlock(&dc->lock);
     dc->drv = KeGetKernelGraphicsDriver();    
     dc->brush = CdGetStockBrush(STOCK_BRUSH_SYSTEM);
     dc->pen = CdGetStockPen(STOCK_PEN_BLACK_1);
@@ -170,7 +171,7 @@ export struct dc* CdCreateDc(void) {
 }
 
 export void CdResetDC(struct dc* dc) {
-    KeLockUserObject(dc);
+    KeAcquireSpinlock(&dc->lock);
     
     CdFreeRegion(dc->cliprgn);
     dc->cliprgn = CdEverythingRegion();
@@ -187,5 +188,5 @@ export void CdResetDC(struct dc* dc) {
     KeRefObject(dc->brush);
     KeRefObject(dc->pen);
 
-    KeUnlockUserObject(dc);
+    KeReleaseSpinlock(&dc->lock);
 }

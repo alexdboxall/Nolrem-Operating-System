@@ -12,7 +12,7 @@
 #define TITLEBAR_HEIGHT 20
 
 struct app {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     struct msgbox* mbox;
     struct window* caret_owner;
     int caret_level;                        /* >= 0 means shown (ShowCaret/HideCaret style) */
@@ -25,15 +25,16 @@ struct app {
     uint64_t timeof_last_entry_to_getmessage;
 };
 
+/* Lives in usermode memory, so it is not an object (the kernel can't count references to something that the
+   process can scribble on) and has no header. */
 struct uapp {
-    struct user_obj_header hdr;
     struct app* krnl_app_ptr;
     uint8_t keystate[256 / 8];
     uint16_t modifier_state;
 };
 
 struct window_class {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     winproc_t proc;
     struct window_class* next;
     struct window_class* parent;
@@ -48,7 +49,7 @@ struct window_class {
 #define WS_HIDDEN                       (1 << 1)
 
 struct window {
-    struct user_obj_header hdr;
+    struct obj_header hdr;
     struct app* app;
 
     // LOCAL COORDS
@@ -117,3 +118,10 @@ bool WmIsAncestor(struct window* potential_ancestor, struct window* reference);
 int WmDispatchMessage(struct msg msg);
 int WmPostOrDispatchMessage(struct msg msg, bool local);
 int WmChangeStyle(struct window* win, int style);
+
+
+#define ADJUST_CLIENT_TO_OUTER  (-1)
+#define ADJUST_OUTER_TO_CLIENT  ( 1)
+
+/* Supply EITHER `win` or the pair `wc` and `style`. If win != NULL, wc and style ignored. */
+int WmAdjustWindowRect(struct rect* rect, struct window* win, struct window_class* wc, int style, int mode);

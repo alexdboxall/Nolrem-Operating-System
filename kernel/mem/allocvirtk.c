@@ -14,6 +14,10 @@ export size_t KeAllocVirt(size_t bytes) {
     return AllocVirtEx(&krnl_va, bytes);
 }
 
+export size_t KeAllocVirtNoHeap(size_t bytes) {
+    return AllocVirtExNoHeap(&krnl_va, bytes);
+}
+
 export void KeFreeVirt(size_t start, size_t bytes) {
     FreeVirtEx(&krnl_va, start, bytes);
 }

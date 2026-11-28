@@ -56,7 +56,9 @@ void* VmmSpecialHeapGetMemory(size_t* bytes) {
         return vmm_heap_bootstrap_page;
 
     } else {
-        size_t virt = KeAllocVirt(*bytes);
+        /* We are called from inside AllocHeapEx, so vmm_heap_lock is held: this must not use the VMM heap
+         * (KeAllocVirt would free an arena node into it if it used a range up exactly, and deadlock). */
+        size_t virt = KeAllocVirtNoHeap(*bytes);
         if (virt == 0) {
             return NULL;        /* the heap treats this as 'no memory' */
         }

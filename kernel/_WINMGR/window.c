@@ -523,6 +523,7 @@ extern void WmInitDcCache(void);
 extern void WmInitWindowClassSubsystem();
 extern void WmInitDesktopWindowSubsystem();
 extern void WmInitAppSubsystem();
+extern void WmInitWindowSubsystem();
 
 export void WmInit(void) {
     KeInitSpinlock(&winmgr_lock);
@@ -533,6 +534,7 @@ export void WmInit(void) {
     KeSetMouseHandler(WmHandleMouseInput);
     KeSetHardErrorHandler(WmHardError);
     WmInitDcCache();
+    WmInitWindowSubsystem();
     WmInitWindowClassSubsystem();
     WmInitDesktopWindowSubsystem();    
     WmInitAppSubsystem();

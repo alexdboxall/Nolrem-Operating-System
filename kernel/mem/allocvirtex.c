@@ -31,7 +31,18 @@ export void InitVirtArena(struct virt_arena* va, size_t start, size_t bytes) {
     InitSpinlock(&va->lock);
 }
 
-export size_t AllocVirtEx(struct virt_arena* va, size_t bytes) {
+/*
+ * `may_free_node` says whether we may give an arena node back to the VMM heap
+ * (FreeVmmHeap, which takes vmm_heap_lock). The VMM heap's own grow callback has
+ * to say no: it runs with vmm_heap_lock already held (it is called from inside
+ * AllocVmmHeap), so freeing a node there would take that lock a second time.
+ *
+ * Without freeing, a range that is used up exactly is left in the list as an
+ * empty one (zero pages, starting just past what was handed out). That is a
+ * valid list entry: nothing can be allocated from it, and when the range that
+ * was handed out is freed again, FreeVirtEx merges it straight back into it.
+ */
+static size_t AllocVirtExImpl(struct virt_arena* va, size_t bytes, bool may_free_node) {
     size_t pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
 
     AcquireSpinlock(&va->lock);
@@ -43,7 +54,7 @@ export size_t AllocVirtEx(struct virt_arena* va, size_t bytes) {
         if (curr->pages >= pages) {
             size_t retv = curr->start_addr;
 
-            if (curr->pages == pages) {
+            if (curr->pages == pages && may_free_node) {
                 if (prev) {
                     prev->next = curr->next;
                 } else {
@@ -68,9 +79,25 @@ export size_t AllocVirtEx(struct virt_arena* va, size_t bytes) {
     return 0; // no range large enough
 }
 
+export size_t AllocVirtEx(struct virt_arena* va, size_t bytes) {
+    return AllocVirtExImpl(va, bytes, true);
+}
+
+/* For the VMM heap's grow callback only: never touches the VMM heap, see above. */
+export size_t AllocVirtExNoHeap(struct virt_arena* va, size_t bytes) {
+    return AllocVirtExImpl(va, bytes, false);
+}
+
 export void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes) {
     size_t pages = (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
     size_t end_addr = start_addr + pages * PAGE_SIZE;
+
+    /*
+     * A node for the range, in case it can't be merged into a neighbour. This has to be got before taking the
+     * arena lock, not while holding it: if the VMM heap is full, growing it allocates from this arena
+     * (VmmSpecialHeapGetMemory), which takes the arena lock, and we would be waiting on ourselves.
+     */
+    struct virt_range* spare = AllocVmmHeap(sizeof(struct virt_range));
 
     AcquireSpinlock(&va->lock);
 
@@ -89,12 +116,14 @@ export void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes) {
         prev->next = curr->next;
         ReleaseSpinlock(&va->lock);
         FreeVmmHeap(curr);
+        if (spare != NULL) FreeVmmHeap(spare);
         return;
     }
 
     if (merged_left) {
         prev->pages += pages;
         ReleaseSpinlock(&va->lock);
+        if (spare != NULL) FreeVmmHeap(spare);
         return;
     }
 
@@ -102,22 +131,25 @@ export void FreeVirtEx(struct virt_arena* va, size_t start_addr, size_t bytes) {
         curr->start_addr = start_addr;
         curr->pages += pages;
         ReleaseSpinlock(&va->lock);
+        if (spare != NULL) FreeVmmHeap(spare);
         return;
     }
 
-    struct virt_range* node = AllocVmmHeap(sizeof(struct virt_range));
-    if (node == NULL) {
+    /* This is only the case if AllocVmmHeap returns NULL, i.e. the system is
+     * out of memory.
+     */
+    if (spare == NULL) {
         /* Nowhere to record the range, so it is lost. That wastes address space but nothing else. */
         ReleaseSpinlock(&va->lock);
         return;
     }
-    node->start_addr = start_addr;
-    node->pages = pages;
-    node->next = curr;
+    spare->start_addr = start_addr;
+    spare->pages = pages;
+    spare->next = curr;
     if (prev) {
-        prev->next = node;
+        prev->next = spare;
     } else {
-        va->free_list_head = node;
+        va->free_list_head = spare;
     }
     ReleaseSpinlock(&va->lock);
 }

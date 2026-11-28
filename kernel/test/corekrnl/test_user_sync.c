@@ -66,13 +66,19 @@ static void TestSemCounts(void) {
     SUCCEEDS(SysAcquireSemaphore(s, NOWAIT, 0));
     FAILS_WITH(EAGAIN, SysAcquireSemaphore(s, NOWAIT, 0));
 
-    /* Give them all back, and the one that was never there is refused. */
+    /*
+     * Give them back. It is a semaphore, not a lock owned by whoever took it: the third unit (the one that was
+     * not free to start with) can be released too, which makes all three free. Only a fourth, with nothing left
+     * to give, is refused.
+     */
+    SUCCEEDS(SysReleaseSemaphore(s, 0, 0, 0));
     SUCCEEDS(SysReleaseSemaphore(s, 0, 0, 0));
     SUCCEEDS(SysReleaseSemaphore(s, 0, 0, 0));
     FAILS_WITH(EOVERFLOW, SysReleaseSemaphore(s, 0, 0, 0));
     FAILS_WITH(EOVERFLOW, SysReleaseSemaphore(s, 0, 0, 0));
 
-    /* Refusing them left it as it was: still exactly two to take. */
+    /* Refusing them left it as it was: all three free, so exactly three to take. */
+    SUCCEEDS(SysAcquireSemaphore(s, NOWAIT, 0));
     SUCCEEDS(SysAcquireSemaphore(s, NOWAIT, 0));
     SUCCEEDS(SysAcquireSemaphore(s, NOWAIT, 0));
     FAILS_WITH(EAGAIN, SysAcquireSemaphore(s, NOWAIT, 0));

@@ -24,7 +24,7 @@
 
 #define SYSCALL_RANGE_KE        0   /* The kernel itself (object handling, ...) */
 #define SYSCALL_RANGE_CD        1   /* CLIPDRAW */
-#define SYSCALL_RANGE_WM        2   /* The window manager (nothing registered yet) */
+#define SYSCALL_RANGE_WM        2   /* The window manager */
 
 /*
  * One list per subsystem, in the order the numbers are handed out. Each entry
@@ -51,6 +51,13 @@
     X(GetGraphicsObject) X(PaintRect) X(PaintRoundedRect) X(PaintEllipse) \
     X(PaintPolygon) X(PaintRegion) X(InvertRect) X(InvertRegion)
 
+#define WM_SYSCALLS(X) \
+    X(CreateWindow) X(GetDesktopWindow) X(GetForegroundWindow) X(RaiseWindowToTop) \
+    X(SetWindowRect) X(GetWindowRect) X(GetWindowClientRect) X(GetWindowGlobalRect) \
+    X(AdjustWindowRect) X(AdjustWindowRectForClass) X(GetRelatedWindow) X(IsWindowAncestor) \
+    X(GetToplevelWindowAtPoint) X(GetDeepestWindowAtPoint) X(GetMousePosition) X(InvalidateWindow) \
+    X(InvalidateWindowRect) X(OpenWindowClass) X(GetWindowClass) X(GetWindowClassName)
+
 #define SYSCALL_ENUMERATOR(name)    SYS_##name,
 #define SYSCALL_PROTOTYPE(name)     size_t Sys##name(size_t, size_t, size_t, size_t);
 
@@ -62,13 +69,19 @@ enum {
     SYS_CD_RESERVED = SYSCALL_BASE(SYSCALL_RANGE_CD),
     CD_SYSCALLS(SYSCALL_ENUMERATOR)
     SYS_CD_END,
+
+    SYS_WM_RESERVED = SYSCALL_BASE(SYSCALL_RANGE_WM),
+    WM_SYSCALLS(SYSCALL_ENUMERATOR)
+    SYS_WM_END,
 };
 
 static_assert(SYS_KE_END <= SYSCALL_BASE(SYSCALL_RANGE_KE + 1), "too many kernel system calls for one range");
 static_assert(SYS_CD_END <= SYSCALL_BASE(SYSCALL_RANGE_CD + 1), "too many CLIPDRAW system calls for one range");
+static_assert(SYS_WM_END <= SYSCALL_BASE(SYSCALL_RANGE_WM + 1), "too many window manager system calls for one range");
 
 KE_SYSCALLS(SYSCALL_PROTOTYPE)
 CD_SYSCALLS(SYSCALL_PROTOTYPE)
+WM_SYSCALLS(SYSCALL_PROTOTYPE)
 
 /*
  * Arguments are one machine word, so 64-bit values (times, mostly) are passed as

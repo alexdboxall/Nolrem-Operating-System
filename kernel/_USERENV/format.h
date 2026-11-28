@@ -55,17 +55,24 @@ int FormatStringGeneric(
 uint64_t UInt64Div10(uint64_t n, int* rem);
 
 ssize_t FormatInt(char* out, size_t max, uint64_t v, int base);
-ssize_t FormatIntLocale(struct locale* loc, char* out, size_t max, uint64_t v, int base, bool negative, bool group);
-
+ssize_t FormatIntLocale(const struct locale* loc, char* out, size_t max, uint64_t v, int base, bool negative, bool group);
+ 
 #define CURRENCY_ALIGN_LEFT     0
 #define CURRENCY_ALIGN_RIGHT    1
 #define CURRENCY_ALIGN_DECIMAL  2
 #define CURRENCY_ALIGN_NUMBER   3
 #define CURRENCY_ALIGN_SIGN     4
 
+#define CURRENCY_SPACE      (1u << 0)   /* printf ' ': reserve the sign's width on non-negative amounts */
+#define CURRENCY_PARENS     (1u << 1)   /* printf '(': accounting style, negatives in parentheses */
+#define CURRENCY_NO_SYMBOL  (1u << 2)   /* printf '!': digits only, no currency symbol */
+#define CURRENCY_INTL       (1u << 3)   /* printf '#': ISO code and the locale's int_* layout */
+#define CURRENCY_NO_GROUP   (1u << 4)   /* printf '^': no digit grouping */
+ 
 ssize_t FormatCurrency(
-    struct locale* loc, char* out, size_t max, int64_t v, 
-    int width, int align, bool show_plus /* any other args needed to get full printf support*/
+    const struct locale* loc, char* out, size_t max, int64_t v,
+    int width, int align, bool show_plus,
+    unsigned flags, int prec, uint32_t fill
 );
 
 size_t EncodeUtf8(uint32_t cp, char out[4]);

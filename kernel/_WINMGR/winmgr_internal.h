@@ -2,6 +2,7 @@
 
 #include "../CLIPDRAW/api.h"
 #include "../CLIPDRAW/clipdraw_internal.h"
+#include "api.h"
 
 #define DOUBLE_CLICK_MS 400
 
@@ -10,6 +11,9 @@
 
 #define SHADOW_CUT_IN   2
 #define TITLEBAR_HEIGHT 20
+
+/* How many windows can be between a window and the desktop. */
+#define MAX_NESTED_WIN_DEPTH 6
 
 struct app {
     struct obj_header hdr;
@@ -44,9 +48,6 @@ struct window_class {
     uint8_t extra_ptrs;
     char name[];
 };
-
-#define WS_MAXIMISED                    (1 << 0)
-#define WS_HIDDEN                       (1 << 1)
 
 struct window {
     struct obj_header hdr;
@@ -119,9 +120,17 @@ int WmDispatchMessage(struct msg msg);
 int WmPostOrDispatchMessage(struct msg msg, bool local);
 int WmChangeStyle(struct window* win, int style);
 
+/*
+ * The window manager's application for the process that is running (the one whose system call this is). It is the
+ * application that windows made for the process belong to, and is the one that the process's messages go to.
+ *
+ * NOT IN YET. The syscalls in syscall/ are written to use it as it is described here, and the kernel won't link
+ * until it exists: they take the pointer as borrowed (no reference is added, since the process keeps its
+ * application for as long as it runs), and NULL as 'this process has no application, and can't be given one'.
+ * If it is to give a counted reference instead, that is WmSysGetApp() in syscall/helpers.c, and nowhere else.
+ */
+struct app* WmGetAppObjForProcess(void);
 
-#define ADJUST_CLIENT_TO_OUTER  (-1)
-#define ADJUST_OUTER_TO_CLIENT  ( 1)
 
 /* Supply EITHER `win` or the pair `wc` and `style`. If win != NULL, wc and style ignored. */
 int WmAdjustWindowRect(struct rect* rect, struct window* win, struct window_class* wc, int style, int mode);

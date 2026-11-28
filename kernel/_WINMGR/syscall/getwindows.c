@@ -75,11 +75,8 @@ pageable size_t SysGetDeepestWindowAtPoint(size_t x, size_t y, size_t, size_t) {
         KeSetLastUserError(ENOMEM);
         return 0;
     }
-    /* This one doesn't give a reference, so we take one while nothing can change. */
-    WmLock();
-    struct window* win = WmSysRefWindow(WmGetDeepestAtPoint((int) x, (int) y, false));
-    WmUnlock();
-    return WmSysFoundWindow(win);
+    /* Comes back with a reference. */
+    return WmSysFoundWindow(WmGetDeepestAtPoint((int) x, (int) y, true));
 }
 
 export pageableuserexec window_t GetDesktopWindow(void) {

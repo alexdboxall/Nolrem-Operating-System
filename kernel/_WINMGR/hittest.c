@@ -25,6 +25,7 @@ struct window* WmGetToplevelAtPoint(int x, int y, bool lock) {
     return NULL;
 }
 
+// ADDS A REFERENCE! (Never NULL: it is the desktop if the point isn't over anything else.)
 struct window* WmGetDeepestAtPoint(int x, int y, bool lock) {
     if (lock) WmLock();
     struct window* retv = WmGetDesktop();
@@ -37,6 +38,7 @@ struct window* WmGetDeepestAtPoint(int x, int y, bool lock) {
         }
         win = win->next_sibling;
     }
+    KeRefObject(retv);
     if (lock) WmUnlock();
     return retv;
 }

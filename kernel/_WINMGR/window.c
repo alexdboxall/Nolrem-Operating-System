@@ -19,20 +19,112 @@ export struct window* WmGetForegroundWindow() {
     return foreground_window;
 }
 
-export void WmSetForegroundWindow(struct window* win, bool lock) {
-    if (lock) WmLock();
-    if (win != foreground_window) {
-        if (foreground_window != NULL) {
-            WmInvalidateWindow(foreground_window, false);
-            KeDerefObject(foreground_window);
-        }
-        foreground_window = win;
-        if (win != NULL) {
-            KeRefObject(win);
-            WmInvalidateWindow(win, false);
+/*
+ * Changes which window is in the foreground. The window manager's lock must be held.
+ *
+ * Nobody can be told about it from in here, as telling a window is a message to its procedure, which needs the lock
+ * (see WmDispatchMessage). So `*change` is filled in with what has to be announced, and holds references to what it
+ * names. Once the lock is let go of, give it to WmAnnounceActivation() (or WmDiscardActivation() if no-one is to be
+ * told). `how` is how the new foreground window got there: WA_ACTIVATE, or WA_CLICKACTIVATE if the user clicked on it.
+ *
+ * If `win` already is the foreground window nothing changes, and `*change` is empty (and safe to give to either).
+ */
+void WmChangeForegroundWindow(struct window* win, int how, struct wm_activation* change) {
+    change->old_fg = NULL;
+    change->new_fg = NULL;
+    change->how = how;
+
+    struct window* old_fg = foreground_window;
+    if (win == old_fg) {
+        return;
+    }
+
+    if (old_fg != NULL) {
+        WmInvalidateWindow(old_fg, false);
+    }
+    foreground_window = win;
+    if (win != NULL) {
+        KeRefObject(win);       /* the foreground window's own */
+        KeRefObject(win);       /* the change's */
+        change->new_fg = win;
+        WmInvalidateWindow(win, false);
+    }
+    if (old_fg != NULL) {
+        if (old_fg == WmGetDesktop()) {
+            /* Nothing is told that the desktop stopped being the foreground window. */
+            KeDerefObject(old_fg);
+        } else {
+            change->old_fg = old_fg;    /* the foreground window's reference goes to the change */
         }
     }
-    if (lock) WmUnlock();
+}
+
+void WmDiscardActivation(struct wm_activation* change) {
+    if (change->old_fg != NULL) {
+        KeDerefObject(change->old_fg);
+        change->old_fg = NULL;
+    }
+    if (change->new_fg != NULL) {
+        KeDerefObject(change->new_fg);
+        change->new_fg = NULL;
+    }
+}
+
+/*
+ * Tells the windows that were involved in a change of foreground window (see WmChangeForegroundWindow), and
+ * gives back the references the change holds. The window manager's lock must NOT be held.
+ *
+ * WM_ACTIVATE goes to the window that lost it (WA_DEACTIVATE) and to the one that gained it (`how`). When the
+ * application changes too, WM_ACTIVATE_APP goes the same way. A window that stays within the same application is
+ * a switch within it, so the one losing it is told straight away, to keep the order of events. When it is another
+ * application's window the message is posted to that application, as that is where it is dealt with. Windows
+ * that don't belong to an application can't be posted to, and are told straight away.
+ */
+void WmAnnounceActivation(struct wm_activation* change) {
+    struct window* old_fg = change->old_fg;
+    struct window* new_fg = change->new_fg;
+
+    bool app_changed = old_fg == NULL || new_fg == NULL || old_fg->app != new_fg->app;
+
+    if (old_fg != NULL) {
+        bool local = old_fg->app == NULL || (new_fg != NULL && old_fg->app == new_fg->app);
+        WmPostOrDispatchMessage((struct msg) {
+            .win = old_fg,
+            .type = WM_ACTIVATE,
+            .i_arg = WA_DEACTIVATE,
+        }, local);
+
+        if (app_changed && old_fg->app != NULL) {
+            WmPostMessage((struct msg) {
+                .win = old_fg,
+                .type = WM_ACTIVATE_APP,
+                .i_arg = WA_DEACTIVATE,
+            });
+        }
+    }
+    if (new_fg != NULL) {
+        if (app_changed && new_fg->app != NULL) {
+            WmDispatchMessage((struct msg) {
+                .win = new_fg,
+                .type = WM_ACTIVATE_APP,
+                .i_arg = WA_ACTIVATE,
+            });
+        }
+        WmDispatchMessage((struct msg) {
+            .win = new_fg,
+            .type = WM_ACTIVATE,
+            .i_arg = change->how,
+        });
+    }
+    WmDiscardActivation(change);
+}
+
+export void WmSetForegroundWindow(struct window* win) {
+    struct wm_activation change;
+    WmLock();
+    WmChangeForegroundWindow(win, WA_ACTIVATE, &change);
+    WmUnlock();
+    WmAnnounceActivation(&change);
 }
 
 static void WmCleanupWindow(void* _win) {
@@ -435,8 +527,12 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     win->vis_rgn = CdCopyRegion(win->win_rgn);
     WmClipOurVisibility(win);
 
-    if (parent == WmGetDesktop()) {
-        WmSetForegroundWindow(win, false);
+    /* A new toplevel window comes up in front, and is the one the user is working with. */
+    struct wm_activation activation;
+    activation.old_fg = NULL;
+    activation.new_fg = NULL;
+    if (parent != NULL && parent == WmGetDesktop()) {
+        WmChangeForegroundWindow(win, WA_ACTIVATE, &activation);
     }
     
     if (lock) WmUnlock();
@@ -445,6 +541,13 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
         .win = win,
         .type = WM_CREATE,
     });
+
+    if (lock) {
+        WmAnnounceActivation(&activation);
+    } else {
+        /* The caller still has the lock, so can't be told (nor can it be done from in here). */
+        WmDiscardActivation(&activation);
+    }
 
     return win;
 }

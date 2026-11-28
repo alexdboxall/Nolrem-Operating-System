@@ -18,7 +18,9 @@ static bool WmAppCaretEligible(struct app* app) {
     if (app->caret_owner == NULL) {
         return false;
     }
-    bool is_toplevel_thread = WmGetForegroundWindow()->app == app;
+    /* There is no foreground window when the user has clicked on the desktop. */
+    struct window* fg = WmGetForegroundWindow();
+    bool is_toplevel_thread = fg != NULL && fg->app == app;
     return is_toplevel_thread && app->caret_level >= 0;
 }
 
@@ -86,6 +88,18 @@ static void WmCheckGenerateSynthMessages(struct app* app) {
     }
 }
 
+bool WmIsAppHung(struct app* app) {
+    WmLock();
+    uint64_t wintime = app->hang_check_time;
+    WmUnlock();
+    if (wintime == 0) {
+        /* Blocking on WmAppGetMessage */
+        return false;
+    }
+    uint64_t currenttime = KeGetTimeSinceBoot();
+    return currenttime > wintime + MS_TO_NS(5000);
+}
+
 export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
     /*
      * First attempt is always non-blocking. If the queue is empty, give the
@@ -94,12 +108,13 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
      * held across the peek and the synth call.
      */
     WmLock();
-    app->timeof_last_entry_to_getmessage = KeGetTimeSinceBoot();
+    app->hang_check_time = 0;
     int res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
     if (res == EAGAIN) {
         WmCheckGenerateSynthMessages(app);
         res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
     }
+    app->hang_check_time = KeGetTimeSinceBoot();
     WmUnlock();
 
     if (res != EAGAIN) {
@@ -132,14 +147,19 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
                               ? next_blink : app->caret_timeout_time;
             timeout = deadline - now;
         }
-        WmUnlock();
 
         if (peek) {
             /* Nothing there, and a peek never blocks. */
+            WmUnlock();
             return EAGAIN;
         }
 
+        app->hang_check_time = 0;
+        WmUnlock();
         res = KeGetMessage(app->mbox, msg_out, timeout);
+        WmLock();
+        app->hang_check_time = KeGetTimeSinceBoot();
+        WmUnlock();
         if (res != ETIMEDOUT) {
             return res;
         }

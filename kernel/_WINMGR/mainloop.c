@@ -96,7 +96,23 @@ static struct rect WmApplyResizeDelta(struct rect base, int dx, int dy, int hit_
     return r;
 }
 
+/*
+ * Starting a drag or a resize while one is still going (a button-up that never arrived, or a resize border that was
+ * clicked mid-drag) would overwrite the window that is held, and the reference we took on it would never be given back.
+ */
+static void WmAbandonDragAndResize(void) {
+    if (dragging_win != NULL) {
+        KeDerefObject(dragging_win);
+        dragging_win = NULL;
+    }
+    if (resizing_win != NULL) {
+        KeDerefObject(resizing_win);
+        resizing_win = NULL;
+    }
+}
+
 void WmStartDraggingWindow(struct window* win) {
+    WmAbandonDragAndResize();
     KeRefObject(win);
     drag_mouse_start_x = mouse_x;
     drag_mouse_start_y = mouse_y;
@@ -105,6 +121,7 @@ void WmStartDraggingWindow(struct window* win) {
 }
 
 void WmStartResizingWindow(struct window* win, int hit_test_results) {
+    WmAbandonDragAndResize();
     KeRefObject(win);
     drag_mouse_start_x = mouse_x;
     drag_mouse_start_y = mouse_y;
@@ -172,8 +189,6 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
         CdDrawMouse(mouse_x, mouse_y);
     }
 
-    //static struct window* prev_set_cursor_win = NULL;
-
     /* Cursor changing. We don't perform this if dragging/resizing in order to
      * lock the cursor as it currently is (otherwise it'd reset to normal). */
     if (moved && !dragging_win && !resizing_win) {
@@ -182,39 +197,34 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
         if (deepest_child != NULL && (
             WmGetForegroundWindow() == deepest_child || WmIsAncestor(WmGetForegroundWindow(), deepest_child)
         )) {
-            //if (prev_set_cursor_win != deepest_child) {
-                struct point pt;
-                pt.x = mouse_x - deepest_child->global_offset_cached.x;
-                pt.y = mouse_y - deepest_child->global_offset_cached.y;
+            struct point pt;
+            pt.x = mouse_x - deepest_child->global_offset_cached.x;
+            pt.y = mouse_y - deepest_child->global_offset_cached.y;
+            if (WmIsAppHung(deepest_child->app)) {
+                CdSetStandardCursor(CURSOR_WAIT);
+            } else {
                 WmPostMessage((struct msg) {
                     .win = deepest_child,
                     .type = WM_SETCURSOR,
                     .point_arg1 = pt
                 });
-            //prev_set_cursor_win = deepest_child;
+            }
         } else {
             /* Not over any normal window - i.e. it's over the desktop. */
             struct window* desktop = WmGetDesktop();
-            //if (prev_set_cursor_win != desktop) {
-                struct point pt;
-                pt.x = mouse_x;
-                pt.y = mouse_y;
-                WmPostMessage((struct msg) {
-                    .win = desktop,
-                    .type = WM_SETCURSOR,
-                    .point_arg1 = pt
-                });
-            //}
-            //prev_set_cursor_win = desktop;
+            struct point pt;
+            pt.x = mouse_x;
+            pt.y = mouse_y;
+            WmPostMessage((struct msg) {
+                .win = desktop,
+                .type = WM_SETCURSOR,
+                .point_arg1 = pt
+            });
         }
         WmUnlock();
+        KeDerefObject(deepest_child);       /* WmGetDeepestAtPoint adds a reference */
     }
 
-    if (prev_mouse_buttons != mouse_buttons) {
-        /* Don't trust old value if anything more than just a move over the window happened, send new WM_SETCURSOR */
-        //prev_set_cursor_win = NULL;
-    }
-    
     prev_mouse_buttons = mouse_buttons;
     mouse_buttons = click_bits;
 
@@ -223,6 +233,9 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
         struct window* win = WmGetToplevelAtPoint(mouse_x, mouse_y, true);
         
         if (win != NULL) {
+            if (WmIsAppHung(win->app)) {
+                /* TODO: probably show a 'this window isn't responding' message */
+            }
             WmCallWinProc(win, (struct msg) {
                 .win = win,
                 .type = WM_TOPLEVEL_MOUSEDOWN,
@@ -233,7 +246,7 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
             });
             KeDerefObject(win);
         } else {
-            WmSetForegroundWindow(NULL, true);
+            WmSetForegroundWindow(NULL);
         }
     }
     

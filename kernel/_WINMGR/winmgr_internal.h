@@ -26,7 +26,7 @@ struct app {
     struct point caret_location;
     struct size caret_size;
     struct window* win_list_head;
-    uint64_t timeof_last_entry_to_getmessage;
+    uint64_t hang_check_time;
 };
 
 /* Lives in usermode memory, so it is not an object (the kernel can't count references to something that the
@@ -100,8 +100,21 @@ int WmCallWinProc(struct window* win, struct msg msg);
 void WmInvalidateRegion(struct window* win, struct region rgn, bool lock);
 void WmInvalidateWindow(struct window* win, bool lock);
 struct window* WmGetForegroundWindow();
-void WmSetForegroundWindow(struct window* win, bool lock);
+/* Takes the lock itself, and tells the windows concerned (WM_ACTIVATE, WM_ACTIVATE_APP). NULL is 'none'. */
+void WmSetForegroundWindow(struct window* win);
+
+/* For callers that already hold the lock: change it now (WmChangeForegroundWindow), and tell the windows
+ * concerned once the lock has been let go of (WmAnnounceActivation, or WmDiscardActivation for no-one). */
+struct wm_activation {
+    struct window* old_fg;      /* a reference, or NULL if there was no real foreground window before */
+    struct window* new_fg;      /* a reference, or NULL if there is none now */
+    int how;                    /* WA_ACTIVATE or WA_CLICKACTIVATE: how new_fg got it */
+};
+void WmChangeForegroundWindow(struct window* win, int how, struct wm_activation* change);
+void WmAnnounceActivation(struct wm_activation* change);
+void WmDiscardActivation(struct wm_activation* change);
 struct window* WmGetToplevelAtPoint(int x, int y, bool lock);
+/* Adds a reference (to the desktop, if nothing else is there), which the caller must give back. */
 struct window* WmGetDeepestAtPoint(int x, int y, bool lock);
 bool WmIsPointInRect(int x, int y, struct rect r);
 struct point WmGetMousePositionGlobal(void);
@@ -119,6 +132,7 @@ bool WmIsAncestor(struct window* potential_ancestor, struct window* reference);
 int WmDispatchMessage(struct msg msg);
 int WmPostOrDispatchMessage(struct msg msg, bool local);
 int WmChangeStyle(struct window* win, int style);
+bool WmIsAppHung(struct app* app);
 
 /*
  * The window manager's application for the process that is running (the one whose system call this is). It is the

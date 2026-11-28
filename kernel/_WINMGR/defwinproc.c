@@ -187,49 +187,11 @@ static int WmHandleToplevelMousedown(struct window* win, struct msg msg) {
     p.x -= win->global_offset_cached.x;
     p.y -= win->global_offset_cached.y;
     WmRaiseToTop(win, false);
-    struct window* old_fg = WmGetForegroundWindow();
-    bool send_activate = win != old_fg;
-    bool send_app_activate = send_activate && old_fg != NULL && win->app != old_fg->app;
-    bool send_deactivate = old_fg != NULL && old_fg != WmGetDesktop();
-    if (send_deactivate) {
-        KeRefObject(old_fg);
-    } else {
-        old_fg = NULL;
-    }
-    WmSetForegroundWindow(win, false);
+    struct wm_activation activation;
+    WmChangeForegroundWindow(win, WA_CLICKACTIVATE, &activation);
     WmUnlock();
-    /* TODO: Move all this nonsense into WmSetForegroundWindow... though 
-     * given it's lockable idk*/
-    if (send_deactivate) {
-        WmPostOrDispatchMessage((struct msg) {
-            .win = old_fg,
-            .type = WM_ACTIVATE,
-            .i_arg = WA_DEACTIVATE,
-        }, old_fg->app == win->app);
+    WmAnnounceActivation(&activation);
 
-        if (send_app_activate) {
-            WmPostMessage((struct msg) {
-                .win = old_fg,
-                .type = WM_ACTIVATE_APP,
-                .i_arg = WA_DEACTIVATE,
-            });
-        }
-        KeDerefObject(old_fg);
-    }
-    if (send_app_activate) {
-        WmDispatchMessage((struct msg) {
-            .win = win,
-            .type = WM_ACTIVATE_APP,
-            .i_arg = WA_ACTIVATE,
-        });
-    }
-    if (send_activate) {
-        WmDispatchMessage((struct msg) {
-            .win = win,
-            .type = WM_ACTIVATE,
-            .i_arg = WA_CLICKACTIVATE,
-        });
-    }
     int retv = WmDispatchMessage((struct msg) {
         .win = win,
         .type = WM_HITTEST,
@@ -293,13 +255,31 @@ static int WmHandleSetCursor(struct window* win, struct msg msg) {
         WmUnlock();
         return 0;
 
-    } else {
-        // TODO: post to message queue a WM_SETCURSOR message for the parent
-        // might need to fiddle with the coords?
-        CdSetStandardCursor(CURSOR_WAIT);
     }
+
+    /*
+     * A child window that doesn't care what the cursor looks like leaves it to its parent, and so on up to the toplevel
+     * window. The point is relative to the window it is sent to, so it has to be moved by where this window sits in
+     * its parent.
+     */
+    struct window* parent = win->parent;
+    KeRefObject(parent);
+    struct msg forwarded = {
+        .win = parent,
+        .type = WM_SETCURSOR,
+        .point_arg1 = {
+            .x = msg.point_arg1.x + win->local_win_bound.x,
+            .y = msg.point_arg1.y + win->local_win_bound.y,
+        },
+    };
+    bool local = parent->app == NULL || parent->app == win->app;
     WmUnlock();
-    return 0;
+
+    /* The window procedure runs without the lock held, so this is done with it let go of. Windows in the same
+       application are handled now, so the cursor is settled before this message returns. */
+    int retv = WmPostOrDispatchMessage(forwarded, local);
+    KeDerefObject(parent);
+    return retv < 0 ? 0 : retv;
 }
 
 export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
@@ -321,6 +301,12 @@ export int WmDefaultWindowProcedure(struct window* win, struct msg msg) {
 
     case WM_SETCURSOR:
         return WmHandleSetCursor(win, msg);
+
+    case WM_CREATE:
+    case WM_ACTIVATE:
+    case WM_ACTIVATE_APP:
+        /* Only notifications, and the window is repainted by whoever changed it. Nothing more to do by default. */
+        return 0;
 
     default:
         return -1;

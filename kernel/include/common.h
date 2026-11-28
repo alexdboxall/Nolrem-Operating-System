@@ -93,6 +93,7 @@ struct rect {
 
 #define SYSMSG_MOUSEEVENT  0
 #define SYSMSG_LOWMEMORY   1
+#define SYSMSG_WM_WAKE     2    /* the desktop (which the window manager's own thread runs) has something to paint */
 
 struct window;
 

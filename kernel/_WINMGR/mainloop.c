@@ -200,7 +200,7 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
             struct point pt;
             pt.x = mouse_x - deepest_child->global_offset_cached.x;
             pt.y = mouse_y - deepest_child->global_offset_cached.y;
-            if (WmIsAppHung(deepest_child->app)) {
+            if (WmIsAppHung(deepest_child->app, false)) {
                 CdSetStandardCursor(CURSOR_WAIT);
             } else {
                 WmPostMessage((struct msg) {
@@ -233,7 +233,7 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
         struct window* win = WmGetToplevelAtPoint(mouse_x, mouse_y, true);
         
         if (win != NULL) {
-            if (WmIsAppHung(win->app)) {
+            if (WmIsAppHung(win->app, true)) {
                 /* TODO: probably show a 'this window isn't responding' message */
             }
             WmCallWinProc(win, (struct msg) {
@@ -268,9 +268,6 @@ static bool WmHandleMouse(int mx, int my, int click_bits) {
     return retv;
 }
 
-struct window* win;
-struct window* win2;
-struct window* win3;
 
 static void WmProcessMessage(struct msg msg) {
     switch (msg.type) {
@@ -290,6 +287,23 @@ static void WmRepaintIfNeeded(struct window* win) {
             .type = WM_PAINT,
             .win = win
         });
+    }
+}
+
+/*
+ * Stands in for a usermode application, until there are real ones: it owns the test windows, and pumps their
+ * messages (the same way as GetMessage/DispatchMessage would) on a thread of its own, alongside the window manager's
+ * thread, which pumps the desktop's. WmAppGetMessage paints its windows (when they are invalidated, a wake-up is
+ * posted to it) before it returns each message.
+ */
+static void WmTestAppThread(void* context) {
+    KeBeginNewThread();
+    struct app* app = context;
+    struct msg msg;
+    while (true) {
+        if (WmAppGetMessage(app, &msg, false) == 0) {
+            WmDispatchMessage(msg);
+        }
     }
 }
 
@@ -338,20 +352,21 @@ export _Noreturn void WmMainloop(void) {
         .x = 50, .y = 50, .w = 50, .h = 50
     };
 
-    win = WmCreateWindow(NULL, WmGetDesktop(), NULL, w1pos, true);
-    win2 = WmCreateWindow(NULL, WmGetDesktop(), NULL, w2pos, true);
-    win3 = WmCreateWindow(NULL, win2, NULL, w3pos, true);
-    
+    struct app* test_app = WmCreateApp();
+    if (test_app != NULL) {
+        struct window* win = WmCreateWindow(test_app, WmGetDesktop(), NULL, w1pos, true);
+        struct window* win2 = WmCreateWindow(test_app, WmGetDesktop(), NULL, w2pos, true);
+        if (win2 != NULL) {
+            WmCreateWindow(test_app, win2, NULL, w3pos, true);
+        }
+        (void) win;
+
+        /* The app is never given up (this is the reference WmCreateApp returned), so the thread needs none of its own.
+           The creation of the windows woke it, so it sends them their first WM_PAINT as soon as it starts. */
+        KeCreateThread(KeGetKernelVas(), WmTestAppThread, test_app);
+    }
+
     WmCallWinProc(WmGetDesktop(), (struct msg) {
-        .type = WM_PAINT
-    });
-    WmCallWinProc(win, (struct msg) {
-        .type = WM_PAINT
-    });
-    WmCallWinProc(win2, (struct msg) {
-        .type = WM_PAINT
-    });
-    WmCallWinProc(win3, (struct msg) {
         .type = WM_PAINT
     });
 
@@ -372,9 +387,7 @@ export _Noreturn void WmMainloop(void) {
 
         if (anything_happened) {
             anything_happened = false;      
-            WmRepaintIfNeeded(win);
-            WmRepaintIfNeeded(win2);
-            WmRepaintIfNeeded(win3);
+            WmRepaintIfNeeded(WmGetDesktop());
         }
         {
             size_t kb_free = KeGetFreeMemory() / 1024;

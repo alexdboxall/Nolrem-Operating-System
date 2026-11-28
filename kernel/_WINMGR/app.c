@@ -71,6 +71,11 @@ static void WmCheckGenerateSynthMessages(struct app* app) {
     if (app == NULL) {
         return;
     }
+
+    /* Anything that is dirty now gets dealt with by this pass, so any wake-up for it is no longer needed. Cleared before
+       painting (which unlocks), so that whatever is invalidated from now on sends a new one. */
+    app->synth_wake_pending = false;
+
     struct window* win = app->win_list_head;
     while (win) {
         if (WmCheckIfPaintRequired(win)) {
@@ -88,16 +93,69 @@ static void WmCheckGenerateSynthMessages(struct app* app) {
     }
 }
 
-bool WmIsAppHung(struct app* app) {
-    WmLock();
+/* An app is hung if it has been running for over 5 seconds without asking for another message. Windows without an app
+ * (the desktop's is fine, but nothing else is guaranteed) can't be hung. Pass lock = false if you already hold WmLock. */
+/*
+ * Wakes up the application that owns `win` so that it paints it. Applications that are blocked in WmAppGetMessage only
+ * look for things to paint when something is posted to them, which an invalidation alone doesn't do.
+ *
+ * Only one wake-up is outstanding at a time, so a burst of invalidations doesn't fill the message box. If the box is
+ * full anyway, that's fine: the application has messages to get through, and looks for things to paint whenever it
+ * runs out of them. The window manager lock must be held.
+ */
+void WmNotifyDirty(struct window* win) {
+    struct app* app = win->app;
+    if (app == NULL || app->synth_wake_pending) {
+        return;
+    }
+
+    int res;
+    struct window* desktop = WmGetDesktop();
+    if (desktop == NULL) {
+        /* Still creating the desktop. The window manager paints it by itself when it starts. */
+        return;
+    }
+    if (desktop->app == app) {
+        /* The window manager's own thread is what runs the desktop, and it waits on the system message box. */
+        struct msg wake = {.type = SYSMSG_WM_WAKE};
+        res = KePostMessage(KeGetSystemMessageBox(), &wake, TIMEOUT_INSTANT);
+    } else {
+        struct msg wake = {.type = WM_CHECK_SYNTH, .win = win};
+        res = KePostMessage(app->mbox, &wake, TIMEOUT_INSTANT);
+    }
+    if (res == 0) {
+        app->synth_wake_pending = true;
+    }
+}
+
+bool WmIsAppHung(struct app* app, bool lock) {
+    if (app == NULL) {
+        return false;
+    }
+    if (lock) WmLock();
     uint64_t wintime = app->hang_check_time;
-    WmUnlock();
+    if (lock) WmUnlock();
     if (wintime == 0) {
         /* Blocking on WmAppGetMessage */
         return false;
     }
     uint64_t currenttime = KeGetTimeSinceBoot();
     return currenttime > wintime + MS_TO_NS(5000);
+}
+
+/*
+ * Takes the next message without waiting, other than the wake-ups from WmNotifyDirty: those are answered here, by
+ * looking for things to paint, and then the box is looked at again. The window manager lock must be held (and is
+ * still held afterwards, though it is let go of while painting).
+ */
+static int WmAppTryGetMessage(struct app* app, struct msg* msg_out) {
+    for (;;) {
+        int res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
+        if (res != 0 || msg_out->type != WM_CHECK_SYNTH) {
+            return res;
+        }
+        WmCheckGenerateSynthMessages(app);
+    }
 }
 
 export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
@@ -108,11 +166,13 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
      * held across the peek and the synth call.
      */
     WmLock();
-    app->hang_check_time = 0;
-    int res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
+    /* Not zero: that means 'blocked, waiting for a message'. Painting happens in here (in WmCheckGenerateSynthMessages),
+       and an application stuck in its WM_PAINT is just as hung as one stuck anywhere else. */
+    app->hang_check_time = KeGetTimeSinceBoot();
+    int res = WmAppTryGetMessage(app, msg_out);
     if (res == EAGAIN) {
         WmCheckGenerateSynthMessages(app);
-        res = KeGetMessage(app->mbox, msg_out, TIMEOUT_INSTANT);
+        res = WmAppTryGetMessage(app, msg_out);
     }
     app->hang_check_time = KeGetTimeSinceBoot();
     WmUnlock();
@@ -159,7 +219,15 @@ export int WmAppGetMessage(struct app* app, struct msg* msg_out, bool peek) {
         res = KeGetMessage(app->mbox, msg_out, timeout);
         WmLock();
         app->hang_check_time = KeGetTimeSinceBoot();
+        bool woken_to_paint = res == 0 && msg_out->type == WM_CHECK_SYNTH;
+        if (woken_to_paint) {
+            WmCheckGenerateSynthMessages(app);
+        }
         WmUnlock();
+        if (woken_to_paint) {
+            /* Not a message for the application; go round again and keep waiting for one. */
+            continue;
+        }
         if (res != ETIMEDOUT) {
             return res;
         }
@@ -180,6 +248,8 @@ struct app* WmCreateApp(void) {
     app->caret_timeout_time = 0;
     app->timeof_last_caret_invert = 0;
     app->win_list_head = NULL;
+    app->hang_check_time = 0;       /* not in WmAppGetMessage yet, but not hung either */
+    app->synth_wake_pending = false;
     app->mbox = KeCreateMessageBox(sizeof(struct msg), APP_QUEUE_SIZE);
     if (app->mbox == NULL) {
         FreeHeap(app);

@@ -27,7 +27,15 @@ struct app {
     struct size caret_size;
     struct window* win_list_head;
     uint64_t hang_check_time;
+    bool synth_wake_pending;                /* a wake-up (WM_CHECK_SYNTH) has been sent and not yet acted on */
 };
+
+/*
+ * Posted to an application's message box when one of its windows needs painting, so that an application that is
+ * waiting for a message wakes up to be given its WM_PAINT. WmAppGetMessage deals with it itself, and it is never
+ * returned to the application or sent to a window procedure.
+ */
+#define WM_CHECK_SYNTH  0xFF00
 
 /* Lives in usermode memory, so it is not an object (the kernel can't count references to something that the
    process can scribble on) and has no header. */
@@ -132,7 +140,9 @@ bool WmIsAncestor(struct window* potential_ancestor, struct window* reference);
 int WmDispatchMessage(struct msg msg);
 int WmPostOrDispatchMessage(struct msg msg, bool local);
 int WmChangeStyle(struct window* win, int style);
-bool WmIsAppHung(struct app* app);
+bool WmIsAppHung(struct app* app, bool lock);
+/* Call (with the lock held) after anything adds to a window's dirty region, so its application wakes up to paint it. */
+void WmNotifyDirty(struct window* win);
 
 /*
  * The window manager's application for the process that is running (the one whose system call this is). It is the

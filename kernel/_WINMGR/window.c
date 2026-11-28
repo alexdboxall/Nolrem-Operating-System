@@ -179,6 +179,7 @@ export void WmInvalidateRegion(struct window* win, struct region rgn, bool lock)
     if (lock) WmLock();
     anything_happened = true;
     CdUnionRegionInPlace(&win->dirty_rgn, rgn);
+    WmNotifyDirty(win);
     struct window* kiddo = win->first_child;
     while (kiddo) {
         WmInvalidateRegion(kiddo, rgn, false);
@@ -214,6 +215,7 @@ static bool WmInvalidateExposedRegionOnWindow(struct window* win, struct region*
             CdUnionRegionInPlace(&win->vis_rgn, overlap);
         }
         CdUnionRegionInPlace(&win->dirty_rgn, overlap);
+        WmNotifyDirty(win);
         CdSubtractRegionInPlace(exposed_rgn, overlap);
         CdFreeRegion(overlap);
         return CdIsRegionEmpty(*exposed_rgn);
@@ -250,6 +252,7 @@ static bool WmApplyExposureToSubtree(struct window* win, struct region* exposed_
             CdUnionRegionInPlace(&win->vis_rgn, remaining);
         }
         CdUnionRegionInPlace(&win->dirty_rgn, remaining);
+        WmNotifyDirty(win);
     }
 
     CdFreeRegion(remaining);
@@ -442,6 +445,7 @@ export void WmChangePosition(struct window* win, struct rect local_r, bool lock)
     /* Make the window dirty. */
     CdFreeRegion(win->dirty_rgn);
     win->dirty_rgn = CdCopyRegion(win->win_rgn);
+    WmNotifyDirty(win);
 
     /* 
      * Tell all the children that their parents moved and to update their
@@ -526,6 +530,7 @@ export struct window* WmCreateWindow(struct app* app, struct window* parent, con
     win->dirty_rgn = CdCopyRegion(win->win_rgn);
     win->vis_rgn = CdCopyRegion(win->win_rgn);
     WmClipOurVisibility(win);
+    WmNotifyDirty(win);
 
     /* A new toplevel window comes up in front, and is the one the user is working with. */
     struct wm_activation activation;
@@ -565,6 +570,7 @@ static void WmRecomputeVisibilityRecursive(struct window* win) {
     struct region newly_visible = CdSubtractRegion(win->vis_rgn, old_vis);
     if (!CdIsRegionEmpty(newly_visible)) {
         CdUnionRegionInPlace(&win->dirty_rgn, newly_visible);
+        WmNotifyDirty(win);
     }
     CdFreeRegion(newly_visible);
     CdFreeRegion(old_vis);
